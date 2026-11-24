@@ -60,3 +60,10 @@ begin
 end $$;
 drop trigger if exists runs_username on public.runs;
 create trigger runs_username before insert on public.runs for each row execute function public.runs_set_username();
+
+-- ---------- let the game use the tables ----------
+-- (newer Supabase projects don't do this automatically; the security rules above still apply)
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.characters to authenticated;
+grant select on public.runs to anon, authenticated;
+grant insert on public.runs to authenticated;

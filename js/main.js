@@ -73,13 +73,20 @@ $('#btn-signup').addEventListener('click', () => {
 // characters before, the one you played most recently is kept.
 async function enterAccount() {
   show(null);
-  let chars = [];
-  try { chars = await backend.listChars(); } catch (err) { toast(err.message); }
-  let c = chars.slice().sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0))[0];
-  if (chars.length && !chars.some((x) => x.lastPlayed)) c = chars[chars.length - 1];
-  if (!c) {
-    const cloak = CLOAKS[Math.floor(Math.random() * CLOAKS.length)].id;
-    c = await backend.createChar({ name: backend.username, cloak, hat: 'hood', flame: 'amber', cls: 'warrior' });
+  let chars = [], c = null;
+  try {
+    chars = await backend.listChars();
+    c = chars.slice().sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0))[0];
+    if (chars.length && !chars.some((x) => x.lastPlayed)) c = chars[chars.length - 1];
+    if (!c) {
+      const cloak = CLOAKS[Math.floor(Math.random() * CLOAKS.length)].id;
+      c = await backend.createChar({ name: backend.username, cloak, hat: 'hood', flame: 'amber', cls: 'warrior' });
+    }
+  } catch (err) {
+    // couldn't load or save your character: back to the login screen with the reason (instead of a blank screen)
+    show('screen-login');
+    $('#login-error').textContent = `Couldn't load your character: ${err.message}`;
+    return;
   }
   c.name = backend.username;
   c.lastPlayed = Date.now();
