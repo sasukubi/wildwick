@@ -216,6 +216,7 @@ class AudioEngine {
       case 'famDie': N(1.0, { filter: 'lowpass', freq: 500, slide: 120, gain: 0.3, attack: 0.05 }); T(120, 0.8, { slide: 40, type: 'triangle', gain: 0.15 }); break;
       case 'shove': T(110, 0.15, { slide: 60, gain: 0.3 }); N(0.12, { filter: 'lowpass', freq: 900, gain: 0.3 }); break;
       case 'haste': N(0.25, { freq: 1200, slide: 3000, q: 1, gain: 0.08 }); break;
+      case 'warcry': T(150, 0.7, { type: 'sawtooth', lp: 900, vib: 7, vibDepth: 14, attack: 0.04, gain: 0.25 }); T(225, 0.6, { type: 'sawtooth', lp: 1100, vib: 6, vibDepth: 10, attack: 0.05, gain: 0.12 }); N(0.5, { filter: 'bandpass', freq: 600, q: 2, gain: 0.15, attack: 0.03 }); break;
       case 'coin': T(1568 + Math.random() * 120, 0.08, { type: 'triangle', gain: 0.07 }); T(2093, 0.1, { type: 'triangle', gain: 0.05, delay: 0.04 }); break;
       case 'combo': [659, 988, 1318].forEach((f, i) => T(f, 0.25, { type: 'triangle', gain: 0.12, delay: i * 0.04 })); N(0.12, { filter: 'highpass', freq: 2500, gain: 0.12 }); break;
       case 'chat': T(1320, 0.06, { type: 'triangle', gain: 0.05 }); T(1760, 0.08, { type: 'triangle', gain: 0.04, delay: 0.05 }); break;

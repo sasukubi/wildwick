@@ -2,7 +2,7 @@
 //  The in-game HUD (HTML, glass style). Updated every frame, but
 //  only touches the page when a value actually changes.
 // =============================================================
-import { CLOAKS, FLAMES, SORCERER, CLERIC, WARLOCK, CLASSES, ELEMENTS, RULES, byId } from './data.js';
+import { CLOAKS, FLAMES, WARRIOR, SORCERER, CLERIC, WARLOCK, CLASSES, ELEMENTS, RULES, byId } from './data.js';
 import { MAX_LEVEL, SHOP, MODES, EVENTS } from './progress.js';
 import { iconSprite, skillIconName } from './sprites.js';
 
@@ -33,51 +33,52 @@ function set(el, prop, value) {
 export const KITS = {
   warrior: [
     { id: 'atk', name: 'Strike', key: 'strike', icon: '⚔' },
-    { id: 'guard', name: 'Smoulder Guard (hold)', key: 'skill2', icon: '🛡' },
-    { id: 'quake', name: 'Cinder Quake', key: 'skill1', icon: '💥' },
-    { id: 'dash', name: 'Dash (shoves enemies)', key: 'dash', icon: '»' },
-    { id: 'ult', name: 'Pyre Cleave (Wildfire)', key: 'ult', icon: '🔥' },
+    { id: 'guard', name: 'Iron Guard (hold)', key: 'skill2', icon: '🛡' },
+    { id: 'quake', name: 'Shockwave', key: 'skill1', icon: '💥' },
+    { id: 'cry', name: 'Battle Cry', key: 'skill3', icon: '' },
+    { id: 'dash', name: 'Bash', key: 'dash', icon: '»' },
+    { id: 'ult', name: 'Bladestorm (Wildfire)', key: 'ult', icon: '🔥' },
   ],
   sorcerer: [
-    { id: 'atk', name: 'Staff (pushes back)', key: 'strike', icon: '🪄' },
+    { id: 'atk', name: 'Shove', key: 'strike', icon: '' },
     { id: 'gale', name: 'Gale', key: 'skill2', icon: '🌀', el: 'gale' },
-    { id: 'fire', name: 'Fire', key: 'skill1', icon: '🔥', el: 'fire' },
-    { id: 'frost', name: 'Frost', key: 'skill3', icon: '❄', el: 'frost' },
-    { id: 'dash', name: 'Dash (leaves a speed trail)', key: 'dash', icon: '»' },
+    { id: 'fire', name: 'Fireball', key: 'skill1', icon: '', el: 'fire' },
+    { id: 'frost', name: 'Frostbite', key: 'skill3', icon: '', el: 'frost' },
+    { id: 'dash', name: 'Gust', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Starfall (Wildfire)', key: 'ult', icon: '☄' },
   ],
   bowman: [
     { id: 'atk', name: 'Hold to draw, let go to shoot', key: 'strike', icon: '🏹' },
     { id: 'mark', name: 'Mark', key: 'skill1', icon: '🎯' },
-    { id: 'rain', name: 'Rain of Arrows', key: 'skill2', icon: '🌧' },
+    { id: 'rain', name: 'Barrage', key: 'skill2', icon: '🌧' },
     { id: 'dash', name: 'Roll (flicks an arrow)', key: 'dash', icon: '»' },
-    { id: 'ult', name: 'Hawk Eye (Wildfire)', key: 'ult', icon: '🦅' },
+    { id: 'ult', name: 'Deadeye (Wildfire)', key: 'ult', icon: '🦅' },
   ],
   rogue: [
     { id: 'atk', name: 'Stab (every 4th spins)', key: 'strike', icon: '🗡' },
     { id: 'smoke', name: 'Smoke Bomb', key: 'skill1', icon: '💨' },
     { id: 'step', name: 'Shadowstep', key: 'skill2', icon: '👣' },
-    { id: 'dash', name: 'Dash (leaves a clone)', key: 'dash', icon: '»' },
+    { id: 'dash', name: 'Shadow Clone', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Thousand Cuts (Wildfire)', key: 'ult', icon: '✴' },
   ],
   cleric: [
-    { id: 'atk', name: 'Mace (builds Grace)', key: 'strike', icon: '' },
+    { id: 'atk', name: 'Swing (builds Grace)', key: 'strike', icon: '' },
     { id: 'judge', name: 'Judgement', key: 'skill2', icon: '' },
-    { id: 'mend', name: 'Mending Light', key: 'skill1', icon: '' },
+    { id: 'mend', name: 'Kindle', key: 'skill1', icon: '' },
     { id: 'ground', name: 'Sanctified Ground', key: 'skill3', icon: '' },
-    { id: 'dash', name: 'Blessed Step', key: 'dash', icon: '' },
-    { id: 'ult', name: 'Dawn (Wildfire)', key: 'ult', icon: '' },
+    { id: 'dash', name: 'Guiding Light', key: 'dash', icon: '' },
+    { id: 'ult', name: 'Daybreak (Wildfire)', key: 'ult', icon: '' },
   ],
   warlock: [
-    { id: 'atk', name: 'Shadow bolt (every 3rd curses)', key: 'strike', icon: '' },
-    { id: 'imps', name: 'Summon Imps', key: 'skill2', icon: '' },
-    { id: 'hands', name: 'Grasping Hands', key: 'skill1', icon: '' },
+    { id: 'atk', name: 'Bolt (every 3rd curses)', key: 'strike', icon: '' },
+    { id: 'imps', name: 'Swarm', key: 'skill2', icon: '' },
+    { id: 'hands', name: 'Dead Man\'s Reach', key: 'skill1', icon: '' },
     { id: 'siphon', name: 'Soul Siphon', key: 'skill3', icon: '' },
-    { id: 'dash', name: 'Shadow Slip', key: 'dash', icon: '' },
+    { id: 'dash', name: 'Phase Shift', key: 'dash', icon: '' },
     { id: 'ult', name: 'Eclipse (Wildfire)', key: 'ult', icon: '' },
   ],
 };
-const USES_BAR = { sorcerer: 'mana', warlock: 'shadow', cleric: 'grace' };
+const USES_BAR = { sorcerer: 'mana', warlock: 'shadow', cleric: 'grace', warrior: 'fury' };
 const RING = 2 * Math.PI * 23;
 const readyAt = new Map();
 
@@ -98,6 +99,7 @@ export function buildHud(cls = 'warrior') {
   row.classList.toggle('hidden', !USES_BAR[cls]);
   row.classList.toggle('grace', cls === 'cleric');
   row.classList.toggle('shadow', cls === 'warlock');
+  row.classList.toggle('fury', cls === 'warrior');
   last.clear();
   readyAt.clear();
 }
@@ -125,7 +127,7 @@ export function updateHud(game, snap, me) {
     if (!c) continue;
     c.querySelector('.dot').style.background = byId(CLOAKS, p.c).hex;
     c.querySelector('b').textContent = p.u + (p.id === game.myId ? ' (you)' : '');
-    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Flame out!') : byId(CLASSES, p.k).name + (p.sh > 0 ? ' · shielded' : '');
+    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Burnt out!') : byId(CLASSES, p.k).name + (p.sh > 0 ? ' · shielded' : '');
     c.classList.toggle('down', !!p.dn);
     const fill = c.querySelector('.mini i');
     fill.style.width = (p.hp / p.mx) * 100 + '%';
@@ -144,12 +146,12 @@ export function updateHud(game, snap, me) {
     const m = byId(MODES, snap.md || 'casual');
     name = 'The Campfire';
     sub = `${m.name}${snap.rs ? ` from forest ${snap.rs}` : ''} · everyone walk under the archway · ${ready}/${snap.ps.length}`;
-  } else if (snap.st === 'rest') { name = 'A quiet moment'; sub = 'Pick a boon, spend skill points'; }
+  } else if (snap.st === 'rest') { name = 'A quiet moment'; sub = 'Pick a favor, spend skill points'; }
   else if (snap.sc === 'forest') {
     const ev = snap.ev ? byId(EVENTS, snap.ev).name + ' · ' : '';
     name = `${stageName(snap)} · ${mm}:${ss}`;
     sub = ev + (snap.go ? 'The gate is open: everyone into the Heartwood Gate' : 'Find and defeat the gate guardian');
-  } else { name = `The Heart of the Wood · ${mm}:${ss}`; sub = snap.md === 'endless' ? `Endless · stage ${snap.stg} · defeat the Elder Treant` : 'Defeat the Elder Treant'; }
+  } else { name = `The Heart of the Woods · ${mm}:${ss}`; sub = snap.md === 'endless' ? `Endless · stage ${snap.stg} · defeat the Creaking Oak` : 'Defeat the Creaking Oak'; }
   set($('#stage-name'), 'text', name);
   set($('#stage-sub'), 'text', sub);
 
@@ -165,10 +167,10 @@ export function updateHud(game, snap, me) {
   set($('#flame-fill'), 'width', ratio * 100 + '%');
   set($('#flame-fill'), 'background', `linear-gradient(90deg, ${pal.outer}, ${pal.mid} 60%, ${pal.core})`);
   set($('#flame-shield'), 'width', Math.min(100, ((me.sh || 0) / me.mx) * 100) + '%');
-  set($('#flame-text'), 'text', me.dn ? 'Flame out' : me.sh > 0 ? `Flame ${me.hp} / ${me.mx}  +${me.sh} shield` : `Flame ${me.hp} / ${me.mx}`);
+  set($('#flame-text'), 'text', me.dn ? 'Burnt out' : me.sh > 0 ? `Flame ${me.hp} / ${me.mx}  +${me.sh} shield` : `Flame ${me.hp} / ${me.mx}`);
   if (bar) {
     set($('#mana-fill'), 'width', (me.mn / me.mm) * 100 + '%');
-    set($('#mana-text'), 'text', `${bar === 'grace' ? 'Grace' : 'Mana'} ${me.mn} / ${me.mm}`);
+    set($('#mana-text'), 'text', `${bar === 'grace' ? 'Grace' : bar === 'fury' ? 'Fury' : bar === 'shadow' ? 'Souls' : 'Mana'} ${me.mn} / ${me.mm}`);
   }
   const wf = me.wf / RULES.wildfireMax;
   set($('#wild-fill'), 'width', wf * 100 + '%');
@@ -178,7 +180,7 @@ export function updateHud(game, snap, me) {
   set($('#lvl'), 'text', mastered ? `Lv ${me.lv} ✦` : `Lv ${me.lv}`);
   set($('#xp-fill'), 'width', (mastered ? 100 : (me.xp / me.nx) * 100) + '%');
   set($('#pts'), 'hide', !me.pts && !mastered);
-  set($('#pts'), 'text', mastered && !me.pts ? 'mastered · prestige at the Skilltree' : `+${me.pts} skill point${me.pts > 1 ? 's' : ''} · spend at the Skilltree`);
+  set($('#pts'), 'text', mastered && !me.pts ? 'mastered · ignite at the Skilltree' : `+${me.pts} skill point${me.pts > 1 ? 's' : ''} · spend at the Skilltree`);
   // potions (1, 2, 3) and coins
   const ik = JSON.stringify([me.it, me.co]);
   const ib = $('#items');
@@ -198,16 +200,16 @@ export function updateHud(game, snap, me) {
     if (me.it && me.it.charm) { const s = document.createElement('span'); s.className = 'it'; s.textContent = `feather ×${me.it.charm}`; s.title = 'Phoenix Feather: relights you once'; ib.appendChild(s); }
     const c = document.createElement('span'); c.className = 'co'; c.textContent = `${me.co || 0} coins`; ib.appendChild(c);
   }
-  const fury = Math.round((stats.furyMax || 0) * (1 - ratio) * 100);
-  const tough = Math.round(30 * (1 - ratio));
-  set($('#fury'), 'text', me.k === 'warrior' && snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage · ${tough}% less damage taken` : '');
+  // Bloodlust: the fuller the Fury gauge, the harder and faster the Warrior hits
+  const lust = me.k === 'warrior' ? (me.mn || 0) / 100 : 0;
+  set($('#fury'), 'text', me.k === 'warrior' && !me.dn && lust >= 0.05 ? `Bloodlust +${Math.round(lust * WARRIOR.lust.dmg * 100)}% damage · +${Math.round(lust * WARRIOR.lust.speed * 100)}% attack speed${me.uq ? ' · unquenchable!' : ''}` : '');
 
   // weaving: show which element is "primed" and how long you have to fuse it
   const weave = $('#weave');
   set(weave, 'hide', !(sorc && me.le));
   if (sorc && me.le) {
     const E = ELEMENTS[me.le];
-    set(weave, 'text', `${E.icon} ${E.name} primed: cast another element to weave!`);
+    set(weave, 'text', `${E.name} primed: cast another element to weave!`);
     set(weave, '--w', String(Math.max(0, me.lt / stats.weaveWindow)));
   }
 
@@ -225,6 +227,7 @@ export function updateHud(game, snap, me) {
     else if (s.id === 'dash') { rem = Math.max(0, game.lp.dashCd); total = stats.dashCd; }
     else if (s.id === 'guard') { rem = me.g ? 0 : me.c2; total = stats.guardCd; }
     else if (s.id === 'quake') { rem = me.c1; total = stats.quakeCd; }
+    else if (s.id === 'cry') { rem = me.c3; total = stats.cryCd; }
     else if (s.id === 'fire') { rem = me.c1; total = SORCERER.fire.cd * stats.spellCd; noMana = me.mn < SORCERER.fire.cost; }
     else if (s.id === 'gale') { rem = me.c2; total = SORCERER.gale.cd * stats.spellCd; noMana = me.mn < SORCERER.gale.cost; }
     else if (s.id === 'frost') { rem = me.c3; total = SORCERER.frost.cd * stats.spellCd; noMana = me.mn < SORCERER.frost.cost; }
@@ -257,10 +260,10 @@ export function updateHud(game, snap, me) {
   }
 
   let big = '', small = '';
-  if (snap.cd > 0) { big = `Into the Wilds in ${snap.cd}`; small = 'Stay on the path…'; }
-  else if (snap.st === 'victory') { big = 'The Heart of the Wood is free'; small = `You defeated the Elder Treant! Back to camp in ${snap.stt}…`; }
-  else if (snap.st === 'defeat') { big = 'All flames went out'; small = `The forest grows dark. Back to camp in ${snap.stt}…`; }
-  else if (me.dn && snap.st === 'playing') { big = 'Your flame went out'; small = me.rv > 0 ? 'A friend is rekindling you…' : 'An ally can rekindle you by standing close.'; }
+  if (snap.cd > 0) { big = `Entrance in ${snap.cd}`; small = 'Stay on the path…'; }
+  else if (snap.st === 'victory') { big = 'The Heart of the Woods is free'; small = `You defeated the Creaking Oak! Back to camp in ${snap.stt}…`; }
+  else if (snap.st === 'defeat') { big = 'Everyone burnt out'; small = `The forest grows dark. Back to camp in ${snap.stt}…`; }
+  else if (me.dn && snap.st === 'playing') { big = 'You burnt out'; small = me.rv > 0 ? 'A friend is rekindling you…' : 'An ally can rekindle you by standing close.'; }
   else if (game.bannerT > 0) { big = game.bannerText; small = game.bannerSub || ''; }
   set($('#banner'), 'hide', !big);
   set($('#banner-big'), 'text', big);
@@ -270,6 +273,6 @@ export function updateHud(game, snap, me) {
 
 // e.g. Thornwood II, or Thornwood 7 in endless
 export function stageName(snap) {
-  if (snap.sc === 'arena') return 'The Heart of the Wood';
+  if (snap.sc === 'arena') return 'The Heart of the Woods';
   return `Thornwood ${snap.md === 'endless' ? snap.stg : ['I', 'II', 'III'][snap.stg - 1] || snap.stg}`;
 }

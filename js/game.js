@@ -490,7 +490,7 @@ export class Game {
 
     const cls = this.cls;
     const held = inp.attackHeld() && !blocked;
-    const guarding = cls === 'warrior' && (!!me.g || (inp.guardHeld() && !blocked && me.c2 <= 0));
+    const guarding = cls === 'warrior' && !me.bs && (!!me.g || (inp.guardHeld() && !blocked && me.c2 <= 0));
     // Bowman: hold to draw (walk slower), let go to shoot
     if (cls === 'bowman') {
       if (me.hk > 0) { lp.drawing = false; lp.charge = 0; }
@@ -566,8 +566,8 @@ export class Game {
     // Bowman: right-click while drawing cancels the shot
     if (cls === 'bowman' && s2 && lp.drawing) { lp.drawing = false; lp.charge = 0; lp.atkCd = 0.15; audio.play('cancel'); }
     // show your own attack straight away (the host decides if it hit)
-    if (cls !== 'bowman' && (atkPressed || held) && lp.atkCd <= 0 && !guarding) {
-      lp.atkCd = S.atkCd;
+    if (cls !== 'bowman' && (atkPressed || held) && lp.atkCd <= 0 && !guarding && !(cls === 'warrior' && me.bs)) {
+      lp.atkCd = S.atkCd * (cls === 'warrior' ? 1 - WARRIOR.lust.speed * (me.mn || 0) / 100 : 1); // Bloodlust
       if (cls === 'warrior') {
         lp.combo = lp.comboT > 0 ? (lp.combo % 3) + 1 : 1;
         lp.comboT = 1.1;
@@ -964,7 +964,7 @@ export class Game {
       case 'down':
         this.burst(f.x, f.y - 16, 16, { color: '#888', speed: 70, life: 1, up: 30 });
         audio.play('down', at);
-        if (!mine) toast(`${f.n}'s flame went out! Stand close to rekindle them.`);
+        if (!mine) toast(`${f.n} burnt out! Stand close to rekindle them.`);
         break;
       case 'revive':
         this.burst(f.x, f.y - 16, 26, { color: '#ffe0a0', speed: 160, life: 0.8, glow: true, up: 30 });
@@ -979,7 +979,7 @@ export class Game {
       case 'shrine':
         this.burst(f.x, f.y - 16, 30, { color: '#ffb060', speed: 140, life: 1, glow: true, up: 40 });
         audio.play('shrine', at);
-        toast(`${f.n} lit a Heartwood shrine (+Wildfire)`);
+        toast(`${f.n} lit a Heartwood Stump (+Wildfire)`);
         break;
       case 'gate':
         audio.play('gate');
@@ -987,7 +987,7 @@ export class Game {
         break;
       case 'howl': audio.play('howl', { x: f.x, y: f.y, range: f.far ? 1400 : 900 }); break;
       case 'growl': audio.play('growl', { x: f.x, y: f.y, big: f.big, range: 400 }); break;
-      case 'roar': audio.play('roar'); this.addShake(8); this.banner('The Treant calls the pack!', 1.8); break;
+      case 'roar': audio.play('roar'); this.addShake(8); this.banner('The Oak calls the pack!', 1.8); break;
       case 'rootsCall': audio.play('rootsCall'); break;
       case 'root': audio.play('root', at); this.burst(f.x, f.y - 6, 10, { color: '#6b4f33', speed: 120, life: 0.5 }); if (near(f.x, f.y)) this.addShake(3); break;
       case 'sweep': audio.play('sweep', at); this.addShake(4); break;
@@ -1213,7 +1213,7 @@ export class Game {
     if (this.stationPrompt(best, me, key, go)) return;
     switch (best.type) {
       case 'wardrobe':
-        this.prompt = { x: best.x, y: best.y - 56, text: `[${key}] Wardrobe`, sub: 'Change your cloak, hat and flame' };
+        this.prompt = { x: best.x, y: best.y - 56, text: `[${key}] Tent`, sub: 'Change your cloak, hat and flame' };
         if (go) this.wardrobe.toggle();
         break;
       case 'campfire': {
@@ -1231,7 +1231,7 @@ export class Game {
         if (go) boardPanel.toggle(this);
         break;
       case 'fountain':
-        this.prompt = { x: best.x, y: best.y - 52, text: `[${key}] Wildfire Fountain`, sub: me.wf >= 100 ? `Wildfire full · press ${this.keyLabel('ult')} to try your ultimate` : 'Fill your Wildfire to practise your ultimate' };
+        this.prompt = { x: best.x, y: best.y - 52, text: `[${key}] Wildfire Fountain`, sub: me.wf >= 100 ? `Wildfire full · press ${this.keyLabel('ult')} to try your Wildfire Ability` : 'Fill your Wildfire to practise your Wildfire Ability' };
         break;
       case 'resetpost':
         this.prompt = { x: best.x, y: best.y - 40, text: `[${key}] Reset the dummies`, sub: 'Clears their damage-per-second' };

@@ -1,0 +1,456 @@
+WILDWICK: EVERY NAME IN THE GAME (rename list)
+==============================================
+
+HOW TO USE THIS
+---------------
+1. Find the name you want to change.
+2. Write the new name after "new:" on the line underneath it.
+     Example:   Cinder Quake
+                  new: Ember Slam
+3. Leave "new:" empty for anything you're happy with.
+4. Save this file and tell Claude "apply the rename list".
+   Claude changes the name EVERYWHERE it appears: menus, skill tree text,
+   the HUD, banners, controls screen, tips, and so on.
+
+You can also add a note after any line, like:  new: Ember Slam (or Ash Slam?)
+Everything shows up in lowercase in the game, so capital letters don't matter.
+
+Names of other things that use a name (for example a skill tree upgrade that
+says "Cinder Quake reaches further") update automatically when you rename it.
+
+
+============================================================
+1. CLASSES (the 6 characters you can play)
+============================================================
+
+Warrior
+  new:
+  what it is: Sword fighter with a shield. Hits harder and takes less damage the lower their flame gets.
+
+Sorcerer
+  new:
+  what it is: Spellcaster with a staff. Casts fire, frost and wind, and fuses two spells into a stronger one.
+
+Bowman
+  new: Archer
+  what it is: Archer. Hold to draw the bow longer for a stronger arrow that pierces through enemies.
+
+Rogue
+  new:
+  what it is: Dagger fighter. Deals double damage when hitting enemies from behind; teleports and uses smoke.
+
+Cleric
+  new:
+  what it is: Healer with a mace and lantern. Hitting enemies builds Grace, which is spent on heals.
+
+Warlock
+  new:
+  what it is: Dark caster. Shoots shadow bolts that curse enemies, summons imps, and drains enemies with a beam.
+
+
+============================================================
+2. ABILITIES (per class)
+   LMB = left click, RMB = right click, E and Q = keys,
+   Space = dash, R = ultimate (uses Wildfire)
+============================================================
+
+--- WARRIOR ---
+Strike (LMB)
+  new:
+  what it is: A 3-hit sword combo; the 3rd hit is a heavy swing.
+Smoulder Guard (RMB, hold)
+  new: 
+  what it is: Raise your guard to block hits; blocked hits store heat for a counter-slash when you let go.
+Counter-slash
+  new:
+  what it is: The swing that comes out of Smoulder Guard when you let go.
+Cinder Quake (E)
+  new:
+  what it is: Slam the ground around you to damage and stun nearby enemies. Costs a little of your own flame.
+Dash (Space)
+  new:
+  what it is: A quick dash that shoves enemies back and interrupts their attacks.
+Pyre Cleave (R, ultimate)
+  new:
+  what it is: A giant flaming sweep in front of you that leaves a trail of fire on the ground.
+Dark Fury (passive)
+  new:
+  what it is: The Warrior deals more damage the lower their flame is.
+
+--- SORCERER ---
+Staff (LMB)
+  new: Shove
+  what it is: A weak staff swing that pushes enemies away.
+Fire (E)
+  new: Fireball
+  what it is: A fireball that explodes when it hits.
+Gale (RMB)
+  new: 
+  what it is: A blast of wind in front of you that knocks enemies back.
+Frost (Q)
+  new: Frostbite
+  what it is: A spread of ice shards that slow enemies.
+Weaving (mechanic)
+  new: Spellweaving
+  what it is: Casting two different elements quickly in a row fuses them into a stronger spell.
+Steam Burst (Fire + Frost)
+  new: Thermal Shock
+  what it is: A burst of steam that stuns enemies.
+Firestorm (Fire + Gale)
+  new:
+  what it is: A moving fire tornado.
+Blizzard (Frost + Gale)
+  new:
+  what it is: A snowstorm on the ground that slows everything inside it.
+Dash (Space)
+  new: Gust
+  what it is: A dash that leaves a short sparkling trail; friends who walk through it get a small speed boost.
+Starfall (R, ultimate)
+  new:
+  what it is: Meteors rain down on the area you aim at and seek out enemies inside it.
+
+--- BOWMAN ---
+Arrows (LMB, hold and release)
+  new: Shoot
+  what it is: Hold to draw, let go to shoot. A full draw pierces through enemies.
+Mark (E)
+  new:
+  what it is: Marks one enemy so the whole party deals extra damage to it.
+Rain of Arrows (RMB)
+  new: Barrage
+  what it is: Arrows rain down on a circle you aim at.
+Roll (Space)
+  new:
+  what it is: A dodge roll that also flicks an arrow at the nearest enemy.
+Hawk Eye (R, ultimate)
+  new: Deadeye
+  what it is: For a few seconds every shot is instantly full strength and homes in on enemies.
+
+--- ROGUE ---
+Stab (LMB)
+  new:
+  what it is: Quick dagger stabs that hop you towards enemies; every 4th attack is a spin.
+Backstab (passive)
+  new:
+  what it is: Hitting an enemy from behind deals double damage. A red glimmer shows where to stand.
+Shadowstep (RMB)
+  new:
+  what it is: Teleport behind the enemy you aim at.
+Smoke Bomb (E)
+  new:
+  what it is: A cloud of smoke; enemies inside can't see you and turn slowly.
+Dash (Space)
+  new: Shadow Clone
+  what it is: A dash that leaves a clone (afterimage) behind which distracts nearby enemies.
+Thousand Cuts (R, ultimate)
+  new:
+  what it is: Blink from enemy to enemy, striking each from behind, then return to where you started.
+
+--- CLERIC ---
+Mace (LMB)
+  new: Swing
+  what it is: Mace swings that build Grace.
+Grace (resource)
+  new:
+  what it is: The Cleric's purple-gold bar. Filled by hitting enemies, spent on heals.
+Mending Light (E)
+  new: Kindle
+  what it is: Heals the friend you aim at (or whoever needs it most nearby, or yourself).
+Overheal shield
+  new: Overheal
+  what it is: Healing past full flame turns into a pale-blue shield that slowly fades.
+Judgement (RMB)
+  new:
+  what it is: A mace slam in front of you that stuns enemies.
+Sanctified Ground (Q)
+  new:
+  what it is: A glowing circle that heals friends and slows enemies inside it.
+Blessed Step (Space)
+  new: Guiding Light
+  what it is: A short dash; friends you pass through get a little heal.
+Dawn (R, ultimate)
+  new: Daybreak
+  what it is: A burst of light that heals everyone nearby and relights friends whose flame went out.
+
+--- WARLOCK ---
+Shadow Bolt (LMB)
+  new: Bolt
+  what it is: Mid-range shadow shots; every 3rd one curses the enemy.
+Curse (mechanic)
+  new:
+  what it is: A cursed enemy takes extra damage from everyone for a few seconds.
+Grasping Hands (E)
+  new: Dead Man's Reach
+  what it is: Shadow hands burst out of the ground where you aim, holding enemies in place.
+Summon Imps (RMB)
+  new: Swarm
+  what it is: Summons small imps that bite enemies for a few seconds.
+Soul Siphon (Q)
+  new:
+  what it is: A beam that drains an enemy and refills your mana.
+Shadow Slip (Space)
+  new: Phase Shift
+  what it is: A short blink; nothing can hit you while you slip.
+Eclipse (R, ultimate)
+  new:
+  what it is: The screen darkens and a huge shadow familiar appears that pulls enemies' attention.
+Familiar
+  new:
+  what it is: The huge shadow beast summoned by Eclipse.
+
+
+============================================================
+3. SKILL TREES (3 branches per class, 4 upgrades per branch)
+   The last upgrade in each branch is the special "capstone".
+============================================================
+
+--- WARRIOR ---
+Fury (branch)                      new:      | Hit harder the lower your flame.
+  Deeper Dark                      new:      | Dark Fury can give more damage.
+  Swift Blade                      new:      | Swing your sword faster.
+  Crushing Third                   new:      | Every 3rd hit deals more.
+  Embers in the Dark (capstone)    new:      | Kills while under 40% flame restore some flame.
+Bulwark (branch)                   new:      | Block, counter and outlast.
+  Tempered Guard                   new:      | Wider block, and blocked hits store more heat.
+  Thick Wick                       new:      | More max flame.
+  Riposte                          new:      | The counter-slash deals more damage.
+  Unbroken (capstone)              new:      | Blocking right as a hit lands stuns the attacker.
+Cinder (branch)                    new:      | Bigger quakes, longer fires.
+  Wide Quake                       new:      | Cinder Quake reaches further.
+  Searing Quake                    new:      | Cinder Quake deals more damage.
+  Lean Burn                        new:      | Cinder Quake costs less flame.
+  Pyre Lord (capstone)             new:      | Pyre Cleave fire lasts twice as long; Wildfire fills faster.
+
+--- SORCERER ---
+Pyromancy (branch)                 new:      | Bigger, hotter fire.
+  Searing Flames                   new:      | Fire spells deal more damage.
+  Wide Blast                       new:      | Fireball explosions are bigger.
+  Raging Storm                     new:      | Firestorm lasts longer.
+  Cataclysm (capstone)             new:      | Starfall drops 50% more meteors.
+Rime (branch)                      new:      | Slow them down, then shatter them.
+  Extra Shard                      new:      | Frost fires 1 more shard.
+  Deep Chill                       new:      | Slows last longer and Frost deals more damage.
+  Whiteout                         new:      | Blizzard is bigger.
+  Shatter (capstone)               new: Permafrost     | Slowed enemies take 30% more damage from you.
+Tempest (branch)                   new:      | Wind, mana and faster weaving.
+  Gale Force                       new:      | Gale pushes harder and deals more damage.
+  Deep Well                        new:      | More max mana.
+  Quick Weave                      new:      | More time to weave, and fusing costs less mana.
+  Eye of the Storm (capstone)      new:      | Fusing costs no extra mana.
+
+--- BOWMAN ---
+Marksman (branch)                  new:      | Bigger, faster shots.
+  Steady Draw                      new:      | Draw your bow faster.
+  Broadhead                        new:      | Arrows deal more damage.
+  Quick Nock                       new:      | Wait less between shots.
+  Deadeye (capstone)               new: Bullseye     | Fully drawn shots deal +20% damage.
+Hunter (branch)                    new:      | Mark prey for the whole party.
+  Hunter's Mark                    new: Weakpoint     | Marked enemies take even more damage.
+  Lingering Mark                   new:      | Mark lasts longer.
+  Tracker                          new:      | Mark recharges faster.
+  Predator (capstone)              new:      | Hitting your marked enemy restores flame.
+Ranger (branch)                    new:      | Rain, roam and Hawk Eye.
+  Downpour                         new:      | Rain of Arrows drops more arrows.
+  Wide Rain                        new:      | Rain of Arrows covers more ground.
+  Light Draw                       new:      | Walk faster while drawing.
+  Keen Hawk (capstone)             new: Apex Sight     | Hawk Eye lasts 3 seconds longer.
+
+--- ROGUE ---
+Shadow (branch)                    new:      | Shadowstep and smoke.
+  Swift Step                       new:      | Shadowstep recharges faster.
+  Ambush                           new:      | Your first stab after Shadowstep deals more.
+  Thick Smoke                      new:      | Smoke Bomb lasts longer and is bigger.
+  Shroud (capstone)                new:      | Standing in your smoke restores flame.
+Blade (branch)                     new: Assassin     | Hit harder from behind.
+  Keen Edge                        new:      | Stabs deal more damage.
+  Assassin                         new: Lethality     | Backstabs deal more.
+  Whirl                            new:      | The combo spin deals more and reaches further.
+  Deep Cuts (capstone)             new:      | Backstabs make enemies bleed.
+Trickster (branch)                 new:      | Decoys, dashes and the ultimate.
+  Mirror Image                     new:      | Your dash clone lasts longer.
+  Light Feet                       new:      | Dash recharges faster.
+  Flurry                           new:      | Thousand Cuts hits 2 more enemies.
+  Phantom (capstone)               new:      | Clones explode when enemies bite them.
+
+--- CLERIC ---
+Devotion (branch)                  new:      | Stronger heals, bigger shields.
+  Mercy                            new:      | Mending Light heals more.
+  Halo                             new:      | Overheal shields can grow bigger.
+  Thrift                           new:      | Mending Light costs less Grace.
+  Beacon (capstone)                new:      | Mending Light also heals everyone near the target.
+Zeal (branch)                      new: Crusader     | Hit harder, earn Grace faster.
+  Zealous                          new:      | Mace hits deal more damage.
+  Fervor                           new: Radiant      | Mace hits build more Grace.
+  Verdict                          new:      | Judgement stuns longer and recharges faster.
+  Smite (capstone)                 new:      | Every 3rd mace hit calls down light for extra damage.
+Sanctum (branch)                   new: Sanctuary     | Holy ground and the dawn.
+  Hallowed                         new:      | Sanctified Ground is bigger and heals more.
+  Lasting Light                    new:      | Sanctified Ground lasts longer.
+  Blessed Step (upgrade)           new:      | Your dash heals more. (Same name as the Cleric dash.)
+  Sunrise (capstone)               new:      | Dawn also gives everyone a shield.
+
+--- WARLOCK ---
+Dread (branch)                     new:      | Bolts and curses.
+  Malice                           new:      | Shadow bolts deal more damage.
+  Deep Hex                         new:      | Cursed enemies take more damage.
+  Quick Hex                        new:      | Curse every 2nd bolt instead of every 3rd.
+  Plague (capstone)                new:      | A cursed enemy passes its curse on when it dies.
+Legion (branch)                    new: Summoner     | More imps, meaner bites.
+  Brood                            new:      | Summon 1 more imp.
+  Sharp Fangs                      new:      | Imps deal more damage.
+  Feast                            new:      | Imp bites give more mana.
+  Colossus (capstone)              new: Nightfall     | Eclipse lasts 3 seconds longer.
+Void (branch)                      new:      | Hands and soul drain.
+  Iron Grip                        new: Grave Bind     | Grasping Hands hold longer and hit harder.
+  Long Reach                       new: Snatch     | Grasping Hands cover more ground.
+  Thirst                           new:      | Soul Siphon drains harder and gives more mana.
+  Lifetap (capstone)               new: Harvest     | Soul Siphon also restores your flame.
+
+
+============================================================
+4. BOONS (pick 1 of 3 between forests, last until the run ends)
+============================================================
+Whetstone          new: Flint     | +12% damage.
+Spare Wick         new: Candle     | +15 max flame.
+Fleetfoot Moss     new: Swift Charm     | +10% move speed.
+Ember Pouch        new:      | Embers heal 50% more.
+Feather Cloak      new: Owl's Feather     | Dash recharges 25% faster.
+Focus Stone        new:      | Skills recharge 15% faster.
+Kindling           new: Firewood     | +30 Wildfire now, and Wildfire fills faster.
+Hungry Flame       new: Siphon Vial     | Every hit restores 1 flame.
+Thornhide          new: Bark Shield     | Take 12% less damage.
+Owl's Wisdom       new: Ancient Scroll     | +25% EXP for the whole party.
+Mana Spring        new: Crystal     | Sorcerer only: mana refills faster.
+Dark Spring        new: Skull     | Warlock only: mana refills faster.
+Psalm Book         new: Ripped Page     | Cleric only: mace hits build more Grace.
+
+
+============================================================
+5. CORE GAME WORDS
+============================================================
+Wildwick                 new:      | The name of the game.
+Flame                    new:      | Your health AND your light. Run out and you go down.
+Flame out / going down   new: Burnt out      | What happens when your flame hits zero (a friend can relight you).
+Rekindle                 new:      | Relighting a friend whose flame went out, by standing next to them.
+Wildfire                 new:      | The second bar; fills slowly and powers your ultimate.
+Ultimate                 new: Wildfire Ability      | Each class's big special move (R).
+Embers                   new:      | Small orange drops from enemies that heal your flame.
+Mana                     new:      | Sorcerer and Warlock spell energy.
+EXP / Level              new:      | Experience; every class levels up on its own, up to 30.
+Skill point              new:      | Earned each level; spent in the skill tree.
+Mastered                 new:      | A class that reached level 30.
+Prestige                 new: Ignition     | Going back to level 1 at level 30 to make one ability permanently stronger.
+Rebirth                  new:      | Every 5th prestige; also upgrades your ultimate.
+Blazing                  new:      | Rebirth choice: ultimate deals 15% more damage and healing.
+Spreading                new: Surging     | Rebirth choice: ultimate is 15% bigger and lasts longer.
+Kindled                  new: Sparking     | Rebirth choice: Wildfire fills 15% faster.
+Boon                     new: Favor     | The pick-1-of-3 bonus between forests.
+Coins                    new:      | Gold specks enemies drop; spent at the Merchant.
+Ember-touched elite      new: Elite     | A rare, tougher, glowing enemy that drops Wildfire.
+Wildfire Surge           new: Twinflare      | Bonus explosion when two friends use their ultimates at the same time.
+Shatter (combo)          new:      | Warrior quake / Cleric Judgement on an enemy a friend slowed with frost.
+Crush (combo)            new:      | Warrior sword hit on an enemy a friend's Grasping Hands is holding.
+Hellfire (combo)         new: Burst      | Killing an enemy a friend cursed makes it explode.
+
+
+============================================================
+6. PLACES
+============================================================
+The Campfire             new:      | The camp hub where you start, meet friends and prepare.
+Into the Wilds           new: Entrance     | The archway you all walk under to start a run.
+Thornwood (I, II, III)   new:      | The forest stages.
+Heartwood Gate           new:      | The gate at the end of each forest; opens when the guardian dies.
+Heartwood shrine         new: Heartwood Stump     | Glowing stumps in forests that give Wildfire.
+The Heart of the Wood    new: The Heart of the Woods     | The final boss arena.
+Training Grounds         new:      | The camp area with practice dummies.
+Class Hall               new:      | The camp area where you switch class at the shrines.
+
+
+============================================================
+7. CAMP STATIONS (things you press F on)
+============================================================
+The Skilltree            new:      | The great glowing tree where you spend points and prestige.
+The Merchant             new:      | The fox's stall that sells potions and Reclaim Seeds.
+Leaderboard              new:      | Board showing daily runs and the deepest endless runs.
+Stats board              new:      | Board showing everyone's runs, kills and best run.
+The Path Stone           new: Waystone     | Standing stone where the host picks casual, daily or endless.
+Wardrobe                 new: Tent     | Change your cloak, hat and flame colour (in the tent).
+Wildfire Fountain        new:      | Fills your Wildfire so you can practise ultimates in camp.
+Duel Ring                new:      | Stone circle for friendly 1v1 fights.
+Pond (Fish)              new:      | Fishing spot that fills your fish journal.
+Campfire panel           new:      | Host your camp or join a friend's.
+Reset post               new:      | Resets the training dummies' damage numbers.
+Practice dummies         new:      | Straw dummies; one swings back, one always faces you.
+
+
+============================================================
+8. RUN MODES
+============================================================
+Casual run       new:      | A new forest each time: 3 forests and the final boss.
+Daily run        new:      | The same forest for everyone that day, with a leaderboard.
+Endless          new:      | Forests forever, harder each time, a boss every 3rd; save between forests.
+
+
+============================================================
+9. ENEMIES AND BOSSES
+============================================================
+Thorn-wolf          new:      | The basic enemy; hunts in packs and lunges.
+Wisp                new:      | Tiny lights that dive at you, burst and dim your light.
+Mossback            new:      | Slow armoured beetle; barely hurt from the front, hit it from behind.
+Shaman              new:      | Hangs back, heals the pack and calls thorn snares under you.
+Alpha Thornwolf     new:      | Mini boss guarding a forest's gate; howls to call more wolves.
+Bramble Widow       new:      | Spider mini boss that can guard the gate instead; spits webs that hold you.
+The Elder Treant    new: The Creaking Oak     | The final boss tree; root slams, sweeps, and pulls up its roots at low health.
+
+
+============================================================
+10. MERCHANT ITEMS
+============================================================
+Flame Tonic       new:      | Potion (key 1): restore 40% of your flame.
+Ember Draught     new:      | Potion (key 2): +35 Wildfire.
+Swiftroot Brew    new:      | Potion (key 3): move 20% faster for 12 seconds.
+Phoenix Feather   new:      | Relights you once when your flame goes out.
+Reclaim Seed      new:      | Takes back 1 spent skill point at the Skilltree.
+
+
+============================================================
+11. FOREST EVENTS (a random twist for a forest)
+============================================================
+Fog              new:      | Everyone's light is smaller.
+Ember Storm      new: Wildfire Surge     | Wildfire drops are doubled.
+Blood Moon       new:      | Enemies are faster but give 30% more EXP.
+Gold Rush        new:      | Enemies drop twice the coins.
+Firefly Bloom    new: Firefly Forest     | Brighter light, and embers heal more.
+Wisp Swarm       new:      | Lots of wisps.
+Restless Pack    new:      | Fewer wolves, many more elites.
+
+
+============================================================
+12. COSMETICS (Wardrobe)
+============================================================
+Cloak colours:  Ember, Moss, Tide, Dusk, Gold, Rose, Ash, Frost
+  new:
+Hats:           None, Hood, Witch Hat, Antlers, Mushroom Cap, Circlet
+  new:
+Flame colours:  Amber, Azure, Verdant, Violet, Ghostlight
+  new:
+(write them in the same order, separated by commas)
+
+
+============================================================
+13. FISH (the pond's fish journal)
+============================================================
+Moss Minnow, Bark Perch, Dusk Trout, Emberfin, Lantern Eel, Starlit Koi, An old boot
+  new:
+(common to rare, in this order. "An old boot" is the joke catch.)
+
+
+============================================================
+14. EMOTES AND PINGS
+============================================================
+Emotes (hold C):   Wave, Bow, Cheer, Dance, Sit, Nap, Show off
+  new:
+Pings (hold middle mouse):   Over here!, Danger!, Go!, Help!, Wait, Attack this!
+  new:
+Emoji reactions:   Haha, Wow, Love, Nice, Grr, Lit, Aww, Cool
+  new:

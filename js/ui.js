@@ -122,7 +122,7 @@ export const settings = {
     const padHead = document.createElement('h3'); padHead.textContent = 'Controller';
     const pad = document.createElement('div');
     pad.className = 'binds';
-    for (const [btn, what] of [['Left stick', 'Move'], ['Right stick', 'Aim'], ['RT', 'Attack'], ['LT', 'Skill 2 (Guard / Gale / Rain / Shadowstep)'], ['X', 'Skill 1 (Quake / Fire / Mark / Smoke)'], ['LB', 'Skill 3 (Frost)'], ['RB', 'Wildfire ultimate'], ['A', 'Dash'], ['Y', 'Interact'], ['View', 'Skill tree'], ['Start', 'Pause'], ['B', 'Back / close']]) {
+    for (const [btn, what] of [['Left stick', 'Move'], ['Right stick', 'Aim'], ['RT', 'Attack'], ['LT', 'Skill 2 (Guard / Gale / Rain / Shadowstep)'], ['X', 'Skill 1 (Quake / Fireball / Mark / Smoke)'], ['LB', 'Skill 3 (Frostbite)'], ['RB', 'Wildfire Ability'], ['A', 'Dash'], ['Y', 'Interact'], ['View', 'Skill tree'], ['Start', 'Pause'], ['B', 'Back / close']]) {
       const r = document.createElement('div');
       r.className = 'bind';
       const l = document.createElement('span'); l.textContent = what;
@@ -304,7 +304,7 @@ export class TreePanel {
     this.lastKey = key;
     const cname = byId(CLASSES, me.k).name;
     const mastered = me.lv >= MAX_LEVEL;
-    $('#tree-title').textContent = `${cname} · level ${me.lv}${mastered ? ' · mastered' : ''}${me.np ? ` · prestige ${me.np}` : ''}`;
+    $('#tree-title').textContent = `${cname} · level ${me.lv}${mastered ? ' · mastered' : ''}${me.np ? ` · ignition ${me.np}` : ''}`;
     $('#tree-pts').textContent = me.pts === 1 ? '1 point' : `${me.pts} points`;
     $('#tree-xp-fill').style.width = (mastered ? 100 : (me.xp / me.nx) * 100) + '%';
     $('#tree-xp-text').textContent = mastered ? 'Mastered!' : `${me.xp} / ${me.nx} exp to level ${me.lv + 1}`;
@@ -348,18 +348,18 @@ export class TreePanel {
     if (have.length || rebs.length) {
       const p = document.createElement('p');
       p.className = 'note';
-      p.textContent = `Prestige upgrades: ${have.join(' · ') || 'none'}${rebs.length ? ` · Ultimate: ${rebs.join(' · ')}` : ''}`;
+      p.textContent = `Ignition upgrades: ${have.join(' · ') || 'none'}${rebs.length ? ` · Wildfire Ability: ${rebs.join(' · ')}` : ''}`;
       box.appendChild(p);
     }
     if (!mastered) return;
-    if (!edit) { const p = document.createElement('p'); p.className = 'note gold'; p.textContent = 'This class is mastered! Visit the Skilltree in camp to prestige.'; box.appendChild(p); return; }
+    if (!edit) { const p = document.createElement('p'); p.className = 'note gold'; p.textContent = 'This class is mastered! Visit the Skilltree in camp to ignite it.'; box.appendChild(p); return; }
     const rebirth = (me.np + 1) % REBIRTH_EVERY === 0;
     const h = document.createElement('h3');
-    h.textContent = rebirth ? `Prestige ${me.np + 1}: a Rebirth!` : `Prestige ${me.np + 1}`;
+    h.textContent = rebirth ? `Ignition ${me.np + 1}: a Rebirth!` : `Ignition ${me.np + 1}`;
     box.appendChild(h);
     const info = document.createElement('p');
     info.className = 'note';
-    info.textContent = `Go back to level 1 with an empty tree, and make one ability permanently stronger (+${Math.round(PRESTIGE.power * 100)}% damage or healing, ${Math.round((1 - PRESTIGE.cd) * 100)}% faster recharge).${rebirth ? ' As a Rebirth, you also improve your Wildfire ultimate.' : ''}`;
+    info.textContent = `Go back to level 1 with an empty tree, and make one ability permanently stronger (+${Math.round(PRESTIGE.power * 100)}% damage or healing, ${Math.round((1 - PRESTIGE.cd) * 100)}% faster recharge).${rebirth ? ' As a Rebirth, you also improve your Wildfire Ability.' : ''}`;
     box.appendChild(info);
     const row = document.createElement('div');
     row.className = 'prow-btns';
@@ -387,11 +387,11 @@ export class TreePanel {
     }
     const go = document.createElement('button');
     go.className = 'gbtn primary';
-    go.textContent = 'Prestige now';
+    go.textContent = 'Ignite now';
     go.disabled = !this.pick || (rebirth && !this.reb);
     go.onclick = async () => {
       const name = slots.find(([id]) => id === this.pick)[1];
-      if (!(await confirmDialog(`Prestige your ${byId(CLASSES, me.k).name}? You go back to level 1 with an empty skill tree, and ${name} becomes permanently stronger.`, 'Prestige'))) return;
+      if (!(await confirmDialog(`Ignite your ${byId(CLASSES, me.k).name}? You go back to level 1 with an empty skill tree, and ${name} becomes permanently stronger.`, 'Ignite'))) return;
       this.game.act('prestige', this.pick, this.reb);
       this.pick = null; this.reb = null; this.lastKey = '';
     };
@@ -409,7 +409,7 @@ export class BoonPanel {
     $('#vote-go').onclick = () => game.vote('go');
     $('#vote-camp').onclick = async () => {
       const endless = game.lastSnap && game.lastSnap.md === 'endless';
-      if (await confirmDialog(endless ? 'Save the endless run and return to camp? The host can continue from the next forest at the Path Stone.' : 'Return to camp? This ends the run for the whole party.', endless ? 'Save and return' : 'Return to camp')) game.vote('camp');
+      if (await confirmDialog(endless ? 'Save the endless run and return to camp? The host can continue from the next forest at the Waystone.' : 'Return to camp? This ends the run for the whole party.', endless ? 'Save and return' : 'Return to camp')) game.vote('camp');
     };
   }
   refresh(snap, me) {
@@ -425,21 +425,21 @@ export class BoonPanel {
     // after picking a boon: continue into the next forest (or the boss), or head back to camp
     const showVote = !me.bc;
     $('#vote-row').classList.toggle('hidden', !showVote);
-    $('#vote-go').textContent = me.vt === 'go' ? 'Waiting for the party…' : nextIsBoss ? 'Face the Elder Treant' : 'Continue into the forest';
+    $('#vote-go').textContent = me.vt === 'go' ? 'Waiting for the party…' : nextIsBoss ? 'Face the Creaking Oak' : 'Continue into the forest';
     $('#vote-go').disabled = me.vt === 'go';
     const key = JSON.stringify(me.bc);
     if (key === this.lastKey) return;
     this.lastKey = key;
     const cards = $('#boon-cards');
     cards.innerHTML = '';
-    $('#boons-title').textContent = me.bc ? 'Choose a boon' : nextIsBoss ? 'The heart of the wood awaits' : 'Continue?';
+    $('#boons-title').textContent = me.bc ? 'Choose a favor' : nextIsBoss ? 'The heart of the woods awaits' : 'Continue?';
     if (!me.bc) return;
     me.bc.forEach((id, i) => {
       const b = byId(BOONS, id);
       const el = document.createElement('button');
       el.className = 'boon gbtn';
       el.innerHTML = `<span class="icon"></span><strong></strong><small></small>`;
-      el.querySelector('.icon').textContent = b.icon;
+      el.querySelector('.icon').appendChild(iconCanvas('boon_' + b.id, 36));
       el.querySelector('strong').textContent = b.name;
       el.querySelector('small').textContent = b.desc;
       el.onclick = () => this.game.pickBoon(i);
@@ -451,20 +451,20 @@ export class BoonPanel {
 // ---------------------------------------------------------- controls screen (H) and class tips
 // Only your class's skills are listed, with the same icons as your skill buttons.
 const SKILL_TEXT = {
-  warrior: { atk: 'Sword combo. Every 3rd swing is heavy (and slower to recover).', guard: 'Hold to block hits from the front, let go to counter-slash.', quake: 'Burn some flame to slam the ground around you.', dash: 'Dash. The start of a dash dodges attacks, and shoves enemies you dash into, breaking their attack.', ult: 'Pyre Cleave: a giant flaming sweep that leaves fire behind (needs full Wildfire).' },
-  sorcerer: { atk: 'Staff swing: weak, but pushes enemies away.', gale: 'Gale: a blast of wind that knocks enemies back.', fire: 'Fire: an exploding fireball.', frost: 'Frost: slowing ice shards.', dash: 'Dash. Leaves a faint trail that speeds up allies who walk through it.', ult: 'Starfall: meteors hunt the monsters where you aim (needs full Wildfire).' },
-  bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Rain of Arrows where you aim.', dash: 'Roll. Flicks a small arrow at the nearest enemy.', ult: 'Hawk Eye: every shot is full strength and seeks enemies (needs full Wildfire).' },
-  rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Dash. Leaves a clone behind that nearby enemies turn on for a moment.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
-  cleric: { atk: 'Mace swing. Every hit builds Grace.', mend: 'Mending Light: heal the ally you aim at (or whoever needs it most, or yourself). Costs Grace.', judge: 'Judgement: slam your mace to stun enemies in front of you.', ground: 'Sanctified Ground: a ring of light that heals allies and slows enemies. Costs Grace.', dash: 'Blessed Step: dash and leave a spark that heals allies you pass.', ult: 'Dawn: heal everyone near you and rekindle fallen allies, who are safe for 3 seconds (needs full Wildfire).' },
-  warlock: { atk: 'Shadow bolt. Every 3rd bolt curses: cursed enemies take extra damage.', hands: 'Grasping Hands: shadow hands burst up where you aim, holding enemies in place.', imps: 'Summon Imps: 3 imps chase and bite for 8 seconds. Their bites give you mana.', siphon: 'Soul Siphon: drain the enemy you aim at, refilling your mana.', dash: 'Shadow Slip: a quick blink you cannot be hit during.', ult: 'Eclipse: a huge, tough familiar draws every enemy to it (needs full Wildfire).' },
+  warrior: { atk: 'Strike: sword combo. Every 3rd swing is heavy (and slower to recover). Never uses Fury.', guard: 'Iron Guard: hold to block hits from the front (blocking builds Fury), let go for Retaliation.', quake: 'Shockwave: slam the ground around you to stun enemies.', cry: 'Battle Cry: every enemy nearby turns on you for a few seconds.', dash: 'Bash: dash and shove enemies you hit, breaking their attack. The start of it dodges attacks.', ult: 'Bladestorm: spin like a whirlwind for 4 seconds, cutting everything around you (needs full Wildfire).' },
+  sorcerer: { atk: 'Shove: a weak staff swing that pushes enemies away.', gale: 'Gale: a blast of wind that knocks enemies back.', fire: 'Fireball: an exploding fireball.', frost: 'Frostbite: slowing ice shards.', dash: 'Gust: dash and leave a faint trail that speeds up allies who walk through it.', ult: 'Starfall: meteors hunt the monsters where you aim (needs full Wildfire).' },
+  bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Barrage where you aim.', dash: 'Roll. Flicks a small arrow at the nearest enemy.', ult: 'Deadeye: every shot is full strength and seeks enemies (needs full Wildfire).' },
+  rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Shadow Clone: dash and leave a clone behind that nearby enemies turn on for a moment.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
+  cleric: { atk: 'Swing. Every hit builds Grace.', mend: 'Kindle: heal the ally you aim at (or whoever needs it most, or yourself). Costs Grace.', judge: 'Judgement: slam your mace to stun enemies in front of you.', ground: 'Sanctified Ground: a ring of light that heals allies and slows enemies. Costs Grace.', dash: 'Guiding Light: dash and leave a spark that heals allies you pass.', ult: 'Daybreak: heal everyone near you and rekindle fallen allies, who are safe for 3 seconds (needs full Wildfire).' },
+  warlock: { atk: 'Bolt. Every 3rd bolt curses: cursed enemies take extra damage.', hands: 'Dead Man\'s Reach: shadow hands burst up where you aim, holding enemies in place.', imps: 'Swarm: 3 imps chase and bite for 8 seconds. Their bites give you souls.', siphon: 'Soul Siphon: drain the enemy you aim at, refilling your souls.', dash: 'Phase Shift: a quick blink you cannot be hit during.', ult: 'Eclipse: a huge, tough familiar draws every enemy to it (needs full Wildfire).' },
 };
 export const CLASS_TRICK = {
-  warrior: 'Dark Fury: the lower your flame, the harder you hit.',
-  sorcerer: 'Weaving: cast two different spells quickly and they fuse. Fire + Frost = Steam Burst, Fire + Gale = Firestorm, Frost + Gale = Blizzard. Fusing costs extra mana.',
+  warrior: 'Fury: getting hit (or blocking) fills your Fury gauge. Your abilities (not Strike) use some of it for extra damage. Bloodlust: the fuller your Fury, the harder and faster you swing.',
+  sorcerer: 'Spellweaving: cast two different spells quickly and they fuse. Fireball + Frostbite = Thermal Shock, Fireball + Gale = Firestorm, Frostbite + Gale = Blizzard. Fusing costs extra mana.',
   bowman: 'Draw longer for stronger shots. You walk slower while drawing.',
   rogue: 'Backstab: hits from behind deal double damage. A red dagger shows over enemies you are behind.',
   cleric: 'Grace: hit enemies to build it, spend it to heal. Heals past full flame become a shield. Grace fades when you stop fighting, but never below half.',
-  warlock: 'Curses and summons: your imps and hands do the dirty work while you keep your distance. Imp bites refill your mana.',
+  warlock: 'Curses and summons: your imps and hands do the dirty work while you keep your distance. Imp bites refill your souls.',
 };
 const PAD = { strike: 'RT', skill2: 'LT', skill1: 'X', skill3: 'LB', ult: 'RB', dash: 'A', interact: 'Y', tree: 'View', controls: '—', pause: 'Start' };
 
@@ -673,10 +673,10 @@ boardPanel.fill = function (game) {
   const snap = game.lastSnap;
   const people = (snap ? snap.ps : []).map((p) => ({ name: p.u, cls: p.k, c: p.cloak || p.c, st: p.cs || (p.id === game.myId ? game.char.stats : null) || { runs: 0, kills: 0, bosses: 0, best: 0 } }));
   people.sort((a, b) => b.st.bosses - a.st.bosses || b.st.best - a.st.best || b.st.kills - a.st.kills);
-  const bestText = (b) => (b >= 4 ? 'Beat the Treant' : b > 0 ? `Thornwood ${['I', 'II', 'III'][b - 1]}` : '—');
+  const bestText = (b) => (b >= 4 ? 'Beat the Oak' : b > 0 ? `Thornwood ${['I', 'II', 'III'][b - 1]}` : '—');
   $('#board-name').textContent = 'Everyone in this camp';
   const box = $('#board-rows');
-  box.innerHTML = '<div class="lrow head"><span>Player</span><span>Runs</span><span>Kills</span><span>Treants</span><span>Best run</span></div>';
+  box.innerHTML = '<div class="lrow head"><span>Player</span><span>Runs</span><span>Kills</span><span>Oaks</span><span>Best run</span></div>';
   for (const p of people) {
     const row = document.createElement('div');
     row.className = 'lrow';

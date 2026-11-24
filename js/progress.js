@@ -19,19 +19,19 @@ export const PRESTIGE = { power: 0.1, cd: 0.94 }; // per pick: +10% damage/heali
 // Every 5th prestige is a Rebirth: also pick one thing about your Wildfire ultimate.
 export const REBIRTH_EVERY = 5;
 export const REBIRTHS = [
-  { id: 'power', name: 'Blazing', desc: 'Your ultimate deals 15% more damage and healing.' },
-  { id: 'reach', name: 'Spreading', desc: 'Your ultimate is 15% bigger and lasts 15% longer.' },
-  { id: 'charge', name: 'Kindled', desc: 'Your Wildfire fills 15% faster.' },
+  { id: 'power', name: 'Blazing', desc: 'Your Wildfire Ability deals 15% more damage and healing.' },
+  { id: 'reach', name: 'Surging', desc: 'Your Wildfire Ability is 15% bigger and lasts 15% longer.' },
+  { id: 'charge', name: 'Sparking', desc: 'Your Wildfire fills 15% faster.' },
 ];
 
 // The 4 abilities you can improve when you prestige (classes without a Q skill get their dash instead).
 export const SLOTS = {
-  warrior: [['atk', 'Strike', 'strike'], ['s2', 'Smoulder Guard', 'skill2'], ['s1', 'Cinder Quake', 'skill1'], ['dash', 'Dash', 'dash']],
-  sorcerer: [['atk', 'Staff', 'strike'], ['s2', 'Gale', 'skill2'], ['s1', 'Fire', 'skill1'], ['s3', 'Frost', 'skill3']],
-  bowman: [['atk', 'Arrows', 'strike'], ['s2', 'Rain of Arrows', 'skill2'], ['s1', 'Mark', 'skill1'], ['dash', 'Roll', 'dash']],
-  rogue: [['atk', 'Stab', 'strike'], ['s2', 'Shadowstep', 'skill2'], ['s1', 'Smoke Bomb', 'skill1'], ['dash', 'Dash', 'dash']],
-  cleric: [['atk', 'Mace', 'strike'], ['s2', 'Judgement', 'skill2'], ['s1', 'Mending Light', 'skill1'], ['s3', 'Sanctified Ground', 'skill3']],
-  warlock: [['atk', 'Shadow Bolt', 'strike'], ['s2', 'Summon Imps', 'skill2'], ['s1', 'Grasping Hands', 'skill1'], ['s3', 'Soul Siphon', 'skill3']],
+  warrior: [['atk', 'Strike', 'strike'], ['s2', 'Iron Guard', 'skill2'], ['s1', 'Shockwave', 'skill1'], ['s3', 'Battle Cry', 'skill3']],
+  sorcerer: [['atk', 'Shove', 'strike'], ['s2', 'Gale', 'skill2'], ['s1', 'Fireball', 'skill1'], ['s3', 'Frostbite', 'skill3']],
+  bowman: [['atk', 'Shoot', 'strike'], ['s2', 'Barrage', 'skill2'], ['s1', 'Mark', 'skill1'], ['dash', 'Roll', 'dash']],
+  rogue: [['atk', 'Stab', 'strike'], ['s2', 'Shadowstep', 'skill2'], ['s1', 'Smoke Bomb', 'skill1'], ['dash', 'Shadow Clone', 'dash']],
+  cleric: [['atk', 'Swing', 'strike'], ['s2', 'Judgement', 'skill2'], ['s1', 'Kindle', 'skill1'], ['s3', 'Sanctified Ground', 'skill3']],
+  warlock: [['atk', 'Bolt', 'strike'], ['s2', 'Swarm', 'skill2'], ['s1', 'Dead Man\'s Reach', 'skill1'], ['s3', 'Soul Siphon', 'skill3']],
 };
 const SLOT_IDS = ['atk', 's1', 's2', 's3', 'dash'];
 
@@ -68,7 +68,7 @@ export const SHOP = [
   { id: 'tonic', name: 'Flame Tonic', price: 15, max: 5, key: 'Digit1', desc: 'Drink to restore 40% of your flame.' },
   { id: 'draught', name: 'Ember Draught', price: 35, max: 3, key: 'Digit2', desc: 'Drink for +35 Wildfire.' },
   { id: 'brew', name: 'Swiftroot Brew', price: 12, max: 5, key: 'Digit3', desc: 'Drink to move 20% faster for 12 seconds.' },
-  { id: 'charm', name: 'Phoenix Feather', price: 60, max: 2, key: '', desc: 'If your flame goes out, it relights you once at 40% (used up automatically).' },
+  { id: 'charm', name: 'Phoenix Feather', price: 60, max: 2, key: '', desc: 'If you burn out, it relights you once at 40% (used up automatically).' },
   { id: 'seed', name: 'Reclaim Seed', price: 25, max: 9, key: '', desc: 'Take back 1 spent skill point at the Skilltree, to spend somewhere else.' },
 ];
 export function cleanItems(raw) {
@@ -83,12 +83,12 @@ export const COIN_DROPS = { wolf: [0.6, 1], wisp: [0.25, 1], mossback: [1, 3], s
 // ---- Forest events: a random twist for a forest ---------------
 export const EVENTS = [
   { id: 'fog', name: 'Fog', desc: "Everyone's light is smaller." },
-  { id: 'emberstorm', name: 'Ember Storm', desc: 'Wildfire drops are doubled.' },
+  { id: 'emberstorm', name: 'Wildfire Surge', desc: 'Wildfire drops are doubled.' },
   { id: 'bloodmoon', name: 'Blood Moon', desc: 'Enemies are faster, but give 30% more EXP.' },
   { id: 'goldrush', name: 'Gold Rush', desc: 'Enemies drop twice the coins.' },
-  { id: 'fireflies', name: 'Firefly Bloom', desc: 'Brighter light, and embers heal 50% more.' },
+  { id: 'fireflies', name: 'Firefly Forest', desc: 'Brighter light, and embers heal 50% more.' },
   { id: 'swarm', name: 'Wisp Swarm', desc: 'Swarms of wisps fill the forest.' },
-  { id: 'restless', name: 'Restless Pack', desc: 'Fewer wolves, but far more ember-touched elites.' },
+  { id: 'restless', name: 'Restless Pack', desc: 'Fewer wolves, but far more elites.' },
 ];
 
 // ---- Fishing (camp pond) ------------------------------------
@@ -110,7 +110,7 @@ export function rollFish() {
 
 // ---- Run modes ----------------------------------------------
 export const MODES = [
-  { id: 'casual', name: 'Casual run', desc: 'A brand-new forest every time: 3 forests and the Elder Treant.' },
+  { id: 'casual', name: 'Casual run', desc: 'A brand-new forest every time: 3 forests and the Creaking Oak.' },
   { id: 'daily', name: 'Daily run', desc: "Today's forest, the same for everyone. Your best time goes on the leaderboard." },
   { id: 'endless', name: 'Endless', desc: 'Forest after forest, harder every time, a boss every 3rd. Save at camp between forests.' },
 ];

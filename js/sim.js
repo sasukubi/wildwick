@@ -117,7 +117,7 @@ export class Sim {
   }
 
   // Clerics start with half their Grace; everyone else starts with full mana
-  startMana(p) { return p.cls === 'cleric' ? (p.stats.maxMana || 0) * CLERIC.graceStart / 100 : p.stats.maxMana || 0; }
+  startMana(p) { return p.cls === 'warrior' ? 0 : p.cls === 'cleric' ? (p.stats.maxMana || 0) * CLERIC.graceStart / 100 : p.stats.maxMana || 0; }
 
 
 
@@ -417,7 +417,8 @@ export class Sim {
   // ======================================================= shared combat helpers
   power(p) {
     const slot = p._slot && p.stats.slot ? (p.stats.slot[p._slot] || 1) * (p._slot === 'ult' ? p.stats.ultMult : 1) : 1;
-    return (1 + (p.stats.furyMax || 0) * (1 - p.hp / p.max)) * p.stats.dmgMult * TOUGH.dmg * slot;
+    const lust = p.cls === 'warrior' ? 1 + WARRIOR.lust.dmg * (p.mana || 0) / 100 : 1; // Bloodlust
+    return (1 + (p.stats.furyMax || 0) * (1 - p.hp / p.max)) * p.stats.dmgMult * TOUGH.dmg * slot * lust;
   }
 
   // Hit every enemy in a cone in front of the player that they can actually see.
@@ -506,31 +507,34 @@ export class Sim {
 
   // ======================================================= Warrior
   warriorActions(p, dt) {
+    if (p.storm) { p.guard = false; return; } // mid Bladestorm
     this.updateGuard(p, dt);
     if (p.guard) return;
     if ((p.want.atk > 0 || p.ah) && p.cd.atk <= 0) { this.warriorStrike(p); p.want.atk = 0; }
-    if ((p.want.s1 > 0 || p.want.s3 > 0) && p.cd.s1 <= 0) { this.quake(p); p.want.s1 = 0; p.want.s3 = 0; }
+    if (p.want.s1 > 0 && p.cd.s1 <= 0) { this.quake(p); p.want.s1 = 0; }
+    if (p.want.s3 > 0 && p.cd.s3 <= 0) { this.battleCry(p); p.want.s3 = 0; }
   }
 
   warriorStrike(p) {
     const S = p.stats;
-    p.cd.atk = S.atkCd;
+    p.cd.atk = S.atkCd * (1 - WARRIOR.lust.speed * (p.mana || 0) / 100); // Bloodlust: faster with more Fury
     p.combo = p.comboT > 0 ? (p.combo % 3) + 1 : 1;
     p.comboT = 1.1;
     const heavy = p.combo === 3;
     if (heavy) p.cd.atk += WARRIOR.heavyRecover;
     this.emit({ k: 'sw', id: p.id, a: r2(p.aim), h: heavy ? 1 : 0 });
-    this.hitArc(p, WARRIOR.atkRange, WARRIOR.atkArc, WARRIOR.atkDmg * this.power(p) * (heavy ? S.heavyMult : 1), heavy ? 300 : 170);
+    if (this.hitArc(p, WARRIOR.atkRange, WARRIOR.atkArc, WARRIOR.atkDmg * this.power(p) * (heavy ? S.heavyMult : 1), heavy ? 300 : 170)) p.lastFight = this.time;
+    if (heavy && S.swordMaster) this.swordWave(p);
   }
 
   quake(p) {
     const S = p.stats;
-    const inStage = this.scene !== 'lobby';
-    if (inStage && p.hp <= S.quakeCost) { p.cd.s1 = 0.3; this.emit({ k: 'nope', id: p.id, what: 'quake' }); return; }
     p.cd.s1 = S.quakeCd;
-    if (inStage) p.hp -= S.quakeCost;
-    this.emit({ k: 'slam', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(S.quakeRadius) });
-    this.hitCircle(p, p.x, p.y, S.quakeRadius, S.quakeDmg * this.power(p), 380, { stun: 0.6 });
+    const fb = this.useFury(p, WARRIOR.fury.shock);
+    this.emit({ k: 'slam', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(S.quakeRadius), fb: r2(fb) });
+    const dmg = S.quakeDmg * this.power(p) * fb;
+    this.hitCircle(p, p.x, p.y, S.quakeRadius, dmg, 380, { stun: 0.6 });
+    if (S.aftershock) p.after = { t: this.time + 0.45, x: p.x, y: p.y, dmg: dmg * S.aftershock, r: S.quakeRadius * 0.75 };
   }
 
   updateGuard(p, dt) {
@@ -546,7 +550,7 @@ export class Sim {
     if (!p.gHeld || p.guardT >= W.guardMax) {
       p.guard = false;
       p.cd.s2 = p.stats.guardCd;
-      const dmg = (W.counterBase + Math.min(W.heatCap, p.guardHeat) * W.counterPerHeat) * p.stats.counterMult * this.power(p);
+      const dmg = (W.counterBase + Math.min(W.heatCap, p.guardHeat) * W.counterPerHeat) * p.stats.counterMult * this.power(p) * this.useFury(p, W.fury.retal);
       this.emit({ k: 'counter', id: p.id, a: r2(p.aim), pw: Math.min(1, p.guardHeat / 30) });
       this.hitArc(p, W.counterRange, W.counterArc, dmg, 280);
     }
@@ -874,7 +878,7 @@ export class Sim {
   dashStart(p) {
     if (p.cls === 'rogue') this.spawnDecoy(p);
     else if (p.cls === 'cleric') this.blessedStep(p);
-    else if (p.cls === 'warrior') { p.pushT = 0.28; p.pushSet = new Set(); }
+    else if (p.cls === 'warrior') { p.pushT = 0.28; p.pushSet = new Set(); p.bashFb = 0; }
     else if (p.cls === 'bowman') this.rollShot(p);
     else if (p.cls === 'sorcerer') { p.trailT = 0.3; p.trailPt = null; }
   }
@@ -887,6 +891,9 @@ export class Sim {
       const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
       if (d > e.r + PLAYER_RADIUS + 10) continue;
       p.pushSet.add(e.id);
+      // Bash: the first thing you hit uses some Fury for bonus damage
+      if (!p.bashFb) p.bashFb = this.useFury(p, W.fury.bash);
+      this.damageEnemy(e, W.bashDmg * this.power(p) * p.bashFb, dx / d, dy / d, 0, p);
       if (e.type === 'dummy') { if (e.state === 'windup') { e.state = 'idle'; e.swingT = 2; } }
       else {
         const k = e.type === 'alpha' ? 0.35 : 1;
@@ -1152,7 +1159,7 @@ export class Sim {
               const dx = p.x - e.x, dy = p.y - e.y;
               if (Math.hypot(dx, dy) > 60 || Math.abs(angDiff(Math.atan2(dy, dx), e.face)) > 1.1) continue;
               if (p.dashing) { this.emit({ k: 'dodge', id: p.id, x: Math.round(p.x), y: Math.round(p.y) }); continue; }
-              if (p.guard && Math.abs(angDiff(Math.atan2(e.y - p.y, e.x - p.x), p.aim)) < p.stats.guardArc / 2) { p.guardHeat += 10 * p.stats.heatMult; this.emit({ k: 'block', id: p.id, x: Math.round(p.x), y: Math.round(p.y), perfect: 0 }); continue; }
+              if (p.guard && Math.abs(angDiff(Math.atan2(e.y - p.y, e.x - p.x), p.aim)) < p.stats.guardArc / 2) { p.guardHeat += 10 * p.stats.heatMult; this.gainFury(p, 8 * p.stats.blockFury); this.emit({ k: 'block', id: p.id, x: Math.round(p.x), y: Math.round(p.y), perfect: 0 }); continue; }
               this.emit({ k: 'practiceHit', id: p.id, x: Math.round(p.x), y: Math.round(p.y) });
             }
             this.emit({ k: 'thwack', x: Math.round(e.x), y: Math.round(e.y) });
@@ -1163,8 +1170,18 @@ export class Sim {
     }
   }
 
+  // the reset post: a clean slate for practice
   resetDummies() {
-    for (const e of this.enemies) if (e.type === 'dummy') e.log = [];
+    for (const e of this.enemies) {
+      if (e.type !== 'dummy') continue;
+      e.log = [];
+      e.stun = 0; e.slowT = 0; e.burnT = 0; e.bleedT = 0; e.markT = 0; e.markBy = null; e.curseT = 0; e.curseBy = null;
+      e.chillBy = null; e.rootBy = null; e.hurtT = 0; e.smoked = false;
+      e.state = 'idle'; e.swingT = 2; e.face = Math.PI / 2;
+    }
+    // everything still lingering goes away: imps, clones, the Eclipse familiar, ground effects, projectiles, meteors
+    this.imps = []; this.decoys = []; this.zones = []; this.shots = []; this.strikes = []; this.hazards = [];
+    for (const p of this.players.values()) { p.storm = null; p.after = null; p.siphon = null; }
     this.emit({ k: 'msg', text: 'Training dummies reset.' });
   }
 
@@ -1239,6 +1256,13 @@ export class Sim {
       return;
     }
     if (p.cls === 'rogue') { this.startCuts(p); return; } // blinks from enemy to enemy (see simx.js)
+    // Warrior: Bladestorm (see stormTick in simx.js)
+    p.storm = { t: WARRIOR.storm.time * p.stats.ultSize, tick: 0, fb: this.useFury(p, WARRIOR.fury.storm) };
+    p.guard = false;
+    this.emit({ k: 'storm', id: p.id, x: Math.round(p.x), y: Math.round(p.y) });
+  }
+
+  oldPyreCleave(p) {
     const W = WARRIOR;
     this.emit({ k: 'pyre', id: p.id, a: r2(p.aim), x: Math.round(p.x), y: Math.round(p.y) });
     this.hitArc(p, W.pyreRange * p.stats.ultSize, W.pyreArc, W.pyreDmg * this.power(p), 340);
@@ -1276,6 +1300,7 @@ export class Sim {
       const a = Math.atan2(sy - p.y, sx - p.x);
       if (Math.abs(angDiff(a, p.aim)) < p.stats.guardArc / 2) {
         p.guardHeat += dmg * p.stats.heatMult;
+        if (p.cls === 'warrior') this.gainFury(p, dmg * WARRIOR.fury.blockGain * p.stats.blockFury);
         const perfect = p.stats.unbroken && this.time - p.guardStart < WARRIOR.perfectWindow;
         if (perfect && attacker && attacker.type !== 'treant') attacker.stun = 1.2;
         this.emit({ k: 'block', id: p.id, x: Math.round(p.x), y: Math.round(p.y), perfect: perfect ? 1 : 0 });
@@ -1292,8 +1317,11 @@ export class Sim {
       p.sh -= a; dmg -= a;
       if (dmg <= 0.01) { this.emit({ k: 'shieldHit', id: p.id, x: Math.round(p.x), y: Math.round(p.y) }); return true; }
     }
+    // Unquenchable: for a moment your flame can't drop below 1
+    if (p.unqT > this.time && p.hp - dmg < 1) dmg = Math.max(0, p.hp - 1);
     p.hp -= dmg;
     p.hurtT = 0.3;
+    if (p.cls === 'warrior') this.gainFury(p, dmg * WARRIOR.fury.gain * p.stats.furyGain);
     this.emit({ k: 'hurt', id: p.id, x: Math.round(p.x), y: Math.round(p.y), d: Math.round(dmg) });
     // a Phoenix Feather relights you once
     if (p.hp <= 0 && p.items && p.items.charm > 0) {
@@ -1441,7 +1469,7 @@ export class Sim {
     // Hellfire: finishing off something a friend cursed makes it burst
     if (e.curseT > 0 && e.curseBy && src && src.id && src.id !== e.curseBy && this.players.has(src.id) && this.players.has(e.curseBy)) {
       const ow = this.players.get(e.curseBy);
-      this.comboFx(e, 'Hellfire!');
+      this.comboFx(e, 'Burst!');
       this.hitCircle(ow, e.x, e.y, 64, 30 * this.power(ow), 200, { el: 'fire' });
     }
   }
@@ -1566,6 +1594,7 @@ export class Sim {
             break;
           }
           e.unseen = seeTgt ? 0 : e.unseen + dt;
+          this.maybeRetarget(e, tgt, seeTgt);
           if (e.unseen > D.giveUp) { this.giveUp(e); break; }
           if (D.leash && Math.hypot(tgt.x - e.homeX, tgt.y - e.homeY) > D.leash) { e.state = 'ret'; break; }
           const dx = tgt.x - e.x, dy = tgt.y - e.y, d = Math.hypot(dx, dy) || 1;
@@ -1763,6 +1792,12 @@ export class Sim {
         if (!e.dead && !(s.hit && s.hit.has(e.id)) && Math.hypot(e.x - nx, e.y - 8 - ny) < e.r + 5) { target = e; hit = true; break; }
       }
       s.x = nx; s.y = ny;
+      if (s.kind === 'wave') {
+        // Sword Master's wave cuts through everything in a line until it hits a tree
+        if (target) { const d = Math.hypot(s.vx, s.vy) || 1; s.hit.add(target.id); this.damageEnemy(target, s.dmg, s.vx / d, s.vy / d, 120, owner); continue; }
+        if (hit || s.life <= 0) s.life = 0;
+        continue;
+      }
       if (s.kind === 'arrow') {
         if (target) {
           const d = Math.hypot(s.vx, s.vy) || 1;

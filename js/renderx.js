@@ -326,6 +326,21 @@ export function drawWorldExtras(ctx, game, snap, me, t) {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(F.bx) - 1, Math.round(F.by + dip), 3, 1);
     }
   }
+  // Bladestorm: a whirl of steel and embers around the Warrior
+  for (const p of snap.ps) {
+    if (!p.bs) continue;
+    const v = game.playerView(p);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) {
+      const a = t * 14 + (i * Math.PI * 2) / 3;
+      ctx.strokeStyle = `rgba(255,${200 - i * 30},${140 - i * 30},0.55)`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(v.x, v.y - 10, 34, 20, 0, a, a + 1.4); ctx.stroke();
+      ctx.strokeStyle = 'rgba(245,250,255,0.8)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(v.x, v.y - 10, 30, 17, 0, a + 0.2, a + 1.2); ctx.stroke();
+    }
+    ctx.restore();
+  }
   // Shadowstep: a brief, faint purple ring under who you'd jump behind
   if (game.stepAim) {
     const v = game.views.get('e' + game.stepAim.id);

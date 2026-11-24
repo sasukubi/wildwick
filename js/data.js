@@ -7,7 +7,7 @@
 
 // The game's version. Friends can only play together on the same version.
 // (Raise this with every update.)
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 import { PRESTIGE } from './progress.js';
 
 export const TILE = 32;
@@ -46,8 +46,8 @@ export const FLAMES = [
 
 export const CLASSES = [
   { id: 'warrior',  name: 'Warrior',  available: true,  color: '#ff8a4c', blurb: 'Fights harder the dimmer their flame burns.' },
-  { id: 'warlock',  name: 'Warlock',  available: true,  color: '#9b6bff', blurb: 'Calls shadow hands and imps, and drains souls for mana.' },
-  { id: 'bowman',   name: 'Bowman',   available: true,  color: '#8fd36b', blurb: 'Draw longer for stronger, piercing shots.' },
+  { id: 'warlock',  name: 'Warlock',  available: true,  color: '#9b6bff', blurb: 'Calls shadow hands and imps, and drains enemies for souls.' },
+  { id: 'bowman',   name: 'Archer',   available: true,  color: '#8fd36b', blurb: 'Draw longer for stronger, piercing shots.' },
   { id: 'rogue',    name: 'Rogue',    available: true,  color: '#d0d4e0', blurb: 'Strikes from behind; dashes leave decoys.' },
   { id: 'sorcerer', name: 'Sorcerer', available: true,  color: '#58b8ff', blurb: 'Weaves two spells together into one.' },
   { id: 'cleric',   name: 'Cleric',   available: true,  color: '#ffe08a', blurb: 'Fights up close to build Grace, then spends it to heal.' },
@@ -60,15 +60,24 @@ export const WARRIOR = {
   atkCd: 0.5, atkRange: 58, atkArc: 2.0, atkDmg: 15, heavyMult: 1.7, heavyRecover: 0.35, // extra wait after the heavy 3rd hit
   dashSpeed: 420, dashTime: 0.2, dashCd: 1.3, dashSafe: 0.12, // only the first part of a dash dodges
   shoveKb: 220, shoveStagger: 0.6,  // dashing into enemies shoves them back and breaks their attack
-  // Cinder Quake: burn some of your own flame to slam the ground
-  quakeCd: 9, quakeCost: 10, quakeRadius: 108, quakeDmg: 30,
-  // Smoulder Guard: hold to block hits from the front, release to counter-slash
+  // Shockwave: slam the ground around you (no flame cost)
+  quakeCd: 9, quakeCost: 0, quakeRadius: 108, quakeDmg: 30,
+  // Iron Guard: hold to block hits from the front, release for Retaliation
   guardMax: 2.5, guardCd: 4, guardArc: 2.1, guardSlow: 0.4,
-  counterBase: 15, counterPerHeat: 2.0, heatCap: 30, // blocking a whole pack can't make one giant hit counterRange: 74, counterArc: 2.8, perfectWindow: 0.25,
-  // Pyre Cleave (Wildfire ultimate)
-  pyreDmg: 80, pyreRange: 125, pyreArc: 3.8, pyreTrail: 4, pyreTrailDps: 30,
-  furyMax: 0.8,      // Dark Fury: up to +80% damage at almost no flame
-  lowGuard: 0.3,     // ...and up to 30% less damage taken at almost no flame
+  counterBase: 15, counterPerHeat: 2.0, heatCap: 30, // blocking a whole pack can't make one giant hit
+  counterRange: 74, counterArc: 2.8, perfectWindow: 0.25,
+  // the Fury gauge: fills when you get hurt (or block), fades out of combat.
+  // Abilities (not Strike) use a chunk of it for bonus damage: a full gauge = +160%.
+  fury: { gain: 2.0, blockGain: 1.2, fadeAfter: 5, fade: 10, bonus: 1.6, bash: 0.15, retal: 0.25, shock: 0.35, storm: 0.5 },
+  lust: { dmg: 0.2, speed: 0.2 },    // Bloodlust: at full Fury, +20% damage and 20% faster Strikes
+  bashDmg: 8,                         // Bash hurts a little too
+  // Bladestorm (Wildfire ultimate): spin like a whirlwind, hitting everything around you
+  storm: { time: 4, every: 0.25, r: 62, dmg: 14, kb: 140 },
+  waveDmg: 16, waveSpeed: 300, waveRange: 220,  // Sword Master's slicing wave
+  cry: { cd: 14, r: 300, time: 4 },              // Battle Cry (Q): every enemy nearby turns on you for 4 seconds
+  pyreDmg: 80, pyreRange: 125, pyreArc: 3.8, pyreTrail: 4, pyreTrailDps: 30, // (old Pyre Cleave, kept for its effect)
+  furyMax: 0,        // (old Dark Fury: replaced by Bloodlust)
+  lowGuard: 0.3,     // up to 30% less damage taken at almost no flame
 };
 
 // ---- Sorcerer -----------------------------------------------
@@ -88,12 +97,12 @@ export const SORCERER = {
   trailTime: 0.7, trailHaste: 0.12,     // the dash leaves a trail that speeds up allies who walk through it
 };
 export const ELEMENTS = {
-  fire:  { name: 'Fire',  color: '#ff8a3c', icon: '🔥' },
-  frost: { name: 'Frost', color: '#8fd8ff', icon: '❄' },
-  gale:  { name: 'Gale',  color: '#bff5d2', icon: '🌀' },
+  fire:  { name: 'Fireball',  color: '#ff8a3c', icon: '' },
+  frost: { name: 'Frostbite', color: '#8fd8ff', icon: '' },
+  gale:  { name: 'Gale',  color: '#bff5d2', icon: '' },
 };
 export const WEAVES = {
-  'fire+frost': { id: 'steam', name: 'Steam Burst' },
+  'fire+frost': { id: 'steam', name: 'Thermal Shock' },
   'fire+gale':  { id: 'firestorm', name: 'Firestorm' },
   'frost+gale': { id: 'blizzard', name: 'Blizzard' },
 };
@@ -149,11 +158,11 @@ export const CLERIC = {
 // ---- Warlock ------------------------------------------------
 export const WARLOCK = {
   speed: 118, maxFlame: 85,
-  mana: 100, manaRegen: 9,
+  mana: 100, manaRegen: 3,   // the Warlock's "mana" is called Souls
   boltCd: 0.6, boltSpeed: 240, boltRange: 250, boltDmg: 10, curseEvery: 3, curseTime: 3, curseBonus: 0.15,
   hands: { cost: 30, cd: 9, r: 58, range: 230, delay: 0.45, dmg: 22, root: 1.6 },
-  imps: { cost: 35, cd: 12, n: 3, life: 8, speed: 150, dmg: 2.5, biteCd: 0.7, mana: 2, aggro: 260 },
-  siphon: { cost: 0, cd: 8, range: 210, time: 1.6, dps: 15, mana: 15, breakRange: 260 },
+  imps: { cost: 35, cd: 12, n: 3, life: 8, speed: 150, dmg: 2.5, biteCd: 0.7, mana: 1, aggro: 260 },
+  siphon: { cost: 0, cd: 8, range: 210, time: 1.6, dps: 15, mana: 8, breakRange: 260 },
   slipTime: 0.14, slipSpeed: 720,                                // Shadow Slip: a quick untouchable blink
   eclipse: { time: 8, hp: 900, r: 20, speed: 70, dmg: 6, swipeCd: 1, swipeR: 52, taunt: 320 },
 };
@@ -179,7 +188,7 @@ export const ALPHA = {
 };
 // Final boss.
 export const TREANT = {
-  name: 'The Elder Treant', r: 40, hp: 1800, speed: 20, attackCd: 2.8,
+  name: 'The Creaking Oak', r: 40, hp: 1800, speed: 20, attackCd: 2.8,
   rootDelay: 1.2, rootR: 38, rootDmg: 20,
   sweepRange: 160, sweepArc: 2.1, sweepWindup: 1.0, sweepDmg: 26,
   fuel: 100, leash: 260, homeHeal: 0.005,
@@ -232,39 +241,39 @@ export const RANK_POWER = 0.6;   // each normal rank is worth 60% of what it use
 const WHOLE = new Set(['shard', 'brood', 'quickhex', 'flurry']);
 export const TREES = {
   warrior: [
-    { id: 'fury', name: 'Fury', color: '#ff7a4c', blurb: 'Hit harder the lower your flame.', nodes: [
-      { id: 'darkfury', name: 'Deeper Dark', max: 3, desc: 'Dark Fury can reach +25% more damage.' },
-      { id: 'swift', name: 'Swift Blade', max: 3, desc: 'Swing your sword 8% faster.' },
-      { id: 'third', name: 'Crushing Third', max: 2, desc: 'Every 3rd hit deals +40% more.' },
-      { id: 'embers', name: 'Embers in the Dark', max: 1, cap: true, desc: 'Kills while under 40% flame restore 4 flame.' },
+    { id: 'fury', name: 'Wrath', color: '#ff7a4c', blurb: 'More Fury, harder swings.', nodes: [
+      { id: 'darkfury', name: 'Fury', max: 3, desc: 'Gain 20% more Fury when you are hit.' },
+      { id: 'swift', name: 'Swiftblade', max: 3, desc: 'Strike swings 8% faster.' },
+      { id: 'third', name: 'Heavy Finisher', max: 2, desc: 'Every 3rd Strike deals +40% more.' },
+      { id: 'embers', name: 'Unquenchable', max: 1, cap: true, desc: "When your Fury fills up, your flame can't drop below 1 for 2 seconds (once every 20 seconds)." },
     ] },
-    { id: 'bulwark', name: 'Bulwark', color: '#7fb6ff', blurb: 'Block, counter and outlast.', nodes: [
-      { id: 'guard', name: 'Tempered Guard', max: 3, desc: 'Wider block, and blocked hits store 25% more heat.' },
+    { id: 'bulwark', name: 'Juggernaut', color: '#7fb6ff', blurb: 'Block, retaliate and outlast.', nodes: [
+      { id: 'guard', name: 'Tempered Guard', max: 3, desc: 'Wider block, and blocked hits give 25% more Fury.' },
       { id: 'wick', name: 'Thick Wick', max: 3, desc: '+15 max flame.' },
-      { id: 'riposte', name: 'Riposte', max: 2, desc: 'Counter-slash deals +30% damage.' },
+      { id: 'riposte', name: 'Riposte', max: 2, desc: 'Retaliation deals +30% damage.' },
       { id: 'unbroken', name: 'Unbroken', max: 1, cap: true, desc: 'Blocking right as a hit lands stuns the attacker.' },
     ] },
-    { id: 'cinder', name: 'Cinder', color: '#ffc24c', blurb: 'Bigger quakes, longer fires.', nodes: [
-      { id: 'wide', name: 'Wide Quake', max: 3, desc: 'Cinder Quake reaches 15% further.' },
-      { id: 'sear', name: 'Searing Quake', max: 3, desc: 'Cinder Quake deals +20% damage.' },
-      { id: 'lean', name: 'Lean Burn', max: 2, desc: 'Cinder Quake costs 3 less flame.' },
-      { id: 'pyrelord', name: 'Pyre Lord', max: 1, cap: true, desc: 'Pyre Cleave fire lasts twice as long, and you gain Wildfire 25% faster.' },
+    { id: 'cinder', name: 'Ravager', color: '#ffc24c', blurb: 'Bigger Shockwaves, reckless power.', nodes: [
+      { id: 'wide', name: 'Tremor', max: 3, desc: 'Shockwave reaches 15% further.' },
+      { id: 'sear', name: 'Aftershock', max: 3, desc: 'A second Shockwave follows a moment later, dealing 20% of the damage.' },
+      { id: 'lean', name: 'Reckless Force', max: 2, desc: 'Fury gives 25% more bonus damage, but you take 5% more damage.' },
+      { id: 'pyrelord', name: 'Sword Master', max: 1, cap: true, desc: 'Every 3rd Strike sends a slicing wave forward.' },
     ] },
   ],
   sorcerer: [
     { id: 'pyro', name: 'Pyromancy', color: '#ff8a4c', blurb: 'Bigger, hotter fire.', nodes: [
-      { id: 'searing', name: 'Searing Flames', max: 3, desc: 'Fire spells deal +15% damage.' },
+      { id: 'searing', name: 'Searing Flames', max: 3, desc: 'Fireball spells deal +15% damage.' },
       { id: 'blast', name: 'Wide Blast', max: 2, desc: 'Fireball explosions are 25% bigger.' },
       { id: 'raging', name: 'Raging Storm', max: 2, desc: 'Firestorm lasts 1 second longer.' },
       { id: 'cataclysm', name: 'Cataclysm', max: 1, cap: true, desc: 'Starfall drops 50% more meteors.' },
     ] },
     { id: 'rime', name: 'Rime', color: '#8fd8ff', blurb: 'Slow them down, then shatter them.', nodes: [
-      { id: 'shard', name: 'Extra Shard', max: 2, desc: 'Frost fires 1 more shard.' },
-      { id: 'chill', name: 'Deep Chill', max: 3, desc: 'Slows last 30% longer and Frost deals +15% damage.' },
+      { id: 'shard', name: 'Extra Shard', max: 2, desc: 'Frostbite fires 1 more shard.' },
+      { id: 'chill', name: 'Deep Chill', max: 3, desc: 'Slows last 30% longer and Frostbite deals +15% damage.' },
       { id: 'whiteout', name: 'Whiteout', max: 2, desc: 'Blizzard is 25% bigger.' },
-      { id: 'shatter', name: 'Shatter', max: 1, cap: true, desc: 'Slowed enemies take 30% more damage from you.' },
+      { id: 'shatter', name: 'Permafrost', max: 1, cap: true, desc: 'Slowed enemies take 30% more damage from you.' },
     ] },
-    { id: 'tempest', name: 'Tempest', color: '#bff5d2', blurb: 'Wind, mana and faster weaving.', nodes: [
+    { id: 'tempest', name: 'Tempest', color: '#bff5d2', blurb: 'Wind, mana and faster spellweaving.', nodes: [
       { id: 'gust', name: 'Gale Force', max: 3, desc: 'Gale pushes 25% harder and deals more damage.' },
       { id: 'well', name: 'Deep Well', max: 3, desc: '+20 max mana.' },
       { id: 'quickweave', name: 'Quick Weave', max: 2, desc: '+0.5s to weave, and fusing costs 6 less mana.' },
@@ -276,19 +285,19 @@ export const TREES = {
       { id: 'steady', name: 'Steady Draw', max: 3, desc: 'Draw your bow 8% faster.' },
       { id: 'broadhead', name: 'Broadhead', max: 3, desc: 'Arrows deal +10% damage.' },
       { id: 'nock', name: 'Quick Nock', max: 2, desc: 'Wait 15% less between shots.' },
-      { id: 'deadeye', name: 'Deadeye', max: 1, cap: true, desc: 'Fully drawn shots deal +20% damage.' },
+      { id: 'deadeye', name: 'Bullseye', max: 1, cap: true, desc: 'Fully drawn shots deal +20% damage.' },
     ] },
     { id: 'hunter', name: 'Hunter', color: '#ff8a7a', blurb: 'Mark prey for the whole party.', nodes: [
-      { id: 'prey', name: 'Hunter\'s Mark', max: 3, desc: 'Marked enemies take +6% more damage.' },
+      { id: 'prey', name: 'Weakpoint', max: 3, desc: 'Marked enemies take +6% more damage.' },
       { id: 'linger', name: 'Lingering Mark', max: 2, desc: 'Mark lasts 2 seconds longer.' },
       { id: 'tracker', name: 'Tracker', max: 2, desc: 'Mark recharges 20% faster.' },
       { id: 'predator', name: 'Predator', max: 1, cap: true, desc: 'Hitting your marked enemy restores 2 flame.' },
     ] },
-    { id: 'ranger', name: 'Ranger', color: '#8fd36b', blurb: 'Rain, roam and Hawk Eye.', nodes: [
-      { id: 'downpour', name: 'Downpour', max: 3, desc: 'Rain of Arrows drops 25% more arrows.' },
-      { id: 'widerain', name: 'Wide Rain', max: 2, desc: 'Rain of Arrows covers 20% more ground.' },
+    { id: 'ranger', name: 'Ranger', color: '#8fd36b', blurb: 'Rain, roam and Deadeye.', nodes: [
+      { id: 'downpour', name: 'Downpour', max: 3, desc: 'Barrage drops 25% more arrows.' },
+      { id: 'widerain', name: 'Wide Rain', max: 2, desc: 'Barrage covers 20% more ground.' },
       { id: 'fleet', name: 'Light Draw', max: 3, desc: 'Walk 15% faster while drawing.' },
-      { id: 'keen', name: 'Keen Hawk', max: 1, cap: true, desc: 'Hawk Eye lasts 3 seconds longer.' },
+      { id: 'keen', name: 'Apex Sight', max: 1, cap: true, desc: 'Deadeye lasts 3 seconds longer.' },
     ] },
   ],
   rogue: [
@@ -298,13 +307,13 @@ export const TREES = {
       { id: 'thick', name: 'Thick Smoke', max: 2, desc: 'Smoke Bomb lasts 1.5s longer and is bigger.' },
       { id: 'shroud', name: 'Shroud', max: 1, cap: true, desc: 'Standing in your smoke restores 3 flame a second.' },
     ] },
-    { id: 'blade', name: 'Blade', color: '#ff8a8a', blurb: 'Hit harder from behind.', nodes: [
+    { id: 'blade', name: 'Assassin', color: '#ff8a8a', blurb: 'Hit harder from behind.', nodes: [
       { id: 'edge', name: 'Keen Edge', max: 3, desc: 'Stabs deal +12% damage.' },
-      { id: 'assassin', name: 'Assassin', max: 3, desc: 'Backstabs deal +25% more.' },
+      { id: 'assassin', name: 'Lethality', max: 3, desc: 'Backstabs deal +25% more.' },
       { id: 'whirl', name: 'Whirl', max: 2, desc: 'Your combo spin deals +30% and reaches further.' },
       { id: 'bleed', name: 'Deep Cuts', max: 1, cap: true, desc: 'Backstabs make enemies bleed for 3 seconds.' },
     ] },
-    { id: 'trick', name: 'Trickster', color: '#9fe8d0', blurb: 'Decoys, dashes and the ultimate.', nodes: [
+    { id: 'trick', name: 'Trickster', color: '#9fe8d0', blurb: 'Decoys, dashes and the Wildfire Ability.', nodes: [
       { id: 'mirror', name: 'Mirror Image', max: 2, desc: 'Your dash decoy lasts 1 second longer.' },
       { id: 'lightfeet', name: 'Light Feet', max: 3, desc: 'Dash recharges 12% faster.' },
       { id: 'flurry', name: 'Flurry', max: 2, desc: 'Thousand Cuts hits 2 more enemies.' },
@@ -314,42 +323,42 @@ export const TREES = {
 };
 TREES.cleric = [
   { id: 'devotion', name: 'Devotion', color: '#ffe08a', blurb: 'Stronger heals, bigger shields.', nodes: [
-    { id: 'mercy', name: 'Mercy', max: 3, desc: 'Mending Light heals 15% more.' },
+    { id: 'mercy', name: 'Mercy', max: 3, desc: 'Kindle heals 15% more.' },
     { id: 'halo', name: 'Halo', max: 2, desc: 'Overheal shields can reach 10% higher.' },
-    { id: 'thrift', name: 'Thrift', max: 2, desc: 'Mending Light costs 5 less Grace.' },
-    { id: 'beacon', name: 'Beacon', max: 1, cap: true, desc: 'Mending Light also heals everyone near the target for half as much.' },
+    { id: 'thrift', name: 'Thrift', max: 2, desc: 'Kindle costs 5 less Grace.' },
+    { id: 'beacon', name: 'Beacon', max: 1, cap: true, desc: 'Kindle also heals everyone near the target for half as much.' },
   ] },
-  { id: 'zeal', name: 'Zeal', color: '#ff9a5a', blurb: 'Hit harder, earn Grace faster.', nodes: [
-    { id: 'zealous', name: 'Zealous', max: 3, desc: 'Mace hits deal +10% damage.' },
-    { id: 'fervor', name: 'Fervor', max: 3, desc: 'Mace hits build 20% more Grace.' },
+  { id: 'zeal', name: 'Crusader', color: '#ff9a5a', blurb: 'Hit harder, earn Grace faster.', nodes: [
+    { id: 'zealous', name: 'Zealous', max: 3, desc: 'Swing hits deal +10% damage.' },
+    { id: 'fervor', name: 'Radiant', max: 3, desc: 'Swing hits build 20% more Grace.' },
     { id: 'verdict', name: 'Verdict', max: 2, desc: 'Judgement stuns 0.4s longer and recharges 15% faster.' },
     { id: 'smite', name: 'Smite', max: 1, cap: true, desc: 'Every 3rd mace hit calls down light for +60% damage.' },
   ] },
-  { id: 'sanctum', name: 'Sanctum', color: '#bfe8ff', blurb: 'Holy ground and the dawn.', nodes: [
+  { id: 'sanctum', name: 'Sanctuary', color: '#bfe8ff', blurb: 'Holy ground and the daybreak.', nodes: [
     { id: 'hallowed', name: 'Hallowed', max: 3, desc: 'Sanctified Ground is 15% bigger and heals 20% more.' },
     { id: 'lasting', name: 'Lasting Light', max: 2, desc: 'Sanctified Ground lasts 1.5s longer.' },
-    { id: 'blessed', name: 'Blessed Step', max: 2, desc: 'Your dash spark heals 50% more.' },
-    { id: 'sunrise', name: 'Sunrise', max: 1, cap: true, desc: 'Dawn shields everyone it touches for 20% of their flame.' },
+    { id: 'blessed', name: 'Guiding Light', max: 2, desc: 'Your dash spark heals 50% more.' },
+    { id: 'sunrise', name: 'Sunrise', max: 1, cap: true, desc: 'Daybreak shields everyone it touches for 20% of their flame.' },
   ] },
 ];
 TREES.warlock = [
   { id: 'dread', name: 'Dread', color: '#b08cff', blurb: 'Bolts and curses.', nodes: [
-    { id: 'malice', name: 'Malice', max: 3, desc: 'Shadow bolts deal +12% damage.' },
+    { id: 'malice', name: 'Malice', max: 3, desc: 'Bolts deal +12% damage.' },
     { id: 'hex', name: 'Deep Hex', max: 2, desc: 'Cursed enemies take 8% more damage.' },
     { id: 'quickhex', name: 'Quick Hex', max: 2, desc: 'Curse every 2nd bolt instead of every 3rd (at rank 2).' },
     { id: 'plague', name: 'Plague', max: 1, cap: true, desc: 'Cursed enemies spread their curse to one nearby enemy when they die.' },
   ] },
-  { id: 'legion', name: 'Legion', color: '#ff7a9a', blurb: 'More imps, meaner bites.', nodes: [
+  { id: 'legion', name: 'Summoner', color: '#ff7a9a', blurb: 'More imps, meaner bites.', nodes: [
     { id: 'brood', name: 'Brood', max: 1, desc: 'Summon 1 more imp.' },
     { id: 'fangs', name: 'Sharp Fangs', max: 3, desc: 'Imps deal +12% damage.' },
-    { id: 'feast', name: 'Feast', max: 2, desc: 'Imp bites give 50% more mana.' },
-    { id: 'colossus', name: 'Colossus', max: 1, cap: true, desc: 'Eclipse lasts 3 seconds longer.' },
+    { id: 'feast', name: 'Feast', max: 2, desc: 'Imp bites give 50% more souls.' },
+    { id: 'colossus', name: 'Nightfall', max: 1, cap: true, desc: 'Eclipse lasts 3 seconds longer.' },
   ] },
   { id: 'void', name: 'Void', color: '#7fd0c0', blurb: 'Hands and soul drain.', nodes: [
-    { id: 'grip', name: 'Iron Grip', max: 3, desc: 'Grasping Hands hold enemies 0.3s longer and deal +15% damage.' },
-    { id: 'reach', name: 'Long Reach', max: 2, desc: 'Grasping Hands cover 15% more ground.' },
-    { id: 'thirst', name: 'Thirst', max: 3, desc: 'Soul Siphon drains 20% harder and gives more mana.' },
-    { id: 'lifetap', name: 'Lifetap', max: 1, cap: true, desc: 'Soul Siphon also restores your flame.' },
+    { id: 'grip', name: 'Grave Bind', max: 3, desc: 'Dead Man\'s Reach holds enemies 0.3s longer and deals +15% damage.' },
+    { id: 'reach', name: 'Snatch', max: 2, desc: 'Dead Man\'s Reach covers 15% more ground.' },
+    { id: 'thirst', name: 'Thirst', max: 3, desc: 'Soul Siphon drains 20% harder and gives more souls.' },
+    { id: 'lifetap', name: 'Harvest', max: 1, cap: true, desc: 'Soul Siphon also restores your flame.' },
   ] },
 ];
 export const WARRIOR_TREE = TREES.warrior;
@@ -381,19 +390,19 @@ export function canBuy(cls, tree, pts, id) {
 
 // ---- Boons: pick 1 of 3 between stages ----------------------
 export const BOONS = [
-  { id: 'sharp',   name: 'Whetstone',      icon: '⚔', desc: '+12% damage' },
-  { id: 'wick',    name: 'Spare Wick',     icon: '🕯', desc: '+15 max flame' },
-  { id: 'swift',   name: 'Fleetfoot Moss', icon: '🍃', desc: '+10% move speed' },
-  { id: 'ember',   name: 'Ember Pouch',    icon: '🔥', desc: 'Embers heal 50% more' },
-  { id: 'dash',    name: 'Feather Cloak',  icon: '🪶', desc: 'Dash recharges 25% faster' },
-  { id: 'focus',   name: 'Focus Stone',    icon: '🪨', desc: 'Skills recharge 15% faster' },
-  { id: 'kindle',  name: 'Kindling',       icon: '✨', desc: '+30 Wildfire now, +15% Wildfire gain' },
-  { id: 'leech',   name: 'Hungry Flame',   icon: '🩸', desc: 'Every hit restores 1 flame' },
-  { id: 'thorn',   name: 'Thornhide',      icon: '🌿', desc: 'Take 12% less damage' },
-  { id: 'scholar', name: "Owl's Wisdom",   icon: '🦉', desc: '+25% EXP for the whole party' },
-  { id: 'spring',  name: 'Mana Spring',    icon: '💧', desc: '+40% mana regeneration', cls: 'sorcerer' },
-  { id: 'wellw',   name: 'Dark Spring',    icon: '💧', desc: '+40% mana regeneration', cls: 'warlock' },
-  { id: 'psalm',   name: 'Psalm Book',     icon: '📖', desc: 'Mace hits build 25% more Grace', cls: 'cleric' },
+  { id: 'sharp',   name: 'Flint',      icon: '', desc: '+12% damage' },
+  { id: 'wick',    name: 'Candle',     icon: '', desc: '+15 max flame' },
+  { id: 'swift',   name: 'Swift Charm', icon: '', desc: '+10% move speed' },
+  { id: 'ember',   name: 'Ember Pouch',    icon: '', desc: 'Embers heal 50% more' },
+  { id: 'dash',    name: 'Owl\'s Feather',  icon: '', desc: 'Dash recharges 25% faster' },
+  { id: 'focus',   name: 'Focus Stone',    icon: '', desc: 'Skills recharge 15% faster' },
+  { id: 'kindle',  name: 'Firewood',       icon: '', desc: '+30 Wildfire now, +15% Wildfire gain' },
+  { id: 'leech',   name: 'Siphon Vial',   icon: '', desc: 'Every hit restores 1 flame' },
+  { id: 'thorn',   name: 'Bark Shield',      icon: '', desc: 'Take 12% less damage' },
+  { id: 'scholar', name: "Ancient Scroll",   icon: '', desc: '+25% EXP for the whole party' },
+  { id: 'spring',  name: 'Crystal',    icon: '', desc: '+40% mana regeneration', cls: 'sorcerer' },
+  { id: 'wellw',   name: 'Skull',    icon: '', desc: '+40% soul regeneration', cls: 'warlock' },
+  { id: 'psalm',   name: 'Ripped Page',     icon: '', desc: 'Swing hits build 25% more Grace', cls: 'cleric' },
 ];
 
 // Works out a player's real numbers from their class, skill tree, boons,
@@ -559,18 +568,23 @@ function baseClassStats(cls, tree = {}, boons = []) {
     speed: W.speed * (1 + 0.1 * b('swift')),
     atkCd: W.atkCd * Math.pow(0.92, r('swift')),
     heavyMult: W.heavyMult + 0.4 * r('third'),
-    furyMax: W.furyMax + 0.25 * r('darkfury'),
+    furyMax: 0,
+    maxMana: 100, manaRegen: 0,                 // the Fury gauge (it is never a cost)
+    furyGain: 1 + 0.2 * r('darkfury'),
+    blockFury: 1 + 0.25 * r('guard'),
+    furyBonus: W.fury.bonus * (1 + 0.25 * r('lean')),
+    dmgTaken: base.dmgTaken * (1 + 0.05 * r('lean')),
     quakeCd: W.quakeCd * focus,
+    cryCd: W.cry.cd * focus,
     guardCd: W.guardCd * focus,
     quakeRadius: W.quakeRadius * (1 + 0.15 * r('wide')),
-    quakeDmg: W.quakeDmg * (1 + 0.2 * r('sear')),
-    quakeCost: Math.max(0, W.quakeCost - 3 * r('lean')),
+    quakeDmg: W.quakeDmg,
+    aftershock: 0.2 * r('sear'),
     guardArc: W.guardArc + 0.25 * r('guard'),
     heatMult: 1 + 0.25 * r('guard'),
     counterMult: 1 + 0.3 * r('riposte'),
-    wfGain: base.wfGain * (r('pyrelord') ? 1.25 : 1),
-    trailMult: r('pyrelord') ? 2 : 1,
-    embersInDark: r('embers') > 0,
+    unquench: r('embers') > 0,
+    swordMaster: r('pyrelord') > 0,
     unbroken: r('unbroken') > 0,
   };
 }

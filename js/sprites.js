@@ -991,17 +991,139 @@ const ICON = {
   tree(g) {
     oval(g, 8, 6, 6, 5, PAL.l1); oval(g, 7, 5, 4, 3, PAL.l3); px(g, 7, 10, 2, 5, PAL.b2);
   },
+  // ---- v1.3 skill icons ----
+  warcry(g) {
+    // a shouting face with sound waves
+    oval(g, 6, 8, 5, 5, PAL.o); oval(g, 6, 8, 4, 4, PAL.skin); px(g, 4, 6, 2, 1, PAL.o); px(g, 7, 6, 2, 1, PAL.o);
+    oval(g, 6, 10, 2, 2, PAL.o); px(g, 5, 10, 2, 1, '#c4372d'); px(g, 3, 3, 7, 2, '#8a5a3a');
+    for (const [x, h] of [[11, 4], [13, 6], [15, 8]]) { px(g, x, 8 - h / 2, 1, h, '#ffb080'); }
+  },
+  bash(g) {
+    // a shoulder charge: shield front with speed lines
+    px(g, 7, 3, 7, 10, PAL.o); px(g, 8, 4, 5, 8, '#c0543a'); px(g, 10, 4, 1, 8, '#e8c45c'); px(g, 8, 7, 5, 1, '#e8c45c');
+    for (let i = 0; i < 3; i++) px(g, 1, 4 + i * 3, 5 - i, 1, '#d8f0ff');
+    px(g, 14, 6, 2, 1, '#ffe08a'); px(g, 14, 9, 2, 1, '#ffe08a');
+  },
+  bladestorm(g) {
+    // three blades whirling around a centre
+    oval(g, 8, 8, 2, 2, PAL.o); px(g, 7, 7, 2, 2, '#ffb060');
+    for (const [x, y, dx, dy] of [[8, 1, 1, 1], [14, 10, -1, 0], [2, 11, 1, -1]]) {
+      for (let i = 0; i < 5; i++) { px(g, x + dx * i - (dy ? 0 : i), y + (dy ? i : 0) * 1, 2, 2, PAL.o); px(g, x + dx * i - (dy ? 0 : i), y + (dy ? i : 0), 1, 1, PAL.steel3); }
+    }
+    for (const [x, y] of [[3, 3], [12, 3], [12, 13], [3, 13]]) px(g, x, y, 1, 1, '#ff9a4a');
+  },
+  shove(g) {
+    // a staff with a push wave
+    for (let i = 0; i < 9; i++) px(g, 2 + i, 13 - i, 2, 2, PAL.o);
+    for (let i = 0; i < 9; i++) px(g, 3 + i, 13 - i, 1, 1, '#a3704a');
+    oval(g, 12, 3, 2, 2, '#9fd8ff');
+    for (const r of [3, 5]) { px(g, 13, 8 - r, 1, r * 2, '#d8f0ff'); }
+    px(g, 15, 6, 1, 4, '#d8f0ff');
+  },
+  gust(g) {
+    // a swirl of wind
+    px(g, 2, 5, 9, 1, '#d8f0ff'); px(g, 10, 3, 2, 2, '#d8f0ff'); px(g, 11, 5, 1, 1, '#d8f0ff');
+    px(g, 1, 8, 12, 1, '#bfe8ff'); px(g, 12, 9, 2, 2, '#bfe8ff'); px(g, 11, 11, 1, 1, '#bfe8ff');
+    px(g, 3, 11, 6, 1, '#9fd0ff'); px(g, 8, 12, 2, 1, '#9fd0ff');
+    for (const [x, y] of [[13, 2], [4, 14], [14, 13]]) px(g, x, y, 1, 1, '#fff6c0');
+  },
+  deadeye(g) {
+    // an eye inside a crosshair
+    px(g, 7, 0, 2, 4, '#ff6a4a'); px(g, 7, 12, 2, 4, '#ff6a4a'); px(g, 0, 7, 4, 2, '#ff6a4a'); px(g, 12, 7, 4, 2, '#ff6a4a');
+    oval(g, 8, 8, 5, 3, PAL.o); oval(g, 8, 8, 4, 2, '#f4f1ea'); oval(g, 8, 8, 2, 2, '#3a7ad0'); px(g, 8, 8, 1, 1, PAL.o); px(g, 7, 7, 1, 1, '#ffffff');
+  },
+  clone(g) {
+    // you, and a see-through copy of you behind
+    for (const [x, col, out] of [[3, '#6a58a8', '#3a2c60'], [8, '#8a6a4a', PAL.o]]) {
+      oval(g, x + 3, 4, 2, 2, out); oval(g, x + 3, 4, 1, 1, col === '#8a6a4a' ? PAL.skin : '#a898e8');
+      px(g, x + 1, 6, 5, 7, out); px(g, x + 2, 7, 3, 5, col); px(g, x + 1, 13, 2, 2, out); px(g, x + 4, 13, 2, 2, out);
+    }
+  },
+  kindle(g) {
+    // a hand lighting a small flame
+    px(g, 3, 11, 10, 3, PAL.o); px(g, 4, 11, 8, 2, PAL.skin); px(g, 3, 9, 2, 3, PAL.o); px(g, 11, 9, 2, 3, PAL.o);
+    oval(g, 8, 7, 3, 4, '#ff8a2a'); oval(g, 8, 8, 2, 2, '#ffe08a'); px(g, 8, 1, 1, 3, '#ff8a2a'); px(g, 7, 9, 2, 1, '#ffffff');
+    px(g, 3, 3, 1, 1, '#9ff0a0'); px(g, 13, 4, 1, 1, '#9ff0a0');
+  },
+  guiding(g) {
+    // a lantern with a trail of light
+    px(g, 9, 1, 1, 3, PAL.o); px(g, 7, 3, 5, 2, PAL.o); px(g, 7, 5, 5, 7, PAL.o); px(g, 8, 6, 3, 5, '#ffe9a8'); px(g, 9, 7, 1, 3, '#ffffff'); px(g, 7, 12, 5, 1, PAL.o);
+    for (let i = 0; i < 4; i++) px(g, 1 + i, 12 - i, 1, 1, '#fff1b8');
+    px(g, 2, 7, 1, 1, '#fff1b8'); px(g, 4, 4, 1, 1, '#fff1b8');
+  },
+  // ---- favor icons ----
+  boon_sharp(g) { // flint stone with a spark
+    oval(g, 7, 10, 5, 4, PAL.o); oval(g, 7, 10, 4, 3, '#6a6f75'); px(g, 5, 8, 3, 2, '#9aa0a6'); px(g, 4, 11, 2, 1, '#4a4f55');
+    for (const [x, y] of [[12, 3], [10, 2], [13, 5], [11, 5]]) px(g, x, y, 1, 1, '#ffd36a'); px(g, 12, 4, 1, 1, '#ffffff');
+  },
+  boon_wick(g) { // a lit candle
+    px(g, 5, 7, 6, 8, PAL.o); px(g, 6, 8, 4, 6, '#efe4c8'); px(g, 6, 8, 1, 6, '#ffffff'); px(g, 4, 14, 8, 2, PAL.o);
+    px(g, 8, 5, 1, 3, PAL.o); oval(g, 8, 3, 2, 3, '#ff8a2a'); px(g, 8, 3, 1, 2, '#ffe08a');
+  },
+  boon_swift(g) { // a charm on a cord
+    for (let i = 0; i < 5; i++) { px(g, 3 + i, 1 + i, 1, 1, '#8a6a4a'); px(g, 12 - i, 1 + i, 1, 1, '#8a6a4a'); }
+    oval(g, 8, 10, 4, 4, PAL.o); oval(g, 8, 10, 3, 3, '#5fbfc6'); oval(g, 8, 10, 1, 1, '#f4f1ea'); px(g, 8, 10, 1, 1, PAL.o);
+    px(g, 13, 11, 2, 1, '#d8f0ff'); px(g, 1, 11, 2, 1, '#d8f0ff');
+  },
+  boon_dash(g) { // an owl's feather
+    for (let i = 0; i < 12; i++) px(g, 3 + i, 13 - i, 1, 1, PAL.o);
+    for (let i = 1; i < 10; i++) { px(g, 4 + i, 13 - i - 2, 2, 2, i % 3 ? '#c8b090' : '#8a6a4a'); px(g, 3 + i, 13 - i, 2, 2, i % 2 ? '#e8dcc0' : '#c8b090'); }
+  },
+  boon_kindle(g) { // a bundle of firewood
+    for (const y of [9, 12]) { px(g, 1, y, 14, 3, PAL.o); px(g, 2, y + 1, 12, 1, '#8a5a3a'); px(g, 13, y, 2, 3, '#c49a6a'); }
+    px(g, 6, 8, 2, 8, '#5a3d26');
+    oval(g, 8, 5, 2, 3, '#ff8a2a'); px(g, 8, 5, 1, 2, '#ffe08a');
+  },
+  boon_leech(g) { // a small vial with something red
+    px(g, 6, 1, 4, 2, '#8a6a4a'); px(g, 6, 3, 4, 3, PAL.o); px(g, 7, 3, 2, 3, '#d8e8f0');
+    oval(g, 8, 10, 5, 5, PAL.o); oval(g, 8, 10, 4, 4, '#d8e8f0'); oval(g, 8, 11, 4, 3, '#c4333a'); px(g, 6, 8, 1, 2, '#ffffff');
+  },
+  boon_thorn(g) { // a bark shield
+    px(g, 3, 2, 10, 2, PAL.o); px(g, 2, 3, 12, 7, PAL.o); px(g, 3, 10, 10, 2, PAL.o); px(g, 5, 12, 6, 2, PAL.o); px(g, 7, 14, 2, 1, PAL.o);
+    px(g, 3, 3, 10, 7, '#6b4a2e'); px(g, 4, 10, 8, 2, '#6b4a2e'); px(g, 6, 12, 4, 2, '#6b4a2e');
+    for (const x of [5, 8, 11]) px(g, x, 3, 1, 9, '#4e3420'); px(g, 4, 5, 2, 2, PAL.moss); px(g, 9, 9, 2, 1, PAL.moss);
+  },
+  boon_scholar(g) { // a rolled scroll
+    px(g, 2, 3, 12, 10, PAL.o); px(g, 3, 4, 10, 8, '#efe4c8');
+    for (let i = 0; i < 3; i++) px(g, 5, 6 + i * 2, 6 - (i % 2) * 2, 1, '#8a7a60');
+    oval(g, 2, 8, 2, 5, PAL.o); oval(g, 2, 8, 1, 4, '#d8c8a8'); oval(g, 14, 8, 2, 5, PAL.o); oval(g, 14, 8, 1, 4, '#d8c8a8');
+    px(g, 10, 10, 2, 2, '#c4333a');
+  },
+  boon_spring(g) { // a blue crystal
+    px(g, 7, 1, 2, 2, PAL.o); px(g, 5, 3, 6, 9, PAL.o); px(g, 7, 12, 2, 3, PAL.o);
+    px(g, 6, 3, 4, 9, '#5fb8ff'); px(g, 6, 3, 2, 9, '#9fe0ff'); px(g, 7, 12, 2, 2, '#3a7ad0'); px(g, 7, 4, 1, 3, '#ffffff');
+  },
+  boon_wellw(g) { // a skull
+    oval(g, 8, 7, 5, 5, PAL.o); oval(g, 8, 7, 4, 4, '#e8dcc0'); px(g, 5, 11, 6, 3, PAL.o); px(g, 6, 11, 4, 2, '#e8dcc0');
+    px(g, 5, 6, 2, 2, '#3a1a50'); px(g, 9, 6, 2, 2, '#3a1a50'); px(g, 5, 6, 1, 1, '#b08cff'); px(g, 9, 6, 1, 1, '#b08cff'); px(g, 7, 9, 2, 1, PAL.o);
+    px(g, 7, 12, 1, 1, PAL.o); px(g, 9, 12, 1, 1, PAL.o);
+  },
+  boon_psalm(g) { // a torn page
+    px(g, 3, 2, 10, 12, PAL.o); px(g, 4, 3, 8, 10, '#efe4c8');
+    for (let i = 0; i < 4; i++) px(g, 5, 5 + i * 2, 6 - (i % 2) * 2, 1, '#8a7a60');
+    px(g, 10, 12, 2, 1, '#efe4c8'); px(g, 11, 13, 1, 1, PAL.o); px(g, 9, 13, 1, 1, '#efe4c8'); px(g, 12, 10, 1, 2, PAL.o);
+    px(g, 4, 3, 2, 2, '#d9b35a');
+  },
+  boon_ember(g) { // a little pouch of embers
+    oval(g, 8, 10, 5, 5, PAL.o); oval(g, 8, 10, 4, 4, '#8a5a3a'); px(g, 6, 4, 4, 2, PAL.o); px(g, 7, 5, 2, 1, '#a3704a');
+    for (const [x, y] of [[6, 9], [9, 11], [8, 8]]) px(g, x, y, 2, 2, '#ff8a2a');
+    px(g, 10, 2, 1, 1, '#ffd36a'); px(g, 5, 1, 1, 1, '#ffd36a');
+  },
+  boon_focus(g) { // a smooth focus stone with a glowing rune
+    oval(g, 8, 9, 6, 5, PAL.o); oval(g, 8, 9, 5, 4, '#7d8288'); oval(g, 7, 8, 3, 2, '#9aa0a6');
+    px(g, 8, 6, 1, 6, '#7fe0ff'); px(g, 6, 8, 5, 1, '#7fe0ff');
+  },
   help(g) {
     oval(g, 8, 8, 7, 7, '#2a4a6a'); px(g, 6, 4, 4, 2, '#ffffff'); px(g, 9, 6, 2, 2, '#ffffff'); px(g, 7, 8, 2, 2, '#ffffff'); px(g, 7, 11, 2, 2, '#ffffff');
   },
 };
 // which picture each skill uses
 const SKILL_ICON = {
-  warrior: { atk: 'sword', guard: 'shield', quake: 'quake', dash: 'dash', ult: 'flamesword' },
-  sorcerer: { atk: 'staff', gale: 'gale', fire: 'fire', frost: 'frost', dash: 'dash', ult: 'starfall' },
-  bowman: { atk: 'bow', mark: 'mark', rain: 'rain', dash: 'dash', ult: 'hawk' },
-  rogue: { atk: 'dagger', smoke: 'smoke', step: 'step', dash: 'dash', ult: 'cuts' },
-  cleric: { atk: 'mace', mend: 'mend', judge: 'judge', ground: 'ground', dash: 'dash', ult: 'dawn' },
+  warrior: { atk: 'sword', guard: 'shield', quake: 'quake', cry: 'warcry', dash: 'bash', ult: 'bladestorm' },
+  sorcerer: { atk: 'shove', gale: 'gale', fire: 'fire', frost: 'frost', dash: 'gust', ult: 'starfall' },
+  bowman: { atk: 'bow', mark: 'mark', rain: 'rain', dash: 'dash', ult: 'deadeye' },
+  rogue: { atk: 'dagger', smoke: 'smoke', step: 'step', dash: 'clone', ult: 'cuts' },
+  cleric: { atk: 'mace', mend: 'kindle', judge: 'judge', ground: 'ground', dash: 'guiding', ult: 'dawn' },
   warlock: { atk: 'bolt', hands: 'hands', imps: 'imps', siphon: 'siphon', dash: 'dash', ult: 'eclipse' },
 };
 export function iconSprite(name) {

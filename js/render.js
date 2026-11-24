@@ -951,6 +951,15 @@ export class Renderer {
         const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 8);
         g.addColorStop(0, 'rgba(235,220,255,1)'); g.addColorStop(0.4, 'rgba(150,100,255,0.9)'); g.addColorStop(1, 'rgba(60,20,120,0)');
         ctx.fillStyle = g; circle(ctx, s.x, s.y, 8);
+      } else if (s.k === 'wave') {
+        // Sword Master: a bright crescent of steel
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(255,200,140,0.5)'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(-6, 0, 12, -1.1, 1.1); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,250,235,0.95)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(-6, 0, 12, -1.0, 1.0); ctx.stroke();
+        ctx.restore();
       } else if (s.k === 'arrow') {
         ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
         ctx.strokeStyle = 'rgba(255,230,170,0.35)'; ctx.lineWidth = 2;
@@ -1317,12 +1326,12 @@ export class Renderer {
       const c = byId(CLASSES, p.cls);
       if (Math.hypot(p.x - game.lp.x, p.y - game.lp.y) < 140) { const [x, y] = toS(p.x, p.y - 54); text(ctx, c.name, x, y, { size: 13, font: TITLE, color: c.available ? '#fff' : '#9aa3ad' }); }
     }
-    if (world.readyZone) { const z = world.readyZone; const [x, y] = toS(z.x + z.w / 2, z.y + 4); text(ctx, 'Into the Wilds', x, y, { size: 15, font: TITLE, color: '#ffe2b0' }); }
+    if (world.readyZone) { const z = world.readyZone; const [x, y] = toS(z.x + z.w / 2, z.y + 4); text(ctx, 'Entrance', x, y, { size: 15, font: TITLE, color: '#ffe2b0' }); }
     if (world.exit && vis(world.exit.x, world.exit.y, 100)) { const [x, y] = toS(world.exit.x, world.exit.y - 64); text(ctx, snap.go ? 'Heartwood Gate (open)' : 'Heartwood Gate (sealed)', x, y, { size: 13, font: TITLE, color: snap.go ? '#d6ffc8' : '#ffb0a0' }); }
     world.shrines.forEach((s, i) => {
       if (snap.sh[i] || Math.hypot(s.x - game.lp.x, s.y - game.lp.y) > 60) return;
       const [x, y] = toS(s.x, s.y - 40);
-      text(ctx, `[${game.keyLabel('interact')}] Light the Heartwood (+Wildfire)`, x, y, { size: 12, color: '#ffd59a' });
+      text(ctx, `[${game.keyLabel('interact')}] Light the Heartwood Stump (+Wildfire)`, x, y, { size: 12, color: '#ffd59a' });
     });
     // practice dummies: damage-per-second readout
     for (const e of snap.es) {
@@ -1419,7 +1428,7 @@ export class Renderer {
         const dark = p < 0.25 ? 1 : Math.max(0, 1 - (p - 0.25) / 0.6);
         ctx.fillStyle = `rgba(4,6,10,${dark})`; ctx.fillRect(0, 0, W, H);
         const name = game.fadeIn.kind === 'lobby' ? 'The Campfire' : stageName(snap);
-        const sub = game.fadeIn.kind === 'lobby' ? 'Home again' : game.fadeIn.kind === 'arena' ? 'The Elder Treant stirs' : snap.stg === 1 ? 'Keep your flame alive' : 'Deeper into the wilds';
+        const sub = game.fadeIn.kind === 'lobby' ? 'Home again' : game.fadeIn.kind === 'arena' ? 'The Creaking Oak stirs' : snap.stg === 1 ? 'Keep your flame alive' : 'Deeper into the wilds';
         const ta = p < 0.15 ? p / 0.15 : p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.3) : 1;
         text(ctx, name, W / 2, H * 0.42, { size: 40, font: TITLE, color: '#ffe6b0', alpha: ta });
         text(ctx, sub, W / 2, H * 0.42 + 38, { size: 17, color: '#d8e2da', alpha: ta * 0.9 });

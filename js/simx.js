@@ -5,7 +5,7 @@
 //  combos, shared Wildfire, duels, chat and the dev console.
 // =============================================================
 import {
-  WOLF, ELITE, ALPHA, TREANT, RULES, CLASSES, TREES, PLAYER_RADIUS, PACE, TOUGH,
+  WOLF, ELITE, ALPHA, TREANT, RULES, CLASSES, TREES, PLAYER_RADIUS, PACE, TOUGH, WARRIOR,
   canBuy, treeNode, branchSpent, CAP_REQUIREMENT,
 } from './data.js';
 import { makeForest, makeArena } from './world.js';
@@ -49,7 +49,7 @@ const WRAP = {
   rogueActions: 'atk', smokeBomb: 's1', shadowstep: 's2', spawnDecoy: 'dash',
   clericActions: 'atk', mendingLight: 's1', judgement: 's2', sanctify: 's3', blessedStep: 'dash',
   warlockActions: 'atk', graspingHands: 's1', summonImps: 's2', soulSiphon: 's3', updateSiphon: 's3',
-  ultimate: 'ult', dawn: 'ult', eclipse: 'ult',
+  ultimate: 'ult', dawn: 'ult', eclipse: 'ult', battleCry: 's3',
 };
 
 const X = {
@@ -250,10 +250,10 @@ const X = {
       const g = this.enemies.find((e) => e.guardian);
       this.emit({ k: 'msg', text: `${name}: defeat the ${g && g.type === 'widow' ? 'Bramble Widow' : 'Alpha'} to open the Heartwood Gate.` });
       if (this.event) this.emit({ k: 'event', ev: this.event });
-    } else this.emit({ k: 'msg', text: 'The Elder Treant awakens…' });
+    } else this.emit({ k: 'msg', text: 'The Creaking Oak awakens…' });
   },
   stageName(n) {
-    if (this.isArenaStage(n)) return 'The Heart of the Wood';
+    if (this.isArenaStage(n)) return 'The Heart of the Woods';
     return `Thornwood ${this.mode === 'endless' ? n : ['I', 'II', 'III'][n - 1] || n}`;
   },
 
@@ -403,6 +403,87 @@ const X = {
   tickPlayer(p, dt) {
     p.brewT = (p.brewT || 0) - dt; p.boostT = (p.boostT || 0) - dt; p.dimT = (p.dimT || 0) - dt; p.rootT = (p.rootT || 0) - dt;
     if (p.cuts) this.updateCuts(p, dt);
+    if (p.cls === 'warrior') this.warriorTick(p, dt);
+  },
+
+  // =================================================== Warrior: Fury, Bladestorm, Aftershock
+  gainFury(p, v) {
+    if (p.cls !== 'warrior' || !(v > 0)) return;
+    const before = p.mana || 0;
+    p.mana = Math.min(100, before + v);
+    // Unquenchable: filling the gauge makes your flame unbreakable for a moment
+    if (before < 99.5 && p.mana >= 99.5 && p.stats.unquench && !(p.unqCd > this.time)) {
+      p.unqT = this.time + 2; p.unqCd = this.time + 20;
+      this.emit({ k: 'unquench', id: p.id, x: Math.round(p.x), y: Math.round(p.y) });
+    }
+  },
+  // abilities use a chunk of Fury for extra damage (never required)
+  useFury(p, frac) {
+    if (p.cls !== 'warrior') return 1;
+    const used = Math.min(p.mana || 0, 100 * frac);
+    p.mana = (p.mana || 0) - used;
+    p.lastFight = this.time;
+    if (used >= 5) this.emit({ k: 'furyUse', id: p.id, v: Math.round(used) });
+    return 1 + (used / 100) * p.stats.furyBonus;
+  },
+  warriorTick(p, dt) {
+    // Fury fades a little at a time once the fighting stops
+    if (this.time - (p.lastFight || -99) > WARRIOR.fury.fadeAfter) p.mana = Math.max(0, (p.mana || 0) - WARRIOR.fury.fade * dt);
+    if (p.down) { p.storm = null; p.after = null; return; }
+    if (p.after && this.time >= p.after.t) {
+      const a = p.after; p.after = null;
+      this.emit({ k: 'slam', id: p.id, x: Math.round(a.x), y: Math.round(a.y), r: Math.round(a.r), after: 1 });
+      this.hitCircle(p, a.x, a.y, a.r, a.dmg, 220, { stun: 0.3 });
+    }
+    const S = p.storm;
+    if (!S) return;
+    S.t -= dt; S.tick -= dt;
+    if (S.tick <= 0) {
+      S.tick = WARRIOR.storm.every;
+      const prev = p._slot; p._slot = 'ult';
+      this.hitCircle(p, p.x, p.y - 4, WARRIOR.storm.r * Math.sqrt(p.stats.ultSize), WARRIOR.storm.dmg * this.power(p) * S.fb, WARRIOR.storm.kb);
+      p._slot = prev;
+      p.lastFight = this.time;
+    }
+    if (S.t <= 0) p.storm = null;
+  },
+  // Battle Cry: every enemy in range turns on the Warrior and won't switch for a few seconds
+  battleCry(p) {
+    const C = WARRIOR.cry;
+    p.cd.s3 = p.stats.cryCd;
+    let n = 0;
+    for (const e of this.enemies) {
+      if (e.dead || e.type === 'dummy' || e.type === 'duelist' || e.type === 'treant') continue;
+      if (Math.hypot(e.x - p.x, e.y - p.y) > C.r) continue;
+      e.target = p.id; e.unseen = 0; e.tauntT = this.time + C.time * (p.stats.slot ? p.stats.slot.s3 : 1);
+      if (e.state === 'idle' || e.state === 'ret') e.state = 'chase';
+      n++;
+    }
+    this.emit({ k: 'cry', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: C.r, n });
+  },
+
+  // Aggro: if another player steps in between (much closer than the enemy's target),
+  // or the target can't be seen while someone else can, the enemy switches to them.
+  maybeRetarget(e, tgt, seeTgt) {
+    if (e.tauntT > this.time || !tgt || !this.players.has(e.target)) return; // taunts and decoys keep their hold
+    if (e.rtAt > this.time) return;
+    e.rtAt = this.time + 0.3;
+    const dT = Math.hypot(tgt.x - e.x, tgt.y - e.y);
+    let best = null, bd = 1e9;
+    for (const o of this.players.values()) {
+      if (o === tgt || o.down || !this.canSee(e, o)) continue;
+      const d = Math.hypot(o.x - e.x, o.y - e.y);
+      const between = d < dT * 0.6 && d < 140;
+      if ((between || (!seeTgt && d < e.def.aggro)) && d < bd) { bd = d; best = o; }
+    }
+    if (best) { e.target = best.id; e.unseen = 0; }
+  },
+
+  // Sword Master: the heavy 3rd Strike throws a slicing wave
+  swordWave(p) {
+    const W = WARRIOR, sp = W.waveSpeed * PACE;
+    this.shots.push({ id: this.nextId++, kind: 'wave', owner: p.id, x: p.x + Math.cos(p.aim) * 14, y: p.y - 10 + Math.sin(p.aim) * 14,
+      vx: Math.cos(p.aim) * sp, vy: Math.sin(p.aim) * sp, life: W.waveRange / sp, dmg: W.waveDmg * this.power(p), hit: new Set() });
   },
   tickWorld(dt) {
     if (this.scene === 'lobby') this.updateDuel(dt);
@@ -523,8 +604,8 @@ const X = {
     switch (cmd) {
       case 'level': case 'lvl': c.lv = Math.max(1, Math.min(MAX_LEVEL, Math.floor(num(a1, 1)))); c.xp = 0; this.recalc(p); say(`level ${c.lv}`); break;
       case 'xp': this.addXp(p, num(a1, 100)); say(`+${num(a1, 100)} exp → level ${c.lv}`); break;
-      case 'max': case 'master': c.lv = MAX_LEVEL; c.xp = 0; say('level 30 (mastered). Visit the Skilltree to prestige.'); break;
-      case 'prestiges': c.np = Math.max(0, Math.floor(num(a1, 0))); say(`prestige count set to ${c.np}`); break;
+      case 'max': case 'master': c.lv = MAX_LEVEL; c.xp = 0; say('level 30 (mastered). Visit the Skilltree to ignite.'); break;
+      case 'prestiges': c.np = Math.max(0, Math.floor(num(a1, 0))); say(`ignition count set to ${c.np}`); break;
       case 'resetclass': p.prog[p.cls] = emptyProgress(); this.loadClass(p); this.recalc(p); say('this class was reset to level 1'); break;
       case 'coins': p.coins = Math.max(0, p.coins + Math.floor(num(a1, 100))); say(`coins: ${p.coins}`); break;
       case 'item': { const it = SHOP.find((s) => s.id === a1); if (!it) { say('items: ' + SHOP.map((s) => s.id).join(', ')); break; } p.items[a1] = Math.min(it.max, (p.items[a1] || 0) + Math.floor(num(a2, 1))); say(`${a1}: ${p.items[a1]}`); break; }
@@ -554,7 +635,7 @@ const X = {
     return {
       lv: c.lv, xp: Math.floor(c.xp), nx: c.lv >= MAX_LEVEL ? 0 : xpNeed(c.lv), pts: pointsLeft(c), np: c.np, pr: c.pres, rb: c.reb,
       co: p.coins, it: p.items, bt: p.brewT > 0 ? 1 : 0, bo: p.boostT > 0 ? 1 : 0, dm: p.dimT > 0 ? 1 : 0, rt: p.rootT > 0 ? 1 : 0,
-      dr: p.duelReady ? 1 : 0, ct: p.cuts ? 1 : 0,
+      dr: p.duelReady ? 1 : 0, ct: p.cuts ? 1 : 0, bs: p.storm ? 1 : 0, uq: p.unqT > this.time ? 1 : 0,
     };
   },
   worldSnap() {

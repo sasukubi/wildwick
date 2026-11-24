@@ -4,7 +4,7 @@
 //  leaderboard, path stone, pond, duel ring), chat, the dev console,
 //  photo mode, fishing and the new effects.
 // =============================================================
-import { ROGUE, byId, CLASSES, BOONS } from './data.js';
+import { ROGUE, WARRIOR, byId, CLASSES, BOONS } from './data.js';
 import { SHOP, MODES, EVENTS, FISH, rollFish, isDev, MAX_LEVEL, todayKey } from './progress.js';
 import { toast, shopPanel, lboardPanel, modePanel, chat, devConsole, settings, pause, campPanel, signPanel, boardPanel } from './ui.js';
 import { audio } from './audio.js';
@@ -57,6 +57,13 @@ const X = {
       if (!t || this.world.kind !== 'lobby' || Math.hypot(t.x - this.lp.x, t.y - this.lp.y) > 150) { this.tree.edit = false; this.tree.lastKey = ''; }
     }
     this.updateStepAim(snap, me);
+    // Bladestorm: keep everyone who's spinning... spinning
+    for (const p of snap.ps) {
+      if (!p.bs) continue;
+      const v = this.viewFor(p.id);
+      if (this.t - (v.spinT ?? -9) > 0.26) { v.spinT = this.t; audio.play('spin', { x: v.x, y: v.y, vol: 0.55 }); }
+      if (Math.random() < dt * 30) { const a = Math.random() * Math.PI * 2; this.particles.push({ x: v.x + Math.cos(a) * 30, y: v.y - 10 + Math.sin(a) * 18, vx: -Math.sin(a) * 120, vy: Math.cos(a) * 70, life: 0.3, max: 0.3, size: 2, color: Math.random() < 0.5 ? '#ffd08a' : '#e8eef3', glow: true, shrink: true }); }
+    }
     this.updateFishing(dt, me);
     // photo mode: mouse wheel zooms
     if (this.photo) {
@@ -131,7 +138,7 @@ const X = {
   stationPrompt(best, me, key, go) {
     switch (best.type) {
       case 'skilltree':
-        this.prompt = { x: best.x, y: best.y - 92, text: `[${key}] The Skilltree`, sub: me.lv >= MAX_LEVEL ? 'Mastered! Spend points or prestige here' : me.pts ? `${me.pts} skill point${me.pts > 1 ? 's' : ''} to spend` : 'Spend skill points and prestige here' };
+        this.prompt = { x: best.x, y: best.y - 92, text: `[${key}] The Skilltree`, sub: me.lv >= MAX_LEVEL ? 'Mastered! Spend points or ignite here' : me.pts ? `${me.pts} skill point${me.pts > 1 ? 's' : ''} to spend` : 'Spend skill points and ignition here' };
         if (go) { this.tree.edit = true; this.tree.lastKey = ''; if (!this.tree.open) this.tree.show(); }
         return true;
       case 'shop':
@@ -144,7 +151,7 @@ const X = {
         return true;
       case 'pathstone': {
         const snap = this.lastSnap, m = byId(MODES, snap ? snap.md : 'casual');
-        this.prompt = { x: best.x, y: best.y - 46, text: `[${key}] The Path Stone`, sub: `Next run: ${m.name}${snap && snap.rs ? ` (from forest ${snap.rs})` : ''}${this.isHost && !this.waitSim ? '' : ' · the host chooses'}` };
+        this.prompt = { x: best.x, y: best.y - 46, text: `[${key}] The Waystone`, sub: `Next run: ${m.name}${snap && snap.rs ? ` (from forest ${snap.rs})` : ''}${this.isHost && !this.waitSim ? '' : ' · the host chooses'}` };
         if (go) { if (this.isHost && !this.waitSim) modePanel.toggle(this); else { toast('Only the host can choose the path.'); audio.play('nope'); } }
         return true;
       }
@@ -208,17 +215,37 @@ const X = {
       case 'lvl':
         if (mine) {
           audio.play('lvl');
-          this.banner(`Level ${f.lvl}!`, 2, f.lvl >= MAX_LEVEL ? `${byId(CLASSES, this.cls).name} mastered! Prestige at the Skilltree in camp` : '+1 skill point · spend it at the Skilltree in camp');
+          this.banner(`Level ${f.lvl}!`, 2, f.lvl >= MAX_LEVEL ? `${byId(CLASSES, this.cls).name} mastered! Ignite it at the Skilltree in camp` : '+1 skill point · spend it at the Skilltree in camp');
         } else toast(`${f.n} reached level ${f.lvl}`);
         return true;
       case 'treeBuy': if (mine) audio.play('boon'); return true;
+      case 'cry':
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 120, t0: this.t, life: 0.6, color: 'rgba(255,120,80,1)', light: 160 });
+        this.burst(f.x, f.y - 20, 18, { color: '#ffb080', speed: 140, life: 0.5, glow: true });
+        audio.play('warcry', at);
+        if (mine) { this.addShake(4); if (f.n) toast(`Battle Cry: ${f.n} enem${f.n === 1 ? 'y turns' : 'ies turn'} on you!`, 1800); }
+        return true;
+      case 'storm':
+        audio.play('pyre', at);
+        if (mine) { this.banner('BLADESTORM', 1.2); this.addShake(5); }
+        return true;
+      case 'unquench':
+        this.burst(f.x, f.y - 16, 24, { color: '#ff6a3a', speed: 120, life: 0.7, glow: true, up: 40 });
+        audio.play('wfReady', at);
+        if (mine) this.banner('Unquenchable!', 1.5, 'Your flame cannot go out for 2 seconds');
+        return true;
+      case 'furyUse': {
+        const v = this.viewFor(f.id);
+        this.burst(v.x, v.y - 14, Math.min(20, 4 + f.v / 4), { color: '#ff5a3a', speed: 90, life: 0.45, glow: true });
+        return true;
+      }
       case 'reclaim': if (mine) { audio.play('ember'); toast('Point reclaimed. Spend it somewhere new!'); } return true;
       case 'prestige':
         this.burst(f.x, f.y - 16, 40, { color: '#ffe9a0', speed: 160, life: 1.2, glow: true, up: 60 });
         this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 60, t0: this.t, life: 0.8, color: 'rgba(255,230,150,1)', light: 200 });
         audio.play('victory');
-        if (mine) this.banner(f.rebirth ? `Rebirth ${f.np / 5}!` : `Prestige ${f.np}!`, 3, 'Back to level 1, stronger than before');
-        else toast(`${f.n} reached prestige ${f.np}!`);
+        if (mine) this.banner(f.rebirth ? `Rebirth ${f.np / 5}!` : `Ignition ${f.np}!`, 3, 'Back to level 1, stronger than before');
+        else toast(`${f.n} reached ignition ${f.np}!`);
         return true;
       case 'bought': if (mine) { audio.play('coin'); toast(`Bought a ${byId(SHOP, f.item).name}`); } return true;
       case 'drink':
@@ -256,7 +283,7 @@ const X = {
         this.burst(f.x, f.y - 10, 60, { color: '#ffcf70', speed: 260, life: 0.9, glow: true });
         this.addShake(10); this.flash = 1;
         audio.play('boom', at);
-        this.banner('WILDFIRE SURGE!', 1.8, `${f.a} and ${f.b} unleashed their Wildfire together`);
+        this.banner('TWINFLARE!', 1.8, `${f.a} and ${f.b} unleashed their Wildfire together`);
         return true;
       case 'chat':
         this.bubbles.set(f.id, { text: f.text, t0: this.t });
@@ -276,12 +303,12 @@ const X = {
       case 'snare': audio.play('rootsCall', { ...at, vol: 0.5 }); return true;
       case 'webSpit': audio.play('bow', at); return true;
       case 'web': this.burst(f.x, f.y - 4, 10, { color: '#e8eef0', speed: 70, life: 0.5 }); audio.play('thwack', at); return true;
-      case 'uproot': audio.play('roar'); this.addShake(12); this.banner('The Treant tears up its roots!', 2.5, 'The thorns are closing in. Stay inside the ring!'); return true;
-      case 'bossDown': audio.play('victory'); this.banner('The Elder Treant falls!', 2.5, 'But the endless forest goes on…'); return true;
+      case 'uproot': audio.play('roar'); this.addShake(12); this.banner('The Oak tears up its roots!', 2.5, 'The thorns are closing in. Stay inside the ring!'); return true;
+      case 'bossDown': audio.play('victory'); this.banner('The Creaking Oak falls!', 2.5, 'But the endless forest goes on…'); return true;
       case 'runOver': this.onRunOver(f); return true;
       case 'endlessSave':
         if (this.isHost && !this.waitSim) { this.char.endless = f.save; this.backend.saveChar(this.char).catch(() => {}); }
-        toast(`Endless run saved: continue from forest ${f.save.forest} at the Path Stone.`, 5000);
+        toast(`Endless run saved: continue from forest ${f.save.forest} at the Waystone.`, 5000);
         return true;
     }
     return false;
