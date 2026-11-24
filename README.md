@@ -1,7 +1,7 @@
 # Wildwick
 
 An online co-op roguelite for 1–4 players, set in a dark magical forest.
-**Your flame is your health:** taking damage dims your light so you see less, embers relight it, and overhealing builds heat until you burst into **Wildfire** for 2 seconds.
+**Your flame is your health:** taking damage dims your light so you see less, and embers relight it. Each class also has a **Wildfire** ultimate, charged by glowing elite enemies, bosses and Heartwood shrines.
 
 ## Play
 
@@ -11,8 +11,9 @@ An online co-op roguelite for 1–4 players, set in a dark magical forest.
 2. Create an account (username + password), then make a character.
 3. **Host:** click *Host a game* and share the 5-letter room code in Discord.
    **Friends:** click *Join* and type the code.
-4. In the campfire lobby you can visit the **wardrobe** (cloak, hat, flame colour) and the **class shrines**. When everyone stands on the glowing path to the north, the run starts.
-5. In the Thornwood, fight the thorn-wolves, collect embers, and get everyone to the **Heartwood Gate**.
+4. In the campfire lobby, visit the **wardrobe** (cloak, hat, flame colour) and the **class shrines**. When everyone stands on the glowing path to the north, the run starts.
+5. A run is **3 forests, then the Elder Treant**. In each forest, defeat the **Alpha Thornwolf** to open the Heartwood Gate, then get everyone inside. Between forests, everyone picks a **boon**.
+6. Enemies give the whole party EXP. Each level gives everyone a **skill point** (press **T**).
 
 To run it from this folder instead (for testing changes before they go online), double-click **`Start Wildwick.bat`**. It opens `http://localhost:5317`.
 
@@ -24,30 +25,45 @@ The game keeps running for as long as the **host** has it open. If the host clos
 |---|---|---|
 | Move | WASD / arrows | Left stick |
 | Aim | Mouse | Right stick |
-| Strike (hold to keep swinging) | Left click | RT / RB |
-| Dash (dodges bites) | Space / Shift | A |
-| Cinder Quake (costs 10 flame) | E / Q / Right click | X / LB / LT |
-| Interact (lobby) | F | Y |
-| Close menus | Esc | B |
+| Strike (hold to keep swinging) | Left click | RT |
+| Smoulder Guard (hold to block, let go to counter) | Right click | LT |
+| Cinder Quake (costs flame) | E / Q | X / LB |
+| Pyre Cleave (Wildfire ultimate) | R | RB |
+| Dash (dodges everything) | Space / Shift | A |
+| Interact | F | Y |
+| Skill tree | T / Tab | View |
+| Settings and volume | Esc | Start |
 
-## What's in this first test
+## What's in the game so far
 
-- Accounts and up to 6 saved characters each (name, cloak, hat, flame colour, class)
-- Campfire lobby with a wardrobe (party cloak colours are unique), six class shrines (only the Warrior works so far) and a ready path
-- **Warrior:** sword combo (every 3rd hit is heavy), dash, Cinder Quake, and *Dark Fury* (up to +80% damage as your flame dims)
-- **Thorn-wolves:** pack hunters that circle you, then flash and lunge. Watch for the red warning streak.
-- Flame health, embers, heat and Wildfire, rekindling downed friends, defeat and victory
-- A new random forest every run
+- Accounts and up to 6 saved characters each (name, cloak, hat, flame colour, class). Your **username** is shown above your head.
+- Campfire lobby with a wardrobe (party cloak colours are unique), six class shrines (only the Warrior works so far) and a ready path.
+- **Warrior:**
+  - Sword combo (every 3rd hit is heavy) and dash.
+  - Cinder Quake: burns some of your flame to slam the ground.
+  - Smoulder Guard: block from the front, store the heat, then counter-slash.
+  - Dark Fury: up to +80% damage as your flame dims.
+  - Pyre Cleave: the Wildfire ultimate, a huge flaming sweep that leaves a burning trail.
+- Skill tree with three groups: Fury, Bulwark and Cinder. Plus 10 boons to pick from between stages.
+- **Enemies:**
+  - Thorn-wolves.
+  - Glowing ember-touched elites, which drop Wildfire.
+  - The Alpha Thornwolf mini boss, which lunges three times and howls for help.
+  - The Elder Treant final boss, which bursts roots up under you, sweeps its branches and calls the pack.
+- Original pixel art, sound effects, forest ambience and music (volume in settings).
 
 ## Where things are
 
 | File | What it does |
 |---|---|
-| `js/data.js` | **All the numbers.** Speeds, damage, cooldowns, colours. Start here to tweak the game. |
-| `js/sim.js` | The rules: enemies, damage, healing, Wildfire. Only the host runs this. |
-| `js/world.js` | Builds the lobby and the random forest. |
-| `js/game.js` | Your character, smoothing of other players, effects. |
-| `js/render.js` | All drawing (characters, trees, light and darkness, HUD). |
+| `js/data.js` | **All the numbers.** Speeds, damage, cooldowns, skill tree, boons. Start here to tweak the game. |
+| `js/sim.js` | The rules: enemies, bosses, damage, EXP, Wildfire, stages. Only the host runs this. |
+| `js/world.js` | Builds the lobby, the random forests and the boss arena. |
+| `js/game.js` | Your character, smoothing of other players, effects, sounds. |
+| `js/sprites.js` | All the pixel art, painted by code. |
+| `js/render.js` | Drawing the world, light and darkness. |
+| `js/hud.js`, `js/ui.js` | The on-screen bars and buttons, skill tree, boons, wardrobe, settings. |
+| `js/audio.js` | Sound effects, ambience and music (made by code). |
 | `js/net.js` | Online rooms (PeerJS). |
 | `js/accounts.js` | Log in and saving characters. |
 | `js/main.js` | The menus. |

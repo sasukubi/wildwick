@@ -6,7 +6,8 @@ import { hostRoom, joinRoom } from './net.js';
 import { Game } from './game.js';
 import { CLASSES, CLOAKS, byId } from './data.js';
 import { drawPreview } from './render.js';
-import { toast } from './ui.js';
+import { toast, settings } from './ui.js';
+import { audio } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
 const backend = createBackend();
@@ -25,13 +26,27 @@ async function busy(btn, fn) {
   try { await fn(); } finally { btn.disabled = false; btn.textContent = label; }
 }
 
+// sound needs a first click or key press before browsers allow it
+const unlock = () => audio.unlock();
+addEventListener('pointerdown', unlock);
+addEventListener('keydown', unlock);
+// UI sounds for every button
+document.addEventListener('click', (e) => { if (e.target.closest('button')) audio.play('click'); });
+document.addEventListener('pointerover', (e) => {
+  const b = e.target.closest('button');
+  if (b && !b.disabled && b !== document.lastHover) { document.lastHover = b; audio.play('hover'); }
+});
+// Esc opens settings from the menus too
+addEventListener('keydown', (e) => { if (e.code === 'Escape' && !game) settings.toggle(false); });
+$('#menu-gear').addEventListener('click', () => settings.toggle(false));
+$('#btn-gear').addEventListener('click', () => settings.toggle(!!game));
+
 // ---------------------------------------------------- login
 $('#backend-note').textContent = backend.note;
 
 $('#login-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  const btn = $('#btn-login');
-  busy(btn, async () => {
+  busy($('#btn-login'), async () => {
     $('#login-error').textContent = '';
     try {
       await backend.logIn($('#username').value.trim(), $('#password').value);
@@ -55,6 +70,7 @@ $('#btn-signup').addEventListener('click', () => {
 // ---------------------------------------------------- characters
 async function showChars() {
   show('screen-chars');
+  audio.setScene('menu');
   $('#who').textContent = backend.username;
   $('#chars-error').textContent = '';
   let chars = [];
@@ -64,26 +80,27 @@ async function showChars() {
   if (!chars.length) list.innerHTML = '<p class="muted">No characters yet. Name your first wanderer below.</p>';
   for (const c of chars) {
     const card = document.createElement('div');
-    card.className = 'char-card';
+    card.className = 'char-card glass';
     const cv = document.createElement('canvas');
-    cv.width = 90; cv.height = 100;
+    cv.width = 88; cv.height = 96;
     drawPreview(cv, c);
     card.appendChild(cv);
     const info = document.createElement('div');
     info.className = 'char-info';
-    info.innerHTML = `<strong></strong><span class="muted"></span>`;
+    info.innerHTML = '<strong></strong><span class="muted"></span>';
     info.querySelector('strong').textContent = c.name;
     info.querySelector('span').textContent = byId(CLASSES, c.cls).name;
     card.appendChild(info);
     const play = document.createElement('button');
-    play.className = 'primary';
+    play.className = 'gbtn primary';
     play.textContent = 'Play';
     play.onclick = () => showMenu(c);
     const del = document.createElement('button');
-    del.className = 'ghost small';
+    del.className = 'gbtn small';
     del.textContent = 'Delete';
     del.onclick = async () => {
-      if (!confirm(`Delete ${c.name}? This can't be undone.`)) return;
+      const { confirmDialog } = await import('./ui.js');
+      if (!(await confirmDialog(`Delete ${c.name}? This can't be undone.`, 'Delete'))) return;
       try { await backend.deleteChar(c.id); } catch (err) { $('#chars-error').textContent = err.message; }
       showChars();
     };
@@ -121,7 +138,7 @@ function showMenu(c) {
   show('screen-menu');
   drawPreview($('#menu-preview'), c);
   $('#menu-name').textContent = c.name;
-  $('#menu-class').textContent = byId(CLASSES, c.cls).name;
+  $('#menu-class').textContent = `${byId(CLASSES, c.cls).name} · played by ${backend.username}`;
   $('#menu-error').textContent = '';
 }
 
@@ -146,17 +163,17 @@ $('#btn-back').addEventListener('click', () => showChars());
 
 function startGame(room, isHost) {
   show(null);
-  $('#hud-top').classList.remove('hidden');
+  settings.close();
   $('#room-code').textContent = room.code;
   game = new Game({
     canvas: $('#game'),
     room,
     isHost,
     character: current,
+    user: backend.username,
     backend,
     onLeave: (msg) => {
       game = null;
-      $('#hud-top').classList.add('hidden');
       $('#help').classList.add('hidden');
       showMenu(current);
       if (msg) $('#menu-error').textContent = msg;
@@ -164,9 +181,6 @@ function startGame(room, isHost) {
   });
 }
 
-$('#btn-leave').addEventListener('click', () => {
-  if (game && confirm(game.isHost ? 'Leave? This closes the room for everyone.' : 'Leave the party?')) game.leave();
-});
 $('#btn-copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText($('#room-code').textContent); toast('Room code copied. Paste it in Discord!'); }
   catch { toast('Could not copy. The code is ' + $('#room-code').textContent); }
@@ -186,7 +200,6 @@ for (let i = 0; i < 26; i++) {
   ff.appendChild(s);
 }
 
-// ---------------------------------------------------- start
 (async () => {
   try {
     if (await backend.restore()) { await showChars(); return; }

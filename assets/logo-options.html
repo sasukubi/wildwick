@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wildwick Logo Options</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@800&family=Fredoka:wght@700&family=Nunito:wght@700;800&family=Pixelify+Sans:wght@700&family=Uncial+Antiqua&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b1310; --card:#121d17; --line:#24352a; --text:#efe4c8; --muted:#9aa892; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:Nunito, sans-serif; padding:28px 16px 60px; }
+  h1 { font-family:Cinzel, serif; text-align:center; margin:0 0 4px; color:#ffd27a; }
+  .sub { text-align:center; color:var(--muted); margin:0 0 28px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap:20px; max-width:1100px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; display:flex; flex-direction:column; gap:12px; }
+  .art { display:flex; align-items:center; justify-content:center; min-height:260px; }
+  .art svg, .art object { width:100%; height:auto; max-height:320px; }
+  .art.square svg { max-width:300px; }
+  .label { display:flex; gap:10px; align-items:baseline; }
+  .num { font-family:Cinzel, serif; font-weight:800; color:#ffb347; font-size:20px; }
+  .name { font-weight:800; font-size:17px; }
+  .desc { color:var(--muted); margin:0; font-size:14px; line-height:1.45; }
+  #defs { position:absolute; width:0; height:0; overflow:hidden; }
+</style>
+</head>
+<body>
+<h1>Wildwick logo options</h1>
+<p class="sub">Pick one (or mix bits from several) and I'll polish it.</p>
+
+<!-- shared gradients and shapes -->
+<svg id="defs" aria-hidden="true">
+  <defs>
+    <linearGradient id="flameOuter" x1="0" y1="40" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff5a2a"/><stop offset="0.6" stop-color="#ff8a2b"/><stop offset="1" stop-color="#ffb347"/>
+    </linearGradient>
+    <linearGradient id="flameInner" x1="0" y1="95" x2="0" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffc14d"/><stop offset="1" stop-color="#ffe9a8"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff1c4"/><stop offset="0.45" stop-color="#ffc766"/><stop offset="1" stop-color="#e8662c"/>
+    </linearGradient>
+    <radialGradient id="warm" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffb347" stop-opacity="0.55"/><stop offset="1" stop-color="#ff7a2b" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="badgeFill" cx="0.5" cy="0.6" r="0.6">
+      <stop offset="0" stop-color="#22402a"/><stop offset="1" stop-color="#0a1410"/>
+    </radialGradient>
+    <linearGradient id="night" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1b2c"/><stop offset="1" stop-color="#16301f"/>
+    </linearGradient>
+    <linearGradient id="iconFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#20402a"/><stop offset="1" stop-color="#0a1510"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow" x="-20%" y="-40%" width="140%" height="180%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="10" result="b"/>
+      <feFlood flood-color="#ff9a4a" flood-opacity="0.45"/>
+      <feComposite in2="b" operator="in" result="g"/>
+      <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <g id="leaf">
+      <path d="M0,0 C11,-9 11,-25 0,-34 C-11,-25 -11,-9 0,0 Z" fill="#7fa63a" stroke="#22351a" stroke-width="2.5"/>
+      <path d="M0,-3 L0,-27" stroke="#3f5f22" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </defs>
+</svg>
+
+<div class="grid">
+  <div class="card">
+    <div class="art"><object data="logo.svg" type="image/svg+xml"></object></div>
+    <div class="label"><span class="num">1</span><span class="name">Ember Wreath</span></div>
+    <p class="desc">The first one. A flame on a wick inside a ring of leaves, with a gold storybook title. Warm and classic fantasy.</p>
+  </div>
+
+  <div class="card">
+    <div class="art" id="pixel"></div>
+    <div class="label"><span class="num">2</span><span class="name">Pixel Campfire</span></div>
+    <p class="desc">Chunky pixel-art flame and blocky letters with a hard shadow. Matches the in-game pixel art and feels retro-arcade.</p>
+  </div>
+
+  <div class="card">
+    <div class="art square" id="badge"></div>
+    <div class="label"><span class="num">3</span><span class="name">Forest Crest</span></div>
+    <p class="desc">A round badge with the name curving around a flame in front of a pine forest. Works well as a profile picture or sticker.</p>
+  </div>
+
+  <div class="card">
+    <div class="art" id="cozy"></div>
+    <div class="label"><span class="num">4</span><span class="name">Cozy Flames</span></div>
+    <p class="desc">Soft, rounded lowercase letters where the dots on the i's are little flames. Friendly and playful, like an indie co-op game.</p>
+  </div>
+
+  <div class="card">
+    <div class="art" id="story"></div>
+    <div class="label"><span class="num">5</span><span class="name">Night Forest</span></div>
+    <p class="desc">Old-fairytale lettering over a moonlit pine treeline with a small campfire and fireflies. Moody and atmospheric.</p>
+  </div>
+
+  <div class="card">
+    <div class="art square" id="mono"></div>
+    <div class="label"><span class="num">6</span><span class="name">W Monogram</span></div>
+    <p class="desc">Just a gold W with a flame rising from its middle, on a rounded tile. For the browser tab icon, loading screen, or anywhere small.</p>
+  </div>
+</div>
+
+<script>
+// The smooth flame from option 1, drawn with its base at (cx, baseY) and scaled by s.
+function flame(cx, baseY, s, glow = true) {
+  return `<g transform="translate(${cx} ${baseY}) scale(${s}) translate(-400 -200)" ${glow ? 'filter="url(#glow)"' : ''}>
+    <path d="M400,36 C424,78 458,104 458,146 C458,178 432,200 400,200 C368,200 342,178 342,146 C342,120 356,102 371,82 C372,104 382,118 391,114 C383,90 388,62 400,36 Z" fill="url(#flameOuter)" stroke="#5a1c0c" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M404,94 C416,118 434,134 434,158 C434,178 419,190 400,190 C381,190 367,178 367,160 C367,140 384,128 391,110 C396,124 402,126 404,94 Z" fill="url(#flameInner)"/>
+    <ellipse cx="400" cy="170" rx="14" ry="17" fill="#fff8e0"/>
+  </g>`;
+}
+function pine(x, base, h, fill) {
+  const p = [[0,-h],[.26,-.62*h],[.12,-.62*h],[.34,-.3*h],[.16,-.3*h],[.4,0],[-.4,0],[-.16,-.3*h],[-.34,-.3*h],[-.12,-.62*h],[-.26,-.62*h]];
+  return `<polygon fill="${fill}" points="${p.map(([a,b], i) => `${x + (i ? a*h : 0)},${base + b}`).join(' ')}"/>`;
+}
+
+// 2 — Pixel Campfire
+(() => {
+  const map = [
+    ".....O......",
+    "....OO......",
+    "....OMO.....",
+    "...OMMO..O..",
+    "...OMMMO.OO.",
+    "..OMMYMMOMO.",
+    "..OMMYYMMMO.",
+    ".OMMYYYMMMMO",
+    ".OMYYWYYMMMO",
+    ".OMYWWWYYMMO",
+    ".OMYWWWWYMMO",
+    ".OMMYWWYYMMO",
+    "..OMYYYYYMO.",
+    "...OMMMMMO..",
+    "..BBOOOOOBB.",
+    ".bbBBBBBBbb.",
+    "..bb....bb..",
+  ];
+  const col = { O:"#d8401f", M:"#ff8a2b", Y:"#ffc94d", W:"#fff3c4", B:"#7a4a26", b:"#4a2c16" };
+  const px = 9, ox = 34, oy = 28;
+  let rects = "";
+  map.forEach((row, y) => [...row].forEach((c, x) => {
+    if (col[c]) rects += `<rect x="${ox + x*px}" y="${oy + y*px}" width="${px}" height="${px}" fill="${col[c]}"/>`;
+  }));
+  const sparks = [[150,30],[24,60],[160,90]].map(([x,y]) => `<rect x="${x}" y="${y}" width="6" height="6" fill="#ffc94d"/>`).join("");
+  document.getElementById("pixel").innerHTML = `
+  <svg viewBox="0 0 660 220" shape-rendering="crispEdges">
+    <circle cx="88" cy="110" r="95" fill="url(#warm)" shape-rendering="auto"/>
+    ${rects}${sparks}
+    <text x="172" y="138" font-family="'Pixelify Sans'" font-weight="700" font-size="92" fill="#6b230c">WILDWICK</text>
+    <text x="166" y="132" font-family="'Pixelify Sans'" font-weight="700" font-size="92" fill="#ffcf5a" stroke="#2a1608" stroke-width="4" paint-order="stroke">WILDWICK</text>
+    <text x="170" y="180" font-family="'Pixelify Sans'" font-weight="700" font-size="20" letter-spacing="3" fill="#9fc25a">KEEP YOUR FLAME ALIVE</text>
+  </svg>`;
+})();
+
+// 3 — Forest Crest
+(() => {
+  let trees = "";
+  [[120,300,90],[160,300,120],[250,300,115],[285,300,85],[205,302,70]].forEach(([x,b,h]) => trees += pine(x,b,h,"#0a140e"));
+  const stars = [[60,200],[340,200]].map(([x,y]) => `<path d="M${x},${y-6} L${x+2},${y-2} L${x+6},${y} L${x+2},${y+2} L${x},${y+6} L${x-2},${y+2} L${x-6},${y} L${x-2},${y-2} Z" fill="#e9b85a"/>`).join("");
+  document.getElementById("badge").innerHTML = `
+  <svg viewBox="0 0 400 400">
+    <defs>
+      <clipPath id="badgeClip"><circle cx="200" cy="200" r="112"/></clipPath>
+      <path id="arcTop" d="M72,200 A128,128 0 0,1 328,200"/>
+      <path id="arcBot" d="M62,200 A138,138 0 0,0 338,200"/>
+    </defs>
+    <circle cx="200" cy="200" r="182" fill="url(#badgeFill)" stroke="#2a1608" stroke-width="6"/>
+    <circle cx="200" cy="200" r="176" fill="none" stroke="#e9b85a" stroke-width="5"/>
+    <circle cx="200" cy="200" r="114" fill="#0d1a13" stroke="#e9b85a" stroke-width="3"/>
+    <g clip-path="url(#badgeClip)">
+      <circle cx="200" cy="230" r="110" fill="url(#warm)"/>
+      ${trees}
+      <rect x="80" y="296" width="240" height="30" fill="#0a140e"/>
+    </g>
+    ${flame(200, 282, 0.78)}
+    <path d="M174,288 L226,280 M174,280 L226,288" stroke="#5a3a1f" stroke-width="9" stroke-linecap="round"/>
+    <text font-family="Cinzel" font-weight="800" font-size="44" letter-spacing="5" fill="url(#gold)" stroke="#2a1608" stroke-width="3" paint-order="stroke">
+      <textPath href="#arcTop" startOffset="50%" text-anchor="middle">WILDWICK</textPath>
+    </text>
+    <text font-family="Nunito" font-weight="800" font-size="17" letter-spacing="4" fill="#cfe39a">
+      <textPath href="#arcBot" startOffset="50%" text-anchor="middle" dominant-baseline="hanging">KEEP YOUR FLAME ALIVE</textPath>
+    </text>
+    ${stars}
+  </svg>`;
+})();
+
+// 4 — Cozy Flames (dotless i's with flames placed on top after the font loads)
+(() => {
+  const el = document.getElementById("cozy");
+  el.innerHTML = `
+  <svg viewBox="0 0 600 260">
+    <text x="300" y="198" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="128" fill="#16241a">wıldwıck</text>
+    <text id="cozyWord" x="300" y="190" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="128" fill="#f6ead0" stroke="#16241a" stroke-width="10" stroke-linejoin="round" paint-order="stroke">wıldwıck</text>
+    <g id="cozyFlames"></g>
+    <use href="#leaf" transform="translate(498 72) rotate(35) scale(0.9)"/>
+    <use href="#leaf" transform="translate(498 72) rotate(80) scale(0.7)"/>
+    <text x="300" y="240" text-anchor="middle" font-family="Nunito" font-weight="800" font-size="18" letter-spacing="6" fill="#9fc25a">A CO-OP FOREST ADVENTURE</text>
+  </svg>`;
+  document.fonts.ready.then(() => {
+    const word = document.getElementById("cozyWord");
+    let out = "";
+    for (const i of [1, 5]) {
+      const b = word.getExtentOfChar(i);
+      out += flame(b.x + b.width / 2, 116, 0.34);
+    }
+    document.getElementById("cozyFlames").innerHTML = out;
+  });
+})();
+
+// 5 — Night Forest
+(() => {
+  let back = "", front = "";
+  for (let x = -10; x <= 610; x += 34) back += pine(x, 300, 70 + ((x * 37) % 50), "#0f2219");
+  for (let x = 6; x <= 600; x += 46) front += pine(x, 300, 50 + ((x * 53) % 45), "#08110c");
+  const stars = [[60,40],[130,80],[220,30],[380,50],[560,110],[30,120],[300,64]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.6" fill="#f3e6c0" opacity="0.8"/>`).join("");
+  const flies = [[110,220],[180,250],[420,235],[500,205],[350,258]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="3" fill="#d9f27a" filter="url(#glow)"/>`).join("");
+  document.getElementById("story").innerHTML = `
+  <svg viewBox="0 0 600 300">
+    <defs><clipPath id="storyClip"><rect width="600" height="300" rx="22"/></clipPath></defs>
+    <g clip-path="url(#storyClip)">
+      <rect width="600" height="300" fill="url(#night)"/>
+      ${stars}
+      <mask id="moonCut"><rect width="600" height="300" fill="#fff"/><circle cx="517" cy="54" r="24" fill="#000"/></mask><circle cx="505" cy="62" r="26" fill="#f3e6c0" mask="url(#moonCut)"/>
+      ${back}
+      <ellipse cx="300" cy="296" rx="120" ry="50" fill="url(#warm)"/>
+      ${front}
+      ${flame(300, 294, 0.32)}
+      ${flies}
+    </g>
+    <text x="300" y="168" text-anchor="middle" font-family="'Uncial Antiqua'" font-size="96" fill="#f3e6c0" stroke="#0b1510" stroke-width="6" paint-order="stroke" filter="url(#softGlow)">Wildwick</text>
+  </svg>`;
+})();
+
+// 6 — W Monogram
+document.getElementById("mono").innerHTML = `
+  <svg viewBox="0 0 300 300">
+    <rect x="10" y="10" width="280" height="280" rx="64" fill="url(#iconFill)" stroke="#e9b85a" stroke-width="5"/>
+    <circle cx="150" cy="150" r="110" fill="url(#warm)"/>
+    <text x="150" y="250" text-anchor="middle" font-family="Cinzel" font-weight="800" font-size="230" fill="url(#gold)" stroke="#2a1608" stroke-width="6" paint-order="stroke">W</text>
+    ${flame(150, 132, 0.52)}
+  </svg>`;
+</script>
+</body>
+</html>

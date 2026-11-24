@@ -12,18 +12,19 @@
 <body>
   <div id="menu-bg"><div id="fireflies"></div></div>
   <canvas id="game"></canvas>
+  <button id="menu-gear" class="gbtn round" title="Settings (Esc)">⚙</button>
 
   <!-- Log in / sign up -->
   <section id="screen-login" class="screen hidden">
-    <div class="panel">
+    <div class="panel glass">
       <h1 class="logo">Wildwick</h1>
       <p class="tagline">Keep your flame alive.</p>
       <form id="login-form" autocomplete="on">
         <label>Username <input id="username" maxlength="16" autocomplete="username" required></label>
         <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
         <div class="row">
-          <button id="btn-login" class="primary" type="submit">Log in</button>
-          <button id="btn-signup" class="ghost" type="button">Create account</button>
+          <button id="btn-login" class="gbtn primary" type="submit">Log in</button>
+          <button id="btn-signup" class="gbtn" type="button">Create account</button>
         </div>
         <p id="login-error" class="error"></p>
       </form>
@@ -33,7 +34,7 @@
 
   <!-- Characters -->
   <section id="screen-chars" class="screen hidden">
-    <div class="panel wide">
+    <div class="panel glass wide">
       <div class="panel-head">
         <h2>Your characters</h2>
         <span class="muted">Logged in as <strong id="who"></strong> · <button id="btn-logout" class="link">Log out</button></span>
@@ -41,7 +42,7 @@
       <div id="char-list"></div>
       <form id="create-form" class="row">
         <input id="new-name" maxlength="16" placeholder="New character name" required>
-        <button id="btn-create" class="primary" type="submit">Create</button>
+        <button id="btn-create" class="gbtn primary" type="submit">Create</button>
       </form>
       <p id="chars-error" class="error"></p>
     </div>
@@ -49,42 +50,58 @@
 
   <!-- Host or join -->
   <section id="screen-menu" class="screen hidden">
-    <div class="panel">
+    <div class="panel glass">
       <div class="menu-hero">
-        <canvas id="menu-preview" width="110" height="122"></canvas>
+        <canvas id="menu-preview" width="104" height="116"></canvas>
         <div>
           <h2 id="menu-name"></h2>
           <span id="menu-class" class="muted"></span>
         </div>
       </div>
-      <button id="btn-host" class="primary block">Host a game</button>
+      <button id="btn-host" class="gbtn primary block">Host a game</button>
       <p class="note">You'll get a room code to share with up to 3 friends. The game runs while you have it open.</p>
       <form id="join-form" class="row">
         <input id="join-code" maxlength="5" placeholder="ROOM CODE" autocomplete="off">
-        <button id="btn-join" class="primary" type="submit">Join</button>
+        <button id="btn-join" class="gbtn primary" type="submit">Join</button>
       </form>
       <p id="menu-error" class="error"></p>
       <button id="btn-back" class="link">← Back to characters</button>
     </div>
   </section>
 
-  <!-- In-game overlays -->
-  <div id="hud-top" class="hidden">
-    <span class="muted">Room</span> <strong id="room-code"></strong>
-    <button id="btn-copy" class="ghost small">Copy</button>
-    <button id="btn-leave" class="ghost small">Leave</button>
+  <!-- In-game HUD -->
+  <div id="hud" class="hidden">
+    <div id="party"></div>
+    <div id="stage-pill" class="glass pill"><b id="stage-name"></b><small id="stage-sub"></small></div>
+    <div id="top-right">
+      <div class="glass pill room"><span class="muted">Room</span> <strong id="room-code"></strong><button id="btn-copy" class="gbtn small">Copy</button></div>
+      <button id="btn-gear" class="gbtn round" title="Settings (Esc)">⚙</button>
+    </div>
+    <div id="bossbar" class="glass hidden"><b id="boss-name"></b><div class="bar"><i id="boss-fill"></i></div></div>
+    <div id="banner" class="hidden"><h2 id="banner-big"></h2><p id="banner-sub"></p></div>
+    <div id="bottom">
+      <div id="bars" class="glass">
+        <div id="fury"></div>
+        <div class="bar flame"><i id="flame-fill"></i><span id="flame-text"></span></div>
+        <div class="bar wild"><i id="wild-fill"></i><span id="wild-text"></span></div>
+        <div class="xprow"><b id="lvl">Lv 1</b><div class="bar xp"><i id="xp-fill"></i></div><span id="pts" class="ptsbadge hidden"></span></div>
+      </div>
+      <div id="skills"></div>
+    </div>
   </div>
 
-  <div id="help" class="hidden">
-    <strong>Controls</strong>
+  <div id="help" class="glass hidden">
+    <b>Controls</b>
     <span><kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> strike (hold to keep swinging)</span>
-    <span><kbd>Space</kbd> dash · <kbd>E</kbd> / <kbd>Right-click</kbd> Cinder Quake · <kbd>F</kbd> interact</span>
-    <span class="muted">Controller: left stick move · right stick aim · RT strike · A dash · X quake · Y interact</span>
+    <span><kbd>Right-click</kbd> hold to block, let go to counter · <kbd>E</kbd> Cinder Quake · <kbd>R</kbd> Pyre Cleave</span>
+    <span><kbd>Space</kbd> dash · <kbd>F</kbd> interact · <kbd>T</kbd> skill tree · <kbd>Esc</kbd> settings</span>
+    <span class="muted">Controller: sticks move/aim · RT strike · LT block · X quake · RB Pyre Cleave · A dash · Y interact · View tree · Start settings</span>
   </div>
 
-  <div id="wardrobe" class="panel hidden">
-    <div class="panel-head"><h2>Wardrobe</h2><button data-close class="ghost small">Close</button></div>
-    <canvas id="wardrobe-preview" width="120" height="132"></canvas>
+  <!-- Panels -->
+  <div id="wardrobe" class="panel glass side hidden">
+    <div class="panel-head"><h2>Wardrobe</h2><button data-close class="gbtn small">Close</button></div>
+    <canvas id="wardrobe-preview" width="104" height="116"></canvas>
     <p id="w-summary" class="muted center"></p>
     <h3>Cloak</h3>
     <p class="note">No two players in a party can wear the same colour.</p>
@@ -93,6 +110,38 @@
     <div id="w-hats" class="hats"></div>
     <h3>Flame</h3>
     <div id="w-flames" class="swatches"></div>
+  </div>
+
+  <div id="tree" class="panel glass modal hidden">
+    <div class="panel-head"><h2>Warrior skills</h2><span id="tree-pts" class="ptsbadge"></span><button data-close class="gbtn small">Close (T)</button></div>
+    <p class="note">The whole party earns EXP together. Every level gives you 1 point. Your upgrades last until the run ends.</p>
+    <div id="tree-cols"></div>
+  </div>
+
+  <div id="boons" class="hidden">
+    <div class="panel glass">
+      <h2 id="boons-title">Choose a boon</h2>
+      <p class="muted" id="boons-wait"></p>
+      <div id="boon-cards"></div>
+      <div class="row center-row"><span id="boons-pts" class="muted"></span><button data-tree class="gbtn small">Skill tree (T)</button></div>
+    </div>
+  </div>
+
+  <div id="settings" class="panel glass modal hidden">
+    <div class="panel-head"><h2>Settings</h2><button data-close class="gbtn small">Close (Esc)</button></div>
+    <div class="slider"><label>Master</label><input id="vol-master" type="range" min="0" max="100"><span></span></div>
+    <div class="slider"><label>Music</label><input id="vol-music" type="range" min="0" max="100"><span></span></div>
+    <div class="slider"><label>Sound effects</label><input id="vol-sfx" type="range" min="0" max="100"><span></span></div>
+    <div class="slider"><label>Forest ambience</label><input id="vol-amb" type="range" min="0" max="100"><span></span></div>
+    <div class="slider"><label>Menu sounds</label><input id="vol-ui" type="range" min="0" max="100"><span></span></div>
+    <button id="btn-leave" class="gbtn danger block hidden">Leave game</button>
+  </div>
+
+  <div id="confirm" class="hidden">
+    <div class="panel glass">
+      <p></p>
+      <div class="row"><button data-yes class="gbtn danger"></button><button data-no class="gbtn"></button></div>
+    </div>
   </div>
 
   <div id="toasts"></div>

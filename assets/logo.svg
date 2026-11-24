@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 440" width="800" height="440">
+  <title>Wildwick</title>
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@800&amp;family=Nunito:wght@700&amp;display=swap');
+      .word { font-family: Cinzel, Georgia, serif; font-weight: 800; }
+      .tag  { font-family: Nunito, 'Segoe UI', sans-serif; font-weight: 700; }
+    </style>
+
+    <!-- soft warm glow behind the flame -->
+    <radialGradient id="glow" cx="400" cy="140" r="170" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffb347" stop-opacity="0.55"/>
+      <stop offset="0.45" stop-color="#ff7a2b" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ff7a2b" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="flameOuter" x1="0" y1="40" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff5a2a"/>
+      <stop offset="0.6" stop-color="#ff8a2b"/>
+      <stop offset="1" stop-color="#ffb347"/>
+    </linearGradient>
+    <linearGradient id="flameInner" x1="0" y1="95" x2="0" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffc14d"/>
+      <stop offset="1" stop-color="#ffe9a8"/>
+    </linearGradient>
+
+    <linearGradient id="wordFill" x1="0" y1="262" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff1c4"/>
+      <stop offset="0.45" stop-color="#ffc766"/>
+      <stop offset="1" stop-color="#e8662c"/>
+    </linearGradient>
+
+    <linearGradient id="bark" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3b2614"/>
+      <stop offset="0.5" stop-color="#6b4526"/>
+      <stop offset="1" stop-color="#3b2614"/>
+    </linearGradient>
+
+    <filter id="wordShadow" x="-10%" y="-30%" width="120%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14" result="b"/>
+      <feFlood flood-color="#ff8a3d" flood-opacity="0.35"/>
+      <feComposite in2="b" operator="in" result="glowC"/>
+      <feOffset in="SourceAlpha" dy="5" result="o"/>
+      <feFlood flood-color="#120a04" flood-opacity="0.9"/>
+      <feComposite in2="o" operator="in" result="shadowC"/>
+      <feMerge><feMergeNode in="glowC"/><feMergeNode in="shadowC"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <filter id="flameGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- one leaf, base at origin, pointing up -->
+    <g id="leaf">
+      <path d="M0,0 C11,-9 11,-25 0,-34 C-11,-25 -11,-9 0,0 Z" fill="#7fa63a" stroke="#22351a" stroke-width="2.5"/>
+      <path d="M0,-3 L0,-27" stroke="#3f5f22" stroke-width="2" stroke-linecap="round"/>
+      <path d="M0,0 C5,-9 5,-20 0,-30" fill="none" stroke="#b7d36a" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+    </g>
+
+    <!-- left half of the leafy ring; right half is a mirror -->
+    <g id="branch">
+      <path d="M400,226 A86,86 0 0,1 322,104" fill="none" stroke="#22351a" stroke-width="9" stroke-linecap="round"/>
+      <path d="M400,226 A86,86 0 0,1 322,104" fill="none" stroke="#5a3a1f" stroke-width="5" stroke-linecap="round"/>
+      <g transform="rotate(22 400 140)"><use href="#leaf" xlink:href="#leaf" transform="translate(400 226) rotate(-128)"/></g>
+      <g transform="rotate(38 400 140)"><use href="#leaf" xlink:href="#leaf" transform="translate(400 226) rotate(-58)"/></g>
+      <g transform="rotate(56 400 140)"><use href="#leaf" xlink:href="#leaf" transform="translate(400 226) rotate(-128)"/></g>
+      <g transform="rotate(72 400 140)"><use href="#leaf" xlink:href="#leaf" transform="translate(400 226) rotate(-58)"/></g>
+      <g transform="rotate(90 400 140)"><use href="#leaf" xlink:href="#leaf" transform="translate(400 226) rotate(-128)"/></g>
+      <g transform="rotate(115 400 140)"><use href="#leaf" xlink:href="#leaf" transform="translate(400 226) rotate(-95) scale(0.85)"/></g>
+    </g>
+  </defs>
+
+  <!-- ===== Emblem ===== -->
+  <circle cx="400" cy="140" r="170" fill="url(#glow)"/>
+
+  <use href="#branch" xlink:href="#branch"/>
+  <use href="#branch" xlink:href="#branch" transform="translate(800 0) scale(-1 1)"/>
+
+  <!-- the wick: a little twisted stick the flame grows from -->
+  <path d="M392,232 C390,218 396,210 393,196 L407,196 C404,210 410,218 408,232 Z" fill="url(#bark)" stroke="#1d1209" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M396,226 C399,218 401,212 399,202" fill="none" stroke="#8a5d33" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- flame -->
+  <g filter="url(#flameGlow)">
+    <path d="M400,36 C424,78 458,104 458,146 C458,178 432,200 400,200 C368,200 342,178 342,146 C342,120 356,102 371,82 C372,104 382,118 391,114 C383,90 388,62 400,36 Z"
+          fill="url(#flameOuter)" stroke="#5a1c0c" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M404,94 C416,118 434,134 434,158 C434,178 419,190 400,190 C381,190 367,178 367,160 C367,140 384,128 391,110 C396,124 402,126 404,94 Z"
+          fill="url(#flameInner)"/>
+    <ellipse cx="400" cy="170" rx="14" ry="17" fill="#fff8e0"/>
+  </g>
+
+  <!-- rising embers -->
+  <g fill="#ffc766">
+    <rect x="452" y="58" width="6" height="6" transform="rotate(45 455 61)"/>
+    <rect x="340" y="76" width="5" height="5" transform="rotate(45 342.5 78.5)" opacity="0.85"/>
+    <rect x="470" y="104" width="4" height="4" transform="rotate(45 472 106)" opacity="0.7"/>
+    <rect x="418" y="22" width="4" height="4" transform="rotate(45 420 24)" opacity="0.8"/>
+  </g>
+
+  <!-- ===== Wordmark ===== -->
+  <text class="word" x="400" y="350" text-anchor="middle" font-size="104" letter-spacing="6"
+        fill="url(#wordFill)" stroke="#2a1608" stroke-width="7" stroke-linejoin="round" paint-order="stroke"
+        filter="url(#wordShadow)">WILDWICK</text>
+
+  <!-- tagline with little vine dividers -->
+  <g stroke="#7fa63a" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.9">
+    <path d="M140,396 L196,396"/>
+    <path d="M604,396 L660,396"/>
+  </g>
+  <use href="#leaf" xlink:href="#leaf" transform="translate(200 396) rotate(90) scale(0.4)"/>
+  <use href="#leaf" xlink:href="#leaf" transform="translate(600 396) rotate(-90) scale(0.4)"/>
+  <text class="tag" x="402.5" y="403" text-anchor="middle" font-size="20" letter-spacing="5" fill="#e9d9b0">KEEP YOUR FLAME ALIVE</text>
+</svg>
