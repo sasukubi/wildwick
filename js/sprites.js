@@ -305,6 +305,25 @@ function paintBody(g, dir, cloak, frame, cls) {
   } else if (dir === 'upright') px(g, 17, 24, 2, 2, PAL.skin);
 }
 
+// small details that tell the classes apart
+function paintClassExtras(g, dir, cls, cloak) {
+  const front = dir === 'down' || dir === 'downright';
+  if (cls === 'bowman') {
+    // quiver strap across the chest, and arrows poking out of the quiver
+    if (front) for (let i = 0; i < 8; i++) px(g, 7 + i, 20 + i, 1, 1, PAL.strap);
+    if (dir === 'up' || dir === 'upright') { px(g, 15, 14, 3, 8, PAL.b1); px(g, 15, 12, 1, 3, '#e8e0c8'); px(g, 17, 11, 1, 4, '#e8e0c8'); px(g, 15, 11, 1, 1, '#c4533a'); px(g, 17, 10, 1, 1, '#c4533a'); }
+    else if (dir === 'right') { px(g, 6, 15, 3, 7, PAL.b1); px(g, 6, 13, 1, 3, '#e8e0c8'); px(g, 8, 12, 1, 4, '#e8e0c8'); }
+    px(g, dir === 'right' ? 15 : 17, 23, 2, 2, PAL.b2); // leather bracer
+  } else if (cls === 'rogue') {
+    // dark scarf over the lower face, and dagger sheaths on the belt
+    const hx = dir === 'right' ? 13 : 12;
+    if (front) { px(g, hx - 4, 16, 9, 3, '#2a2530'); px(g, hx - 3, 16, 7, 1, '#3d3647'); }
+    else if (dir === 'right') { px(g, hx - 1, 16, 6, 3, '#2a2530'); }
+    px(g, 6, 25, 2, 4, '#2a2530'); px(g, 16, 25, 2, 4, '#2a2530');
+    if (dir === 'up' || dir === 'upright') px(g, 8, 18, 8, 2, '#2a2530'); // scarf tail
+  }
+}
+
 // frame: 0 idle, 1 and 2 walking
 export function charSprite(look, dir, frame, cls = 'warrior') {
   const base = BASE_DIR[dir] || 'down';
@@ -316,6 +335,7 @@ export function charSprite(look, dir, frame, cls = 'warrior') {
     paintBody(g, base, look.cloak, frame, cls);
     paintPack(g, base, true);
     paintHead(g, base, look.hat, look.cloak);
+    paintClassExtras(g, base, cls, look.cloak);
     return c;
   });
   return { img, flip: dir === 'left' || dir === 'downleft' || dir === 'upleft' };
@@ -338,6 +358,77 @@ export function staffSprite() {
     px(g, 0, 3, 23, 3, PAL.o); px(g, 1, 4, 22, 1, PAL.b3);
     px(g, 21, 1, 3, 7, PAL.o); px(g, 22, 2, 1, 5, PAL.b2);
     oval(g, 26, 4, 3, 3, PAL.o); oval(g, 26, 4, 2, 2, '#7fe0ff'); px(g, 25, 3, 1, 1, '#ffffff');
+    return c;
+  });
+}
+
+// bow, drawn pointing right (the string is drawn live so it can be pulled back)
+export function bowSprite() {
+  return cached('bow', () => {
+    const [c, g] = canvas(9, 27);
+    for (let y = 0; y < 27; y++) {
+      const x = Math.round(5 * Math.sin((y / 26) * Math.PI));
+      px(g, x, y, 2, 1, PAL.o);
+      px(g, x + 1, y, 1, 1, y > 11 && y < 15 ? '#3b2a1e' : PAL.b3);
+    }
+    return c;
+  });
+}
+
+// rogue's dagger, pointing right, grip at x=0
+export function daggerSprite() {
+  return cached('dagger', () => {
+    const [c, g] = canvas(16, 5);
+    px(g, 0, 1, 4, 3, PAL.o); px(g, 0, 2, 4, 1, '#3b2a1e');
+    px(g, 4, 0, 1, 5, PAL.gold);
+    px(g, 5, 1, 9, 3, PAL.o); px(g, 5, 2, 9, 1, PAL.steel); px(g, 5, 1, 8, 1, PAL.steel3);
+    px(g, 14, 2, 2, 1, PAL.o);
+    return c;
+  });
+}
+
+// the ancient tree archway that leads out of camp into the wilds
+export function archwaySprite() {
+  return cached('archway', () => {
+    const [c, g] = canvas(176, 132);
+    // trunks
+    for (const [bx, dir] of [[26, 1], [150, -1]]) {
+      for (let y = 30; y < 126; y++) {
+        const twist = Math.round(Math.sin(y / 9) * 3) * dir;
+        const w = 12 + Math.floor((y - 30) / 12);
+        px(g, bx - w / 2 + twist - 1, y, w + 2, 1, PAL.b0);
+        px(g, bx - w / 2 + twist, y, w, 1, PAL.b1);
+        px(g, bx - w / 2 + twist, y, 3, 1, PAL.b2);
+        if (hash2(y, bx) < 0.25) px(g, bx - 2 + twist, y, 1, 3, PAL.b0);
+      }
+      // roots
+      for (const k of [-1, 1]) for (let i = 0; i < 14; i++) px(g, bx + k * (8 + i), 124 - Math.floor(i / 3), 3, 2, i < 8 ? PAL.b1 : PAL.b0);
+      for (let y = 40; y < 120; y += 7) px(g, bx - 4 + Math.round(Math.sin(y) * 3), y, 3, 2, PAL.moss);
+    }
+    // arching branches
+    for (let i = 0; i <= 60; i++) {
+      const t = i / 60, x = 26 + (150 - 26) * t, y = 40 - Math.sin(t * Math.PI) * 26;
+      px(g, x - 2, y - 2, 6, 6, PAL.b0); px(g, x - 1, y - 1, 4, 3, PAL.b2);
+    }
+    // leaves on top
+    for (let i = 0; i < 22; i++) {
+      const t = i / 21, x = 18 + 140 * t, y = 30 - Math.sin(t * Math.PI) * 24;
+      oval(g, x, y, 12, 9, PAL.l0); oval(g, x - 1, y - 1, 10, 7, PAL.l2); oval(g, x - 3, y - 3, 5, 3, PAL.l3);
+      if (i % 3 === 0) px(g, x - 2, y - 6, 2, 1, PAL.l5);
+    }
+    // lantern hooks
+    for (const lx of [52, 76, 100, 124]) { const y = 40 - Math.sin(((lx - 26) / 124) * Math.PI) * 26; px(g, lx, y + 2, 1, 10, PAL.o); }
+    return c;
+  });
+}
+// where the 4 lanterns hang on the archway (relative to the sprite's top-left)
+export const ARCH_LANTERNS = [52, 76, 100, 124].map((lx) => [lx, 40 - Math.sin(((lx - 26) / 124) * Math.PI) * 26 + 14]);
+
+export function lanternSprite(lit) {
+  return cached('lantern' + lit, () => {
+    const [c, g] = canvas(7, 9);
+    px(g, 1, 0, 5, 1, PAL.o); px(g, 0, 1, 7, 7, PAL.o); px(g, 1, 2, 5, 5, lit ? '#ffd36a' : '#3b3326');
+    px(g, 3, 2, 1, 5, PAL.o); px(g, 1, 4, 5, 1, PAL.o); px(g, 1, 8, 5, 1, PAL.o);
     return c;
   });
 }

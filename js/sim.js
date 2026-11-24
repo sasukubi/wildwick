@@ -8,7 +8,7 @@
 //  or attack through trees and rocks.
 // =============================================================
 import {
-  WARRIOR, SORCERER, WOLF, ELITE, ALPHA, TREANT, RULES, CLOAKS, HATS, FLAMES, CLASSES, BOONS,
+  WARRIOR, SORCERER, BOWMAN, ROGUE, WOLF, ELITE, ALPHA, TREANT, RULES, CLOAKS, HATS, FLAMES, CLASSES, BOONS,
   PLAYER_RADIUS, TILE, xpToNext, classStats, canBuy, weaveOf,
 } from './data.js';
 import { makeLobby, makeForest, makeArena } from './world.js';
@@ -35,6 +35,7 @@ export class Sim {
     this.zones = [];       // ground effects: pyre fire, firestorm, blizzard
     this.shots = [];       // fireballs, frost shards
     this.strikes = [];     // Starfall meteors on their way down
+    this.decoys = [];      // Rogue afterimages that enemies chase
     this.flows = new Map();
     this.nextId = 1;
     this.sv = 0;
@@ -82,6 +83,7 @@ export class Sim {
     this.zones = [];
     this.shots = [];
     this.strikes = [];
+    this.decoys = [];
     this.flows.clear();
     this.countdown = -1;
     this.stageTime = 0;
@@ -171,6 +173,7 @@ export class Sim {
       combo: 0, comboT: 0,
       guard: false, guardT: 0, guardHeat: 0, guardStart: 0, gHeld: false,
       lastEl: null, lastElT: -9,
+      charge: 0, drawing: false, hawkT: 0, stabN: 0, ambushT: 0, tpLock: 0, vote: null,
       ac: null, sc: null, s2c: null, s3c: null, uc: null, ic: null, ah: false,
       want: { atk: 0, s1: 0, s2: 0, s3: 0, ult: 0, int: 0 },
       hurtT: 0, glowT: 0, lastSeen: performance.now(),
@@ -247,11 +250,20 @@ export class Sim {
     return true;
   }
 
+  // between forests: 'go' (continue) or 'camp' (everyone returns to camp)
+  vote(id, v) {
+    const p = this.players.get(id);
+    if (!p || this.state !== 'rest' || (v !== 'go' && v !== 'camp')) return;
+    p.vote = v;
+    this.emit({ k: 'vote', n: p.user, v });
+  }
+
   applyInput(id, m) {
     const p = this.players.get(id);
     if (!p) return;
     p.lastSeen = performance.now();
-    if (m.sv === this.sv && !p.down && Number.isFinite(m.x) && Number.isFinite(m.y)) {
+    if (p.cls === 'rogue' && m.d && !p.dashing && !p.down && this.scene !== 'lobby') this.spawnDecoy(p);
+    if (m.sv === this.sv && !p.down && p.tpLock <= 0 && Number.isFinite(m.x) && Number.isFinite(m.y)) {
       p.x = Math.max(0, Math.min(this.world.pw, m.x));
       p.y = Math.max(0, Math.min(this.world.ph, m.y));
     }
@@ -276,10 +288,13 @@ export class Sim {
     for (const p of this.players.values()) {
       for (const k in p.cd) p.cd[k] -= dt;
       for (const k in p.want) p.want[k] -= dt;
-      p.comboT -= dt; p.hurtT -= dt; p.glowT -= dt;
+      p.comboT -= dt; p.hurtT -= dt; p.glowT -= dt; p.hawkT -= dt; p.ambushT -= dt; p.tpLock -= dt;
       if (p.stats.maxMana) p.mana = Math.min(p.stats.maxMana, p.mana + p.stats.manaRegen * dt);
-      if (p.down || !active) { p.guard = false; continue; }
+      if (p.down || !active) { p.guard = false; p.drawing = false; p.charge = 0; continue; }
+      if (p.stats.shroud && this.inSmoke(p.x, p.y)) p.hp = Math.min(p.max, p.hp + 3 * dt);
       if (p.cls === 'sorcerer') this.sorcererActions(p);
+      else if (p.cls === 'bowman') this.bowmanActions(p, dt);
+      else if (p.cls === 'rogue') this.rogueActions(p);
       else this.warriorActions(p, dt);
       if (p.want.ult > 0) { this.ultimate(p); p.want.ult = 0; }
       if (p.want.int > 0 && this.scene === 'forest') { this.useShrine(p); p.want.int = 0; }
@@ -297,12 +312,18 @@ export class Sim {
       this.updateHazards(dt);
       this.updateZones(dt);
       this.updatePickups(dt);
+      for (const d of this.decoys) d.t -= dt;
+      this.decoys = this.decoys.filter((d) => d.t > 0);
       if (this.scene === 'forest') this.updateWaves(dt);
       this.checkEnd();
     } else if (this.state === 'rest') {
       this.stateTimer -= dt;
       const ps = [...this.players.values()];
-      if (ps.every((p) => p.picked) || this.stateTimer <= 0) {
+      if (ps.some((p) => p.vote === 'camp')) {
+        const who = ps.find((p) => p.vote === 'camp');
+        this.emit({ k: 'msg', text: `${who.user} chose to return to camp.` });
+        this.goLobby();
+      } else if (ps.every((p) => p.picked && p.vote === 'go') || this.stateTimer <= 0) {
         for (const p of ps) if (!p.picked) this.pickBoon(p.id, 0);
         this.startStage(this.stage + 1);
       }
@@ -360,7 +381,9 @@ export class Sim {
       if (d > range + e.r) continue;
       if (d > e.r + 10 && Math.abs(angDiff(Math.atan2(dy, dx), aim)) > arc / 2) continue;
       if (!this.los(p.x, p.y, e.x, e.y)) continue;
-      this.damageEnemy(e, dmg, dx / (d || 1), dy / (d || 1), kb, p, false, opts.el);
+      let hitDmg = dmg, el = opts.el;
+      if (opts.backstab && this.isBehind(p, e)) { hitDmg *= 1 + opts.backstab; el = 'back'; if (p.stats.bleed) e.bleedT = 3; }
+      this.damageEnemy(e, hitDmg, dx / (d || 1), dy / (d || 1), kb, p, false, el);
       if (opts.slow) { e.slowT = opts.slow; }
       hits++;
     }
@@ -383,6 +406,37 @@ export class Sim {
     }
     if (hits && p && p.stats.leech) p.hp = Math.min(p.max, p.hp + p.stats.leech * hits);
     return hits;
+  }
+
+  // Is the player in the back half of this enemy?
+  isBehind(p, e) {
+    return Math.abs(angDiff(Math.atan2(p.y - e.y, p.x - e.x), e.face || 0)) > Math.PI / 2;
+  }
+
+  inSmoke(x, y) {
+    for (const z of this.zones) if (z.kind === 'smoke' && Math.hypot(x - z.x, y - z.y) < z.r) return true;
+    return false;
+  }
+
+  // a player or a Rogue decoy
+  targetOf(id) {
+    if (typeof id === 'string' && id.startsWith('decoy')) return this.decoys.find((d) => d.id === id) || null;
+    return this.players.get(id) || null;
+  }
+
+  // The enemy closest to where the player is aiming (that they can see).
+  aimedEnemy(p, range, maxAngle = 0.6) {
+    let best = null, bs = 1e9;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
+      if (d > range) continue;
+      const da = Math.abs(angDiff(Math.atan2(dy, dx), p.aim));
+      if (da > maxAngle || !this.los(p.x, p.y, e.x, e.y)) continue;
+      const score = da * 120 + d * 0.3;
+      if (score < bs) { bs = score; best = e; }
+    }
+    return best;
   }
 
   // The furthest point along the aim (up to range) before a tree blocks it.
@@ -439,7 +493,7 @@ export class Sim {
     if (!p.gHeld || p.guardT >= W.guardMax) {
       p.guard = false;
       p.cd.s2 = p.stats.guardCd;
-      const dmg = (W.counterBase + p.guardHeat * W.counterPerHeat) * p.stats.counterMult * this.power(p);
+      const dmg = (W.counterBase + Math.min(W.heatCap, p.guardHeat) * W.counterPerHeat) * p.stats.counterMult * this.power(p);
       this.emit({ k: 'counter', id: p.id, a: r2(p.aim), pw: Math.min(1, p.guardHeat / 30) });
       this.hitArc(p, W.counterRange, W.counterArc, dmg, 280);
     }
@@ -464,15 +518,16 @@ export class Sim {
     const S = SORCERER, st = p.stats;
     const slot = el === 'fire' ? 's1' : el === 'gale' ? 's2' : 's3';
     if (p.cd[slot] > 0) return false;
-    const cost = S[el].cost;
-    if (p.mana < cost) { this.emit({ k: 'nope', id: p.id, what: 'mana' }); return true; }
+    const fuse = p.lastEl && p.lastEl !== el && this.time - p.lastElT <= st.weaveWindow ? weaveOf(p.lastEl, el) : null;
+    // weaving is strong, so it costs extra mana on top of the second spell
+    const cost = S[el].cost + (fuse && this.scene !== 'lobby' ? st.weaveExtra : 0);
+    if (p.mana < cost) { this.emit({ k: 'nope', id: p.id, what: 'mana', slot }); return true; }
     p.mana -= cost;
     p.cd[slot] = S[el].cd * st.spellCd;
-    const fuse = p.lastEl && p.lastEl !== el && this.time - p.lastElT <= st.weaveWindow ? weaveOf(p.lastEl, el) : null;
     if (this.scene === 'lobby') { this.emit({ k: 'spell', id: p.id, el, a: r2(p.aim), x: Math.round(p.x), y: Math.round(p.y) }); return true; }
     if (fuse) {
       p.lastEl = null;
-      p.mana = Math.min(st.maxMana, p.mana + Math.min(cost, st.weaveRefund));
+      p.cd.s1 = Math.max(p.cd.s1, 0.6); p.cd.s2 = Math.max(p.cd.s2, 0.6); p.cd.s3 = Math.max(p.cd.s3, 0.6);
       this.castWeave(p, fuse.id);
       this.emit({ k: 'weave', id: p.id, w: fuse.id, n: fuse.name });
       return true;
@@ -512,6 +567,120 @@ export class Sim {
     }
   }
 
+  // ======================================================= Bowman
+  bowmanActions(p, dt) {
+    const B = BOWMAN, st = p.stats;
+    if (p.want.s1 > 0 && p.cd.s1 <= 0) { p.want.s1 = 0; this.markTarget(p); }
+    if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.rainOfArrows(p); }
+    if (p.hawkT > 0) {
+      // Hawk Eye: every shot is instantly full strength and seeks the nearest enemy
+      p.drawing = false; p.charge = 0;
+      if ((p.ah || p.want.atk > 0) && p.cd.atk <= 0) { p.want.atk = 0; this.fireArrow(p, 1, true); p.cd.atk = B.hawkRecover; }
+      return;
+    }
+    if (p.cd.atk > 0) { if (!p.ah) p.drawing = false; return; }
+    if (p.ah) {
+      p.drawing = true;
+      p.charge = Math.min(1, p.charge + dt / st.drawTime);
+      p.want.atk = 0;
+    } else if (p.drawing || p.want.atk > 0) {
+      // let go: the longer you drew, the stronger the arrow (and the longer the wait)
+      const c = Math.max(0.05, p.charge);
+      this.fireArrow(p, c, false);
+      p.cd.atk = (B.minRecover + (B.maxRecover - B.minRecover) * c) * st.recoverMult;
+      p.drawing = false; p.charge = 0; p.want.atk = 0;
+    }
+  }
+
+  fireArrow(p, c, homing) {
+    const B = BOWMAN, st = p.stats;
+    const full = c >= B.pierceAt;
+    const dmg = (B.minDmg + (B.maxDmg - B.minDmg) * Math.pow(c, 1.3)) * st.arrowMult * this.power(p) * (full && st.deadeye ? 1.5 : 1);
+    const speed = B.minSpeed + (B.maxSpeed - B.minSpeed) * c;
+    const range = B.minRange + (B.maxRange - B.minRange) * c;
+    this.emit({ k: 'shoot', id: p.id, c: r2(c), a: r2(p.aim) });
+    if (this.scene === 'lobby') return;
+    this.shots.push({ id: this.nextId++, kind: 'arrow', owner: p.id, x: p.x + Math.cos(p.aim) * 10, y: p.y - 12 + Math.sin(p.aim) * 10,
+      vx: Math.cos(p.aim) * speed, vy: Math.sin(p.aim) * speed, life: range / speed, dmg, pierce: full, hit: new Set(), homing, power: c });
+  }
+
+  markTarget(p) {
+    const st = p.stats;
+    const e = this.aimedEnemy(p, BOWMAN.markRange, 0.7);
+    if (!e) { p.cd.s1 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'mark', slot: 's1' }); return; }
+    for (const o of this.enemies) if (o.markBy === p.id) { o.markT = 0; o.markBy = null; }
+    e.markT = st.markTime; e.markBonus = st.markBonus; e.markBy = p.id;
+    p.cd.s1 = st.markCd;
+    this.emit({ k: 'mark', id: p.id, x: Math.round(e.x), y: Math.round(e.y) });
+  }
+
+  rainOfArrows(p) {
+    const st = p.stats;
+    const c = this.aimPoint(p, BOWMAN.rainRange);
+    p.cd.s2 = st.rainCd;
+    this.emit({ k: 'rain', id: p.id, x: Math.round(c.x), y: Math.round(c.y), r: Math.round(st.rainR) });
+    if (this.scene === 'lobby') return;
+    this.zones.push({ id: this.nextId++, kind: 'rain', owner: p.id, x: c.x, y: c.y, vx: 0, vy: 0, r: st.rainR, t: BOWMAN.rainTime, max: BOWMAN.rainTime,
+      dps: 0, tick: 0, every: BOWMAN.rainTime / st.rainArrows, dmg: BOWMAN.rainDmg * this.power(p) * st.arrowMult });
+  }
+
+  // ======================================================= Rogue
+  rogueActions(p) {
+    const G = ROGUE, st = p.stats;
+    if (p.want.s1 > 0 && p.cd.s1 <= 0) { p.want.s1 = 0; this.shadowstep(p); }
+    if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.smokeBomb(p); }
+    if ((p.want.atk > 0 || p.ah) && p.cd.atk <= 0) {
+      p.want.atk = 0;
+      p.cd.atk = st.atkCd;
+      p.stabN = (p.stabN % G.spinEvery) + 1;
+      const amb = p.ambushT > 0 ? 1 + st.ambush : 1;
+      p.ambushT = 0;
+      if (p.stabN === G.spinEvery) {
+        this.emit({ k: 'spin', id: p.id, r: Math.round(st.spinR) });
+        this.hitArc(p, st.spinR, Math.PI * 2 + 0.1, G.spinDmg * st.spinMult * this.power(p) * amb, 260, p.aim, { backstab: st.backstab });
+      } else {
+        this.emit({ k: 'stab', id: p.id, a: r2(p.aim) });
+        this.hitArc(p, G.stabRange, G.stabArc, G.stabDmg * st.stabMult * this.power(p) * amb, 160, p.aim, { backstab: st.backstab });
+      }
+    }
+  }
+
+  shadowstep(p) {
+    const e = this.aimedEnemy(p, ROGUE.stepRange, 0.8);
+    if (!e) { p.cd.s1 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's1' }); return; }
+    const back = (e.face || 0) + Math.PI;
+    let spot = null;
+    for (const off of [0, 0.6, -0.6, 1.2, -1.2]) {
+      const x = e.x + Math.cos(back + off) * (e.r + 14), y = e.y + Math.sin(back + off) * (e.r + 14);
+      if (!this.world.isSolid(Math.floor(x / TILE), Math.floor(y / TILE))) { spot = this.world.collide(x, y, PLAYER_RADIUS); break; }
+    }
+    if (!spot) { p.cd.s1 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's1' }); return; }
+    const from = { x: Math.round(p.x), y: Math.round(p.y) };
+    p.x = spot.x; p.y = spot.y;
+    p.aim = Math.atan2(e.y - p.y, e.x - p.x);
+    p.tpLock = 0.35;
+    p.ambushT = 2;
+    p.cd.s1 = p.stats.stepCd;
+    this.emit({ k: 'tp', id: p.id, x: Math.round(p.x), y: Math.round(p.y), fx: from.x, fy: from.y, a: r2(p.aim) });
+  }
+
+  smokeBomb(p) {
+    p.cd.s2 = p.stats.smokeCd;
+    this.emit({ k: 'smoke', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(p.stats.smokeR) });
+    if (this.scene === 'lobby') return;
+    this.zones.push({ id: this.nextId++, kind: 'smoke', owner: p.id, x: p.x, y: p.y, vx: 0, vy: 0, r: p.stats.smokeR, t: p.stats.smokeTime, max: p.stats.smokeTime, dps: 0 });
+  }
+
+  spawnDecoy(p) {
+    this.decoys.push({ id: 'decoy' + this.nextId++, owner: p.id, x: p.x, y: p.y, t: p.stats.decoyTime, down: false, phantom: p.stats.phantom, cloak: p.cloak });
+  }
+
+  popDecoy(d) {
+    d.t = 0;
+    this.emit({ k: 'decoyPop', x: Math.round(d.x), y: Math.round(d.y), boom: d.phantom ? 1 : 0 });
+    if (d.phantom) this.hitCircle(this.players.get(d.owner) || null, d.x, d.y, 50, 25, 300);
+  }
+
   // ======================================================= ultimates (Wildfire)
   ultimate(p) {
     if (p.wf < RULES.wildfireMax) { this.emit({ k: 'nope', id: p.id, what: 'ult' }); return; }
@@ -522,10 +691,32 @@ export class Sim {
       const S = SORCERER.starfall;
       const c = this.aimPoint(p, S.range);
       this.emit({ k: 'starfall', id: p.id, x: Math.round(c.x), y: Math.round(c.y), r: S.r });
+      // meteors lock on to the monsters inside the area (spread between them)
+      const prey = this.enemies.filter((e) => !e.dead && Math.hypot(e.x - c.x, e.y - c.y) < S.r + e.r);
       for (let i = 0; i < p.stats.meteors; i++) {
         const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * S.r;
-        this.strikes.push({ id: this.nextId++, owner: p.id, x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d * 0.8, t: 0.6 + (i / p.stats.meteors) * S.t, dmg: S.dmg * this.power(p), r: S.hitR });
+        const tgt = prey.length ? prey[i % prey.length] : null;
+        this.strikes.push({ id: this.nextId++, owner: p.id, tid: tgt ? tgt.id : null, cx: c.x, cy: c.y, area: S.r,
+          x: tgt ? tgt.x : c.x + Math.cos(a) * d, y: tgt ? tgt.y : c.y + Math.sin(a) * d * 0.8,
+          t: 0.6 + (i / p.stats.meteors) * S.t, dmg: S.dmg * this.power(p), r: S.hitR });
       }
+      return;
+    }
+    if (p.cls === 'bowman') {
+      p.hawkT = p.stats.hawkTime;
+      p.cd.atk = 0;
+      this.emit({ k: 'hawk', id: p.id, x: Math.round(p.x), y: Math.round(p.y) });
+      return;
+    }
+    if (p.cls === 'rogue') {
+      const G = ROGUE;
+      const targets = this.enemies
+        .filter((e) => !e.dead && Math.hypot(e.x - p.x, e.y - p.y) < G.cutsRange && this.los(p.x, p.y, e.x, e.y))
+        .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))
+        .slice(0, p.stats.cutsTargets);
+      const pts = targets.map((e) => [Math.round(e.x), Math.round(e.y - 8)]);
+      this.emit({ k: 'cuts', id: p.id, x: Math.round(p.x), y: Math.round(p.y), pts });
+      for (const e of targets) this.damageEnemy(e, G.cutsDmg * this.power(p) * (1 + p.stats.backstab), 0, 0, 0, p, false, 'back');
       return;
     }
     const W = WARRIOR;
@@ -641,6 +832,11 @@ export class Sim {
   damageEnemy(e, dmg, kx, ky, kb, src = null, silent = false, el = null) {
     if (e.dead) return;
     if (src && src.stats && src.stats.shatter && e.slowT > 0) dmg *= 1.3;
+    if (e.markT > 0) {
+      dmg *= 1 + (e.markBonus || BOWMAN.markBonus);
+      const marker = this.players.get(e.markBy);
+      if (!silent && marker && marker === src && marker.stats.predator) marker.hp = Math.min(marker.max, marker.hp + 2);
+    }
     e.hp -= dmg;
     if (e.type !== 'treant') {
       const heavyFoe = e.type === 'alpha' ? 0.35 : 1;
@@ -681,16 +877,23 @@ export class Sim {
     if (src && src.stats && src.stats.embersInDark && src.hp / src.max < 0.4) src.hp = Math.min(src.max, src.hp + 4);
   }
 
-  // nearest living player this enemy can SEE
+  // nearest living player (or Rogue decoy) this enemy can SEE. Smoke hides everyone.
   nearestVisible(e, maxD) {
+    if (e.smoked) return null;
     let best = null, bd = maxD;
     for (const p of this.players.values()) {
-      if (p.down) continue;
+      if (p.down || this.inSmoke(p.x, p.y)) continue;
       const d = Math.hypot(p.x - e.x, p.y - e.y);
       if (d < bd && this.los(e.x, e.y, p.x, p.y)) { bd = d; best = p; }
     }
+    for (const dc of this.decoys) {
+      const d = Math.hypot(dc.x - e.x, dc.y - e.y) * 0.6; // decoys are extra tempting
+      if (d < bd && this.los(e.x, e.y, dc.x, dc.y)) { bd = d; best = dc; }
+    }
     return best;
   }
+
+  canSee(e, t) { return !!t && !e.smoked && !this.inSmoke(t.x, t.y) && this.los(e.x, e.y, t.x, t.y); }
 
   nearestAlive(x, y, maxD) {
     let best = null, bd = maxD;
@@ -729,6 +932,9 @@ export class Sim {
     for (const e of this.enemies) {
       if (e.dead) continue;
       e.t -= dt; e.cd -= dt; e.hurtT -= dt; e.stun -= dt; e.burnT -= dt; e.slowT -= dt;
+      e.markT = (e.markT || 0) - dt;
+      if (e.bleedT > 0) { e.bleedT -= dt; this.damageEnemy(e, 8 * dt, 0, 0, 0, null, true); if (e.dead) continue; }
+      e.smoked = this.inSmoke(e.x, e.y);
       if (e.type === 'treant') this.updateTreant(e, dt);
       else this.updateWolfLike(e, dt);
     }
@@ -737,10 +943,10 @@ export class Sim {
   updateWolfLike(e, dt) {
     const D = e.def;
     let tvx = 0, tvy = 0;
-    const tgt = e.target ? this.players.get(e.target) : null;
-    const ok = tgt && !tgt.down;
-    const slow = e.slowT > 0 ? 0.5 : 1;
-    const seeTgt = ok && this.los(e.x, e.y, tgt.x, tgt.y);
+    const tgt = e.target ? this.targetOf(e.target) : null;
+    const ok = tgt && !tgt.down && (tgt.t === undefined || tgt.t > 0);
+    const slow = e.smoked ? 0.2 : e.slowT > 0 ? 0.5 : 1;
+    const seeTgt = ok && this.canSee(e, tgt);
     if (e.type === 'alpha' && (e.state === 'chase' || e.state === 'windup')) {
       e.howlT -= dt;
       if (e.howlT <= 0 && seeTgt) {
@@ -830,6 +1036,9 @@ export class Sim {
                 break;
               }
             }
+            for (const d of this.decoys) {
+              if (!e.hit && d.t > 0 && Math.hypot(d.x - e.x, d.y - e.y) < e.r + PLAYER_RADIUS + 4) { e.hit = true; this.popDecoy(d); }
+            }
           }
           if (e.t <= 0) {
             if (e.type === 'alpha' && --e.lungesLeft > 0) { e.state = 'windup'; e.t = 0.45; }
@@ -865,8 +1074,14 @@ export class Sim {
     if (e.state === 'lunge' && Math.hypot(pos.x - nx, pos.y - ny) > 2) { e.state = 'recover'; e.t = D.recover; } // bonked into a tree
     e.x = pos.x;
     e.y = pos.y;
-    if (e.state === 'windup' || e.state === 'lunge') e.fx = e.dx >= 0 ? 1 : -1;
-    else if (Math.abs(e.vx) > 5) e.fx = e.vx > 0 ? 1 : -1;
+    if (e.state === 'windup' || e.state === 'lunge') { e.fx = e.dx >= 0 ? 1 : -1; e.face = Math.atan2(e.dy, e.dx); }
+    else {
+      if (Math.abs(e.vx) > 5) e.fx = e.vx > 0 ? 1 : -1;
+      // which way it's looking (for backstabs): at its target, otherwise where it walks
+      const want = ok && seeTgt ? Math.atan2(tgt.y - e.y, tgt.x - e.x) : Math.hypot(e.vx, e.vy) > 8 ? Math.atan2(e.vy, e.vx) : e.face || 0;
+      const turn = e.smoked ? 0.6 : 6; // smoke makes them turn very slowly
+      e.face = (e.face || 0) + Math.max(-turn * 0.016, Math.min(turn * 0.016, angDiff(want, e.face || 0)));
+    }
   }
 
   giveUp(e) {
@@ -895,7 +1110,7 @@ export class Sim {
       this.emit({ k: 'roar', x: Math.round(e.x), y: Math.round(e.y) });
     }
     // only fights people it can see; walks home (healing a tiny bit) if everyone is far away
-    const seen = alive.filter((p) => this.los(e.x, e.y, p.x, p.y) && Math.hypot(p.x - e.homeX, p.y - e.homeY) < T.leash + 200);
+    const seen = alive.filter((p) => !this.inSmoke(p.x, p.y) && this.los(e.x, e.y, p.x, p.y) && Math.hypot(p.x - e.homeX, p.y - e.homeY) < T.leash + 200);
     if (e.state === 'sweep') {
       e.t -= dt;
       if (e.t <= 0) {
@@ -930,6 +1145,7 @@ export class Sim {
       e.x = pos.x; e.y = pos.y;
     }
     e.fx = dx >= 0 ? 1 : -1;
+    e.face = Math.atan2(dy, dx);
     if (e.atkT > 0) return;
     if (d < T.sweepRange * 0.9 && Math.random() < 0.6) {
       e.state = 'sweep';
@@ -949,14 +1165,40 @@ export class Sim {
   updateShots(dt) {
     for (const s of this.shots) {
       s.life -= dt;
+      if (s.homing) {
+        // Hawk Eye arrows curve towards the nearest enemy they can see
+        let best = null, bd = 220;
+        for (const e of this.enemies) {
+          if (e.dead || s.hit.has(e.id)) continue;
+          const d = Math.hypot(e.x - s.x, e.y - 8 - s.y);
+          if (d < bd && this.world.lineOfSight(s.x, s.y, e.x, e.y - 8)) { bd = d; best = e; }
+        }
+        if (best) {
+          const sp = Math.hypot(s.vx, s.vy), a = Math.atan2(s.vy, s.vx);
+          const want = Math.atan2(best.y - 8 - s.y, best.x - s.x);
+          const na = a + Math.max(-8 * dt, Math.min(8 * dt, angDiff(want, a)));
+          s.vx = Math.cos(na) * sp; s.vy = Math.sin(na) * sp;
+        }
+      }
       const nx = s.x + s.vx * dt, ny = s.y + s.vy * dt;
       const owner = this.players.get(s.owner) || null;
       let hit = this.world.isSolid(Math.floor(nx / TILE), Math.floor(ny / TILE));
       let target = null;
       if (!hit) for (const e of this.enemies) {
-        if (!e.dead && Math.hypot(e.x - nx, e.y - 8 - ny) < e.r + 5) { target = e; hit = true; break; }
+        if (!e.dead && !(s.hit && s.hit.has(e.id)) && Math.hypot(e.x - nx, e.y - 8 - ny) < e.r + 5) { target = e; hit = true; break; }
       }
       s.x = nx; s.y = ny;
+      if (s.kind === 'arrow') {
+        if (target) {
+          const d = Math.hypot(s.vx, s.vy) || 1;
+          s.hit.add(target.id);
+          this.damageEnemy(target, s.dmg, s.vx / d, s.vy / d, 60 + 200 * s.power, owner, false, s.power >= BOWMAN.pierceAt ? 'pierce' : null);
+          if (owner && owner.stats.leech) owner.hp = Math.min(owner.max, owner.hp + owner.stats.leech);
+          if (s.pierce) continue; // full-strength arrows fly on through the whole line
+          s.life = 0;
+        } else if (hit || s.life <= 0) { s.life = 0; this.emit({ k: 'thunk', x: Math.round(s.x), y: Math.round(s.y) }); }
+        continue;
+      }
       if (hit || s.life <= 0) {
         s.life = 0;
         if (s.kind === 'fire') {
@@ -975,6 +1217,15 @@ export class Sim {
   updateStrikes(dt) {
     for (const s of this.strikes) {
       s.t -= dt;
+      if (s.tid) {
+        // follow the monster it's locked on to (while it stays near the area)
+        const e = this.enemies.find((o) => o.id === s.tid && !o.dead);
+        if (e && Math.hypot(e.x - s.cx, e.y - s.cy) < s.area * 1.6) { s.x = e.x; s.y = e.y; }
+        else {
+          const next = this.enemies.find((o) => !o.dead && Math.hypot(o.x - s.cx, o.y - s.cy) < s.area);
+          s.tid = next ? next.id : null;
+        }
+      }
       if (s.t <= 0 && !s.done) {
         s.done = true;
         this.emit({ k: 'meteor', x: Math.round(s.x), y: Math.round(s.y) });
@@ -1008,6 +1259,17 @@ export class Sim {
         else { z.x = nx; z.y = ny; }
       }
       const owner = this.players.get(z.owner) || null;
+      if (z.kind === 'smoke') continue; // smoke works through inSmoke()
+      if (z.kind === 'rain') {
+        z.tick -= dt;
+        while (z.tick <= 0 && z.t > 0) {
+          z.tick += z.every;
+          const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * z.r;
+          const x = z.x + Math.cos(a) * d, y = z.y + Math.sin(a) * d * 0.7;
+          this.hitCircle(owner, x, y, 18, z.dmg, 60, { fromSky: true });
+        }
+        continue;
+      }
       for (const e of this.enemies) {
         if (e.dead) continue;
         const d = Math.hypot(e.x - z.x, e.y - z.y);
@@ -1099,7 +1361,9 @@ export class Sim {
       p.choices = [];
       while (p.choices.length < 3 && pool.length) p.choices.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
       p.picked = false;
+      p.vote = null;
     }
+    this.decoys = [];
     this.emit({ k: 'rest' });
   }
 
@@ -1135,11 +1399,14 @@ export class Sim {
         lt: p.lastEl ? r2(Math.max(0, p.stats.weaveWindow - (this.time - p.lastElT))) : 0,
         pts: p.pts, tr: p.tree, bn: p.boons,
         bc: this.state === 'rest' && !p.picked ? p.choices : null,
+        vt: p.vote, pk: p.picked ? 1 : 0,
+        ch: p.drawing ? r2(p.charge) : 0, hk: Math.max(0, r1(p.hawkT)), ca: Math.max(0, r2(p.cd.atk)),
       })),
+      dc: this.decoys.map((d) => ({ x: Math.round(d.x), y: Math.round(d.y), c: d.cloak, t: r1(d.t) })),
       es: this.enemies.map((e) => ({
         id: e.id, t: e.type, x: r1(e.x), y: r1(e.y), s: STATE_CODE[e.state], fx: e.fx, dx: r2(e.dx), dy: r2(e.dy),
         hp: Math.ceil(e.hp), mx: Math.ceil(e.max), hu: e.hurtT > 0 ? 1 : 0, b: e.burnT > 0 ? 1 : 0, sl: e.slowT > 0 ? 1 : 0,
-        el: e.elite ? 1 : 0, sn: e.stun > 0 ? 1 : 0,
+        el: e.elite ? 1 : 0, sn: e.stun > 0 ? 1 : 0, mk: e.markT > 0 ? 1 : 0, fa: r2(e.face || 0), sm: e.smoked ? 1 : 0, bl: e.bleedT > 0 ? 1 : 0,
       })),
       pk: this.pickups.map((k) => ({ id: k.id, k: k.kind, x: Math.round(k.x), y: Math.round(k.y) })),
       hz: this.hazards.map((h) => ({ id: h.id, k: h.kind, x: Math.round(h.x), y: Math.round(h.y), r: h.r, a: h.a, arc: h.arc, p: r2(Math.max(0, 1 - h.t / h.max)), done: h.done ? 1 : 0 })),

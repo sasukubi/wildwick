@@ -33,6 +33,20 @@ const KITS = {
     { id: 'dash', name: 'Dash', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Starfall (Wildfire)', key: 'ult', icon: '☄' },
   ],
+  bowman: [
+    { id: 'atk', name: 'Hold to draw, let go to shoot', key: 'strike', icon: '🏹' },
+    { id: 'mark', name: 'Mark', key: 'skill1', icon: '🎯' },
+    { id: 'rain', name: 'Rain of Arrows', key: 'skill2', icon: '🌧' },
+    { id: 'dash', name: 'Dash', key: 'dash', icon: '»' },
+    { id: 'ult', name: 'Hawk Eye (Wildfire)', key: 'ult', icon: '🦅' },
+  ],
+  rogue: [
+    { id: 'atk', name: 'Stab (every 4th spins)', key: 'strike', icon: '🗡' },
+    { id: 'step', name: 'Shadowstep', key: 'skill1', icon: '👣' },
+    { id: 'smoke', name: 'Smoke Bomb', key: 'skill2', icon: '💨' },
+    { id: 'dash', name: 'Dash (leaves a decoy)', key: 'dash', icon: '»' },
+    { id: 'ult', name: 'Thousand Cuts (Wildfire)', key: 'ult', icon: '✴' },
+  ],
 };
 const RING = 2 * Math.PI * 23;
 const readyAt = new Map();
@@ -77,7 +91,7 @@ export function updateHud(game, snap, me) {
     if (!c) continue;
     c.querySelector('.dot').style.background = byId(CLOAKS, p.c).hex;
     c.querySelector('b').textContent = p.u + (p.id === game.myId ? ' (you)' : '');
-    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Flame out!') : `${p.n} · ${p.k === 'sorcerer' ? 'Sorcerer' : 'Warrior'}`;
+    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Flame out!') : `${p.n} · ${{ sorcerer: 'Sorcerer', bowman: 'Bowman', rogue: 'Rogue' }[p.k] || 'Warrior'}`;
     c.classList.toggle('down', !!p.dn);
     const fill = c.querySelector('.mini i');
     fill.style.width = (p.hp / p.mx) * 100 + '%';
@@ -94,7 +108,7 @@ export function updateHud(game, snap, me) {
     const z = game.world.readyZone;
     const ready = snap.ps.filter((p) => p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h).length;
     name = 'The Campfire';
-    sub = `Everyone onto the glowing path to begin · ${ready}/${snap.ps.length}`;
+    sub = `Everyone walk under the archway to begin · ${ready}/${snap.ps.length}`;
   } else if (snap.st === 'rest') { name = 'A quiet moment'; sub = 'Pick a boon, spend skill points'; }
   else if (snap.sc === 'forest') {
     name = `Thornwood ${['I', 'II', 'III'][snap.stg - 1] || ''} · ${mm}:${ss}`;
@@ -128,7 +142,7 @@ export function updateHud(game, snap, me) {
   set($('#pts'), 'hide', !me.pts);
   set($('#pts'), 'text', `+${me.pts} skill point${me.pts > 1 ? 's' : ''} [${game.keyLabel('tree')}]`);
   const fury = Math.round((stats.furyMax || 0) * (1 - ratio) * 100);
-  set($('#fury'), 'text', !sorc && snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage` : '');
+  set($('#fury'), 'text', me.k === 'warrior' && snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage` : '');
 
   // weaving: show which element is "primed" and how long you have to fuse it
   const weave = $('#weave');
@@ -145,7 +159,11 @@ export function updateHud(game, snap, me) {
     const el = document.getElementById('sk-' + s.id);
     if (!el) continue;
     let rem = 0, total = 1, noMana = false;
-    if (s.id === 'atk') { rem = Math.max(0, game.lp.atkCd); total = stats.atkCd; }
+    if (s.id === 'atk') { rem = Math.max(0, game.lp.atkCd); total = me.k === 'bowman' ? 0.9 * stats.recoverMult : stats.atkCd; }
+    else if (s.id === 'mark') { rem = me.c1; total = stats.markCd; }
+    else if (s.id === 'rain') { rem = me.c2; total = stats.rainCd; }
+    else if (s.id === 'step') { rem = me.c1; total = stats.stepCd; }
+    else if (s.id === 'smoke') { rem = me.c2; total = stats.smokeCd; }
     else if (s.id === 'dash') { rem = Math.max(0, game.lp.dashCd); total = stats.dashCd; }
     else if (s.id === 'guard') { rem = me.g ? 0 : me.c2; total = stats.guardCd; }
     else if (s.id === 'quake') { rem = me.c1; total = stats.quakeCd; }

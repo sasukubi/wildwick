@@ -42,8 +42,8 @@ export const FLAMES = [
 export const CLASSES = [
   { id: 'warrior',  name: 'Warrior',  available: true,  color: '#ff8a4c', blurb: 'Fights harder the dimmer their flame burns.' },
   { id: 'warlock',  name: 'Warlock',  available: false, color: '#9b6bff', blurb: 'Commands a shadow familiar that feeds on darkness.' },
-  { id: 'bowman',   name: 'Bowman',   available: false, color: '#8fd36b', blurb: 'Charged shots that pierce whole packs.' },
-  { id: 'rogue',    name: 'Rogue',    available: false, color: '#d0d4e0', blurb: 'Dashes leave afterimages that draw enemies away.' },
+  { id: 'bowman',   name: 'Bowman',   available: true,  color: '#8fd36b', blurb: 'Draw longer for stronger, piercing shots.' },
+  { id: 'rogue',    name: 'Rogue',    available: true,  color: '#d0d4e0', blurb: 'Strikes from behind; dashes leave decoys.' },
   { id: 'sorcerer', name: 'Sorcerer', available: true,  color: '#58b8ff', blurb: 'Weaves two spells together into one.' },
   { id: 'cleric',   name: 'Cleric',   available: false, color: '#ffe08a', blurb: 'Gives away their own flame to heal allies.' },
 ];
@@ -58,7 +58,7 @@ export const WARRIOR = {
   quakeCd: 9, quakeCost: 10, quakeRadius: 108, quakeDmg: 30,
   // Smoulder Guard: hold to block hits from the front, release to counter-slash
   guardMax: 2.5, guardCd: 4, guardArc: 2.1, guardSlow: 0.4,
-  counterBase: 15, counterPerHeat: 2.0, counterRange: 74, counterArc: 2.8, perfectWindow: 0.25,
+  counterBase: 15, counterPerHeat: 2.0, heatCap: 30, // blocking a whole pack can't make one giant hit counterRange: 74, counterArc: 2.8, perfectWindow: 0.25,
   // Pyre Cleave (Wildfire ultimate)
   pyreDmg: 80, pyreRange: 125, pyreArc: 3.8, pyreTrail: 4, pyreTrailDps: 30,
   furyMax: 0.8,      // Dark Fury: up to +80% damage at almost no flame
@@ -69,11 +69,11 @@ export const SORCERER = {
   speed: 118,
   maxFlame: 85,
   staffCd: 0.55, staffRange: 46, staffArc: 1.9, staffDmg: 7, staffKb: 320, // weak but pushes enemies away
-  mana: 100, manaRegen: 13,
-  fire:  { cost: 22, cd: 0.5, speed: 250, dmg: 24, r: 34, range: 260 },
+  mana: 100, manaRegen: 10,
+  fire:  { cost: 22, cd: 0.9, speed: 250, dmg: 24, r: 34, range: 260 },
   frost: { cost: 18, cd: 0.6, dmg: 10, shards: 3, spread: 0.32, speed: 300, range: 160, slow: 0.5, slowT: 2 },
   gale:  { cost: 16, cd: 0.7, range: 92, arc: 1.7, kb: 440, dmg: 6 },
-  weaveWindow: 1.6, weaveRefund: 15,
+  weaveWindow: 1.6, weaveExtra: 20, // fusing costs 20 extra mana on top of the second spell
   steam:     { r: 70, dmg: 34, stun: 1.3, range: 150 },
   firestorm: { r: 30, dps: 42, t: 3, speed: 90 },
   blizzard:  { r: 92, dps: 12, t: 4, slow: 0.45, range: 160 },
@@ -90,6 +90,34 @@ export const WEAVES = {
   'frost+gale': { id: 'blizzard', name: 'Blizzard' },
 };
 export function weaveOf(a, b) { return WEAVES[[a, b].sort().join('+')] || null; }
+
+// ---- Bowman -------------------------------------------------
+// Hold to draw: a quick tap is a weak arrow, a full draw hits hard and pierces.
+// The stronger the shot, the longer you wait before the next one.
+export const BOWMAN = {
+  speed: 118, maxFlame: 90,
+  drawTime: 1.0, drawSlow: 0.5,          // walk at half speed while drawing
+  minDmg: 7, maxDmg: 44,
+  minSpeed: 300, maxSpeed: 560,
+  minRange: 220, maxRange: 380,
+  minRecover: 0.22, maxRecover: 0.9,     // wait after a weak / full shot
+  pierceAt: 0.95,                         // draw needed to pierce
+  markCd: 10, markTime: 8, markBonus: 0.25, markRange: 320,
+  rainCd: 12, rainR: 70, rainTime: 2, rainArrows: 10, rainDmg: 13, rainRange: 240,
+  hawkTime: 6, hawkRecover: 0.32,         // Hawk Eye (Wildfire ultimate)
+};
+
+// ---- Rogue --------------------------------------------------
+export const ROGUE = {
+  speed: 128, maxFlame: 90,
+  stabCd: 0.72, stabRange: 40, stabArc: 1.3, stabDmg: 21,  // slow, heavy stabs
+  spinEvery: 4, spinR: 50, spinDmg: 17,                     // every 4th stab spins
+  backstab: 1.0,                                            // +100% from the back half
+  decoyTime: 2.5,
+  stepCd: 7, stepRange: 220,                                // Shadowstep
+  smokeCd: 14, smokeR: 72, smokeTime: 5, smokeSpeed: 1.4,   // Smoke Bomb
+  cutsTargets: 6, cutsRange: 230, cutsDmg: 42,              // Thousand Cuts (ultimate)
+};
 
 // ---- Enemies ------------------------------------------------
 export const WOLF = {
@@ -127,7 +155,7 @@ export const RULES = {
   shrineChance: 0.6,
   reviveTime: 3, reviveFlame: 35, reviveRange: 48,
   forestStages: 3,
-  restTime: 45,
+  restTime: 90,           // if nobody decides, the party carries on after this long
 };
 
 export function xpToNext(level) { return 30 + level * 25; }
@@ -173,8 +201,48 @@ export const TREES = {
     { id: 'tempest', name: 'Tempest', color: '#bff5d2', blurb: 'Wind, mana and faster weaving.', nodes: [
       { id: 'gust', name: 'Gale Force', max: 3, desc: 'Gale pushes 25% harder and deals more damage.' },
       { id: 'well', name: 'Deep Well', max: 3, desc: '+20 max mana.' },
-      { id: 'quickweave', name: 'Quick Weave', max: 2, desc: '+0.5s to weave, and fusing refunds 10 more mana.' },
-      { id: 'eye', name: 'Eye of the Storm', max: 1, cap: true, desc: 'Fused spells refund all their mana.' },
+      { id: 'quickweave', name: 'Quick Weave', max: 2, desc: '+0.5s to weave, and fusing costs 6 less mana.' },
+      { id: 'eye', name: 'Eye of the Storm', max: 1, cap: true, desc: 'Fusing costs no extra mana.' },
+    ] },
+  ],
+  bowman: [
+    { id: 'marksman', name: 'Marksman', color: '#ffd36a', blurb: 'Bigger, faster shots.', nodes: [
+      { id: 'steady', name: 'Steady Draw', max: 3, desc: 'Draw your bow 12% faster.' },
+      { id: 'broadhead', name: 'Broadhead', max: 3, desc: 'Arrows deal +15% damage.' },
+      { id: 'nock', name: 'Quick Nock', max: 2, desc: 'Wait 15% less between shots.' },
+      { id: 'deadeye', name: 'Deadeye', max: 1, cap: true, desc: 'Fully drawn shots deal +50% damage.' },
+    ] },
+    { id: 'hunter', name: 'Hunter', color: '#ff8a7a', blurb: 'Mark prey for the whole party.', nodes: [
+      { id: 'prey', name: 'Hunter\'s Mark', max: 3, desc: 'Marked enemies take +8% more damage.' },
+      { id: 'linger', name: 'Lingering Mark', max: 2, desc: 'Mark lasts 3 seconds longer.' },
+      { id: 'tracker', name: 'Tracker', max: 2, desc: 'Mark recharges 20% faster.' },
+      { id: 'predator', name: 'Predator', max: 1, cap: true, desc: 'Hitting your marked enemy restores 2 flame.' },
+    ] },
+    { id: 'ranger', name: 'Ranger', color: '#8fd36b', blurb: 'Rain, roam and Hawk Eye.', nodes: [
+      { id: 'downpour', name: 'Downpour', max: 3, desc: 'Rain of Arrows drops 25% more arrows.' },
+      { id: 'widerain', name: 'Wide Rain', max: 2, desc: 'Rain of Arrows covers 20% more ground.' },
+      { id: 'fleet', name: 'Light Draw', max: 3, desc: 'Walk 15% faster while drawing.' },
+      { id: 'keen', name: 'Keen Hawk', max: 1, cap: true, desc: 'Hawk Eye lasts 3 seconds longer.' },
+    ] },
+  ],
+  rogue: [
+    { id: 'shadow', name: 'Shadow', color: '#b08cff', blurb: 'Shadowstep and smoke.', nodes: [
+      { id: 'swiftstep', name: 'Swift Step', max: 3, desc: 'Shadowstep recharges 15% faster.' },
+      { id: 'ambush', name: 'Ambush', max: 2, desc: 'Your first stab after Shadowstep deals +40%.' },
+      { id: 'thick', name: 'Thick Smoke', max: 2, desc: 'Smoke Bomb lasts 1.5s longer and is bigger.' },
+      { id: 'shroud', name: 'Shroud', max: 1, cap: true, desc: 'Standing in your smoke restores 3 flame a second.' },
+    ] },
+    { id: 'blade', name: 'Blade', color: '#ff8a8a', blurb: 'Hit harder from behind.', nodes: [
+      { id: 'edge', name: 'Keen Edge', max: 3, desc: 'Stabs deal +12% damage.' },
+      { id: 'assassin', name: 'Assassin', max: 3, desc: 'Backstabs deal +25% more.' },
+      { id: 'whirl', name: 'Whirl', max: 2, desc: 'Your combo spin deals +30% and reaches further.' },
+      { id: 'bleed', name: 'Deep Cuts', max: 1, cap: true, desc: 'Backstabs make enemies bleed for 3 seconds.' },
+    ] },
+    { id: 'trick', name: 'Trickster', color: '#9fe8d0', blurb: 'Decoys, dashes and the ultimate.', nodes: [
+      { id: 'mirror', name: 'Mirror Image', max: 2, desc: 'Your dash decoy lasts 1 second longer.' },
+      { id: 'lightfeet', name: 'Light Feet', max: 3, desc: 'Dash recharges 12% faster.' },
+      { id: 'flurry', name: 'Flurry', max: 2, desc: 'Thousand Cuts hits 2 more enemies.' },
+      { id: 'phantom', name: 'Phantom', max: 1, cap: true, desc: 'Decoys explode when they are bitten.' },
     ] },
   ],
 };
@@ -245,7 +313,55 @@ export function classStats(cls, tree = {}, boons = []) {
       shatter: r('shatter') > 0,
       galeMult: 1 + 0.25 * r('gust'),
       weaveWindow: S.weaveWindow + 0.5 * r('quickweave'),
-      weaveRefund: r('eye') ? 999 : S.weaveRefund + 10 * r('quickweave'),
+      weaveExtra: r('eye') ? 0 : S.weaveExtra - 6 * r('quickweave'),
+      furyMax: 0,
+    };
+  }
+  if (cls === 'bowman') {
+    const B = BOWMAN;
+    return {
+      ...base,
+      maxFlame: B.maxFlame + 15 * b('wick'),
+      speed: B.speed * (1 + 0.1 * b('swift')),
+      atkCd: B.minRecover,
+      drawTime: B.drawTime * Math.pow(0.88, r('steady')),
+      drawSlow: Math.min(1, B.drawSlow + 0.15 * r('fleet')),
+      arrowMult: 1 + 0.15 * r('broadhead'),
+      recoverMult: Math.pow(0.85, r('nock')),
+      deadeye: r('deadeye') > 0,
+      markBonus: B.markBonus + 0.08 * r('prey'),
+      markTime: B.markTime + 3 * r('linger'),
+      markCd: B.markCd * Math.pow(0.8, r('tracker')) * focus,
+      predator: r('predator') > 0,
+      rainArrows: Math.round(B.rainArrows * (1 + 0.25 * r('downpour'))),
+      rainR: B.rainR * (1 + 0.2 * r('widerain')),
+      rainCd: B.rainCd * focus,
+      hawkTime: B.hawkTime + (r('keen') ? 3 : 0),
+      furyMax: 0,
+    };
+  }
+  if (cls === 'rogue') {
+    const G = ROGUE;
+    return {
+      ...base,
+      maxFlame: G.maxFlame + 15 * b('wick'),
+      speed: G.speed * (1 + 0.1 * b('swift')),
+      atkCd: G.stabCd,
+      dashCd: base.dashCd * Math.pow(0.88, r('lightfeet')),
+      stabMult: 1 + 0.12 * r('edge'),
+      backstab: G.backstab + 0.25 * r('assassin'),
+      spinMult: 1 + 0.3 * r('whirl'),
+      spinR: G.spinR * (1 + 0.15 * r('whirl')),
+      bleed: r('bleed') > 0,
+      stepCd: G.stepCd * Math.pow(0.85, r('swiftstep')) * focus,
+      ambush: 0.4 * r('ambush'),
+      smokeCd: G.smokeCd * focus,
+      smokeTime: G.smokeTime + 1.5 * r('thick'),
+      smokeR: G.smokeR * (1 + 0.15 * r('thick')),
+      shroud: r('shroud') > 0,
+      decoyTime: G.decoyTime + r('mirror'),
+      phantom: r('phantom') > 0,
+      cutsTargets: G.cutsTargets + 2 * r('flurry'),
       furyMax: 0,
     };
   }

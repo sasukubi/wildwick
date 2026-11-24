@@ -7,6 +7,7 @@ import { Game } from './game.js';
 import { CLASSES, CLOAKS, byId } from './data.js';
 import { drawPreview } from './render.js';
 import { toast, settings } from './ui.js';
+import { getRoomPref, setRoomPref } from './prefs.js';
 import { audio } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
@@ -133,7 +134,15 @@ $('#btn-logout').addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------- host / join
+function fillRoomCode() {
+  const r = getRoomPref();
+  $('#host-code').value = r.custom || r.last || '';
+  $('#use-code').checked = r.use !== false && !!(r.custom || r.last);
+}
+$('#host-code').addEventListener('input', () => { $('#host-code').value = $('#host-code').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5); if ($('#host-code').value) $('#use-code').checked = true; });
+
 function showMenu(c) {
+  fillRoomCode();
   current = c;
   show('screen-menu');
   drawPreview($('#menu-preview'), c);
@@ -145,7 +154,15 @@ function showMenu(c) {
 $('#btn-host').addEventListener('click', () => {
   busy($('#btn-host'), async () => {
     $('#menu-error').textContent = '';
-    try { startGame(await hostRoom(), true); } catch (err) { $('#menu-error').textContent = err.message; }
+    const code = $('#host-code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const useCode = $('#use-code').checked && code.length === 5;
+    setRoomPref({ use: $('#use-code').checked, custom: code });
+    try {
+      const room = await hostRoom(useCode ? code : null);
+      setRoomPref({ last: room.code });
+      startGame(room, true);
+      if (room.codeChanged) toast(`Room code ${code} was busy, so your code this time is ${room.code}.`);
+    } catch (err) { $('#menu-error').textContent = err.message; }
   });
 });
 

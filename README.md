@@ -28,13 +28,14 @@ All keys can be changed in **Settings (Esc) > Controls**.
 | Move | WASD / arrows | Left stick |
 | Aim | Mouse | Right stick |
 | Strike / staff (hold to keep swinging) | Left click | RT |
-| Warrior: Smoulder Guard (hold to block, let go to counter) · Sorcerer: Gale | Right click | LT |
-| Warrior: Cinder Quake · Sorcerer: Fire | E | X |
+| Skill 2: Smoulder Guard / Gale / Rain of Arrows / Smoke Bomb | Right click | LT |
+| Skill 1: Cinder Quake / Fire / Mark / Shadowstep | E | X |
 | Sorcerer: Frost | Q | LB |
 | Wildfire ultimate (Pyre Cleave / Starfall) | R | RB |
-| Dash (the start of a dash dodges) | Space / Shift | A |
+| Dash (the start of a dash dodges) | Space | A |
 | Interact | F | Y |
 | Skill tree | T / Tab | View |
+| Show controls for your class | H | — |
 | Settings | Esc | Start |
 
 **Sorcerer weaving:** cast two *different* spells quickly and they fuse: Fire + Frost = Steam Burst (stuns), Fire + Gale = Firestorm (moving fire tornado), Frost + Gale = Blizzard (slowing storm). Spells use mana, which refills on its own.
@@ -44,7 +45,9 @@ All keys can be changed in **Settings (Esc) > Controls**.
 ## What's in the game so far
 
 - Accounts and up to 6 saved characters each (name, cloak, hat, flame colour, class). Your **username** is shown above your head.
-- Campfire lobby with a wardrobe (party cloak colours are unique), six class shrines (Warrior and Sorcerer work so far) and a ready path.
+- Campfire lobby with a wardrobe (party cloak colours are unique), six class shrines (Warrior, Sorcerer, Bowman and Rogue work so far) and an ancient tree archway that leads into the wilds and a ready path.
+- **Bowman:** hold to draw (longer = stronger, piercing, but a longer wait), Mark, Rain of Arrows, and the Hawk Eye ultimate.
+- **Rogue:** heavy stabs with a combo spin, Backstab (double damage from behind, shown by a red dagger), decoy dash, Shadowstep, Smoke Bomb, and the Thousand Cuts ultimate.
 - **Sorcerer:** a weak staff swing that pushes enemies back, Fire, Frost and Gale spells paid with mana, spell weaving, and the Starfall ultimate.
 - **Warrior:**
   - Sword combo (every 3rd hit is heavy) and dash.

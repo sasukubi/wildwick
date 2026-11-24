@@ -12,7 +12,7 @@ export class Input {
     this.canvas = canvas;
     this.keys = new Set();
     this.mouse = { x: innerWidth / 2, y: innerHeight / 2, left: false, right: false };
-    this.counts = { atk: 0, s1: 0, s2: 0, s3: 0, dash: 0, interact: 0, esc: 0, ult: 0, tree: 0, back: 0 };
+    this.counts = { atk: 0, s1: 0, s2: 0, s3: 0, dash: 0, interact: 0, esc: 0, ult: 0, tree: 0, back: 0, controls: 0 };
     this.device = 'kbm';
     this.padMove = { x: 0, y: 0 };
     this.padAim = null;
@@ -26,7 +26,8 @@ export class Input {
       if (window.__rebinding) return;
       const k = prefs.keys, c = e.code;
       if (!e.repeat) {
-        if (c === k.dash || (c === 'ShiftLeft' && k.dash === 'Space')) this.counts.dash++;
+        if (c === k.dash) this.counts.dash++;
+        if (c === k.controls) this.counts.controls++;
         if (c === k.skill1) this.counts.s1++;
         if (c === k.skill3) this.counts.s3++;
         if (c === k.ult) this.counts.ult++;

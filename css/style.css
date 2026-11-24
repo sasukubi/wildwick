@@ -10,7 +10,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: Nunito, system-ui, sans-serif; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Pixelify Sans', system-ui, sans-serif; }
 .hidden { display: none !important; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
@@ -75,11 +75,11 @@ button.link { background: none; border: none; padding: 0; color: var(--gold); te
 .panel.wide { width: min(720px, 100%); }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 h1.logo {
-  font-family: Cinzel, Georgia, serif; font-weight: 800; font-size: 56px; letter-spacing: 4px; margin: 0; text-align: center;
+  font-family: 'Pixelify Sans', system-ui, sans-serif; font-weight: 800; font-size: 56px; letter-spacing: 4px; margin: 0; text-align: center;
   background: linear-gradient(#ffe6b0, #ff8a3d); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 0 18px rgba(255, 140, 60, 0.45));
 }
-h2, h3 { font-family: Cinzel, Georgia, serif; margin: 0; color: var(--gold); }
+h2, h3 { font-family: 'Pixelify Sans', system-ui, sans-serif; margin: 0; color: var(--gold); }
 h2 { font-size: 21px; }
 h3 { font-size: 14px; margin: 14px 0 6px; letter-spacing: 1px; }
 .tagline { text-align: center; color: var(--muted); margin: 4px 0 22px; font-style: italic; }
@@ -120,14 +120,14 @@ input:focus { outline: 2px solid rgba(255, 154, 74, 0.6); outline-offset: 1px; }
 
 .pill { padding: 7px 18px; border-radius: 999px; }
 #stage-pill { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); text-align: center; display: flex; flex-direction: column; opacity: 0.92; }
-#stage-pill b { font-family: Cinzel, Georgia, serif; font-size: 14px; color: var(--gold); }
+#stage-pill b { font-family: 'Pixelify Sans', system-ui, sans-serif; font-size: 14px; color: var(--gold); }
 #stage-pill small { font-size: 11px; color: var(--muted); }
 #top-right { position: absolute; right: 14px; top: 14px; display: flex; gap: 8px; align-items: center; }
 .room { display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 14px; font-size: 13px; }
 #room-code { letter-spacing: 3px; color: var(--gold); }
 
 #bossbar { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); width: min(520px, 70vw); padding: 7px 14px 9px; text-align: center; border-radius: 16px; }
-#bossbar b { font-family: Cinzel, Georgia, serif; font-size: 13px; color: #ffcfb8; }
+#bossbar b { font-family: 'Pixelify Sans', system-ui, sans-serif; font-size: 13px; color: #ffcfb8; }
 #bossbar .bar { height: 8px; margin-top: 5px; }
 #boss-fill { background: linear-gradient(90deg, #8a1e14, #e0503a); }
 
@@ -264,3 +264,53 @@ input[type=range] { accent-color: #ff9a4a; width: 100%; }
 #settings-code { letter-spacing: 3px; color: var(--gold); }
 #settings { width: min(460px, calc(100vw - 28px)); }
 #help { left: auto; right: 14px; bottom: auto; top: 66px; }
+
+/* ---------- round 4: Pixelify Sans everywhere, readable text ---------- */
+body { font-size: 15px; letter-spacing: 0.2px; }
+h2 { font-size: 23px; letter-spacing: 0.5px; }
+h3 { font-size: 15px; }
+.note, .muted { font-size: 14px; }
+button, .gbtn { font-family: 'Pixelify Sans', system-ui, sans-serif; font-weight: 600; letter-spacing: 0.3px; }
+input:not([type=range]) { font-family: 'Pixelify Sans', system-ui, sans-serif; }
+/* bar text: big, white, with a solid dark outline so it reads on any fill colour */
+.bar span {
+  font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.4px;
+  text-shadow: -1px -1px 0 #120a04, 1px -1px 0 #120a04, -1px 1px 0 #120a04, 1px 1px 0 #120a04, 0 0 4px rgba(0,0,0,0.9);
+}
+#bars .flame { height: 20px; }
+#bars .flame span { font-size: 14px; }
+#bars .wild { height: 16px; }
+#bars .mana { height: 15px; }
+#bars .wild span, #bars .mana span { font-size: 12px; }
+#bars { width: min(360px, 48vw); }
+.pcard b { font-size: 14px; }
+.pcard small { font-size: 12px; }
+#stage-pill b { font-size: 16px; }
+#stage-pill small { font-size: 12px; }
+#fury { font-size: 13px; text-shadow: 0 1px 2px #000; }
+.xprow b { font-size: 13px; }
+.skill .key { font-size: 10px; }
+.skill .cdnum { font-size: 18px; font-weight: 700; }
+#banner h2 { font-size: 38px; }
+#banner p { font-size: 17px; }
+.toast { font-size: 14px; }
+#weave { font-size: 12px; }
+
+/* "can't do that" gleam */
+.skill.denied { animation: denied 0.45s ease-out; }
+@keyframes denied { 0%, 60% { box-shadow: 0 0 0 3px rgba(255, 60, 50, 0.95), 0 0 22px rgba(255, 50, 40, 0.9); } 100% { box-shadow: none; } }
+
+/* controls screen + class tips */
+#help { position: fixed; left: auto; right: 14px; top: 66px; bottom: auto; padding: 6px 14px; font-size: 14px; display: block; max-width: none; }
+.guide { position: fixed; z-index: 7; width: min(440px, calc(100vw - 28px)); }
+#controls { right: 14px; top: 66px; pointer-events: auto; }
+.tips { left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 14; }
+.guide-trick { margin: 0 0 12px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 200, 120, 0.12); border: 1px solid rgba(255, 200, 120, 0.3); color: #ffe6b0; line-height: 1.35; }
+.guide-moves { display: grid; gap: 7px; }
+.move { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 10px; }
+.move kbd { justify-self: start; padding: 3px 9px; font-size: 13px; border-radius: 8px; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.3); font-family: 'Pixelify Sans', system-ui, sans-serif; }
+.move span { font-size: 14px; }
+.code-row { align-items: center; }
+.code-row .toggle { margin: 0; white-space: nowrap; }
+#host-code { text-transform: uppercase; letter-spacing: 4px; text-align: center; max-width: 120px; }
+#vote-row { margin-top: 14px; }

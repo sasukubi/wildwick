@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wildwick</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Nunito:wght@600;700;800&family=Pixelify+Sans:wght@700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link id="favicon" rel="icon" href="data:,">
   <link rel="stylesheet" href="css/style.css">
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -60,7 +60,11 @@
         </div>
       </div>
       <button id="btn-host" class="gbtn primary block">Host a game</button>
-      <p class="note">You'll get a room code to share with up to 3 friends. The game runs while you have it open.</p>
+      <div class="row code-row">
+        <label class="toggle"><input id="use-code" type="checkbox"><span>Use room code</span></label>
+        <input id="host-code" maxlength="5" placeholder="CODE" autocomplete="off">
+      </div>
+      <p class="note">Friends join with your room code (up to 3). Keep the same code each time so they can rejoin easily. The game runs while you have it open.</p>
       <form id="join-form" class="row">
         <input id="join-code" maxlength="5" placeholder="ROOM CODE" autocomplete="off">
         <button id="btn-join" class="gbtn primary" type="submit">Join</button>
@@ -92,13 +96,7 @@
     </div>
   </div>
 
-  <div id="help" class="glass hidden">
-    <b>Controls</b>
-    <span><kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> strike (hold to keep swinging)</span>
-    <span><b>Warrior:</b> <kbd>Right-click</kbd> hold to block, let go to counter · <kbd>E</kbd> Cinder Quake · <kbd>R</kbd> Pyre Cleave</span>
-    <span><b>Sorcerer:</b> <kbd>E</kbd> Fire · <kbd>Q</kbd> Frost · <kbd>Right-click</kbd> Gale · two different spells quickly = weave · <kbd>R</kbd> Starfall</span>
-    <span><kbd>Space</kbd> dash · <kbd>F</kbd> interact · <kbd>T</kbd> skill tree · <kbd>Esc</kbd> settings (change keys there)</span>
-  </div>
+  <div id="help" class="glass pill hidden">Press <kbd id="help-key">H</kbd> for controls</div>
 
   <!-- Panels -->
   <div id="wardrobe" class="panel glass side hidden">
@@ -125,8 +123,26 @@
       <h2 id="boons-title">Choose a boon</h2>
       <p class="muted" id="boons-wait"></p>
       <div id="boon-cards"></div>
+      <div id="vote-row" class="row center-row hidden">
+        <button id="vote-go" class="gbtn primary">Continue into the forest</button>
+        <button id="vote-camp" class="gbtn">Return to camp</button>
+      </div>
       <div class="row center-row"><span id="boons-pts" class="muted"></span><button data-tree class="gbtn small">Skill tree (T)</button></div>
     </div>
+  </div>
+
+  <div id="controls" class="panel glass guide hidden">
+    <div class="panel-head"><h2>Controls: <span class="guide-title"></span></h2><button data-close class="gbtn small">Close (H)</button></div>
+    <p class="guide-trick"></p>
+    <div class="guide-moves"></div>
+    <p class="note">You can keep moving while this is open. Change keys in Settings (Esc) &gt; Controls.</p>
+  </div>
+
+  <div id="tips" class="panel glass guide tips hidden">
+    <div class="panel-head"><h2>New class: <span class="guide-title"></span></h2></div>
+    <p class="guide-trick"></p>
+    <div class="guide-moves"></div>
+    <button data-close class="gbtn primary block">Got it</button>
   </div>
 
   <div id="settings" class="panel glass modal hidden">

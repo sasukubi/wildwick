@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wildwick Font Options</title>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=Jersey+10&family=VT323&family=Grenze+Gotisch:wght@600;800&family=Alegreya+Sans:wght@500;700;800&family=Lexend:wght@400;600;700&family=MedievalSharp&family=Nunito:wght@700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px 60px; color: #f2f5ef; font-family: Nunito, sans-serif;
+    background: radial-gradient(ellipse at 50% 120%, rgba(255,140,60,.25), transparent 60%), linear-gradient(#0d1a12, #050807); }
+  h1 { text-align: center; margin: 0 0 4px; font: 700 28px Nunito, sans-serif; color: #ffd27a; }
+  .sub { text-align: center; color: #a9b8ad; margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; max-width: 1400px; margin: 0 auto; }
+  .card { border-radius: 18px; overflow: hidden; border: 1px solid rgba(255,255,255,.15); background: #0c1510; }
+  .label { padding: 12px 16px; display: flex; gap: 10px; align-items: baseline; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .num { background: #ffb24c; color: #1d0d04; border-radius: 999px; padding: 1px 10px; font-weight: 800; font-family: Nunito, sans-serif; }
+  .name { font: 700 16px Nunito, sans-serif; }
+  .fonts { color: #a9b8ad; font: 600 12px Nunito, sans-serif; margin-left: auto; }
+  /* a fake game scene behind the UI */
+  .scene { position: relative; height: 360px; padding: 14px;
+    background:
+      radial-gradient(circle at 50% 62%, rgba(255,170,90,.55), rgba(40,60,30,.2) 30%, rgba(3,6,12,.92) 62%),
+      repeating-linear-gradient(45deg, #3e5622 0 6px, #4b672a 6px 12px); }
+  .glass { background: linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.04) 60%, rgba(255,255,255,.08));
+    backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.2); border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 8px 24px rgba(0,0,0,.35); }
+  .pill { position: absolute; left: 58%; top: 12px; transform: translateX(-50%); padding: 6px 18px; border-radius: 999px; text-align: center; white-space: nowrap; }
+  .pill b { display: block; color: #ffd27a; }
+  .pill small { color: #c5d2c8; }
+  .party { position: absolute; left: 12px; top: 64px; padding: 6px 12px; min-width: 150px; }
+  .party b { display: block; }
+  .party small { color: #c5d2c8; }
+  .name-tag { position: absolute; left: 47%; top: 165px; text-shadow: 0 0 3px #000, 0 2px 3px #000; }
+  .dmg { position: absolute; left: 63%; top: 185px; color: #ffb347; text-shadow: 0 0 3px #000, 0 2px 3px #000; }
+  .dmg2 { position: absolute; left: 30%; top: 200px; color: #fff; text-shadow: 0 0 3px #000, 0 2px 3px #000; }
+  .banner { position: absolute; left: 0; right: 0; top: 118px; text-align: center; color: #ffe6b0; text-shadow: 0 2px 12px #000; }
+  .bars { position: absolute; left: 14px; bottom: 14px; width: 230px; padding: 8px 12px; }
+  .bar { position: relative; height: 15px; border-radius: 999px; background: rgba(0,0,0,.45); overflow: hidden; margin: 3px 0; }
+  .bar i { position: absolute; inset: 0 30% 0 0; background: linear-gradient(90deg, #ff5a1a, #ffb13b, #fff4c8); }
+  .bar span { position: absolute; inset: 0; display: grid; place-items: center; text-shadow: 0 1px 2px #000; }
+  .tip { position: absolute; right: 12px; bottom: 14px; width: 190px; padding: 10px 12px; }
+  .tip b { display: block; color: #ffd27a; }
+  .tip p { margin: 4px 0 8px; color: #dfe8e1; }
+  .btn { display: inline-block; padding: 6px 16px; border-radius: 999px; background: linear-gradient(180deg, rgba(255,178,102,.95), rgba(222,100,44,.9)); color: #1d0d04; }
+
+  /* ---- option 1: Pixelify Sans everywhere ---- */
+  .o1 .t { font-family: 'Pixelify Sans'; font-weight: 700; letter-spacing: .5px; }
+  .o1 .b { font-family: 'Pixelify Sans'; font-weight: 500; }
+  /* ---- option 2: Jersey 10 titles + VT323 body (retro arcade) ---- */
+  .o2 .t { font-family: 'Jersey 10'; font-weight: 400; letter-spacing: 1px; }
+  .o2 .b { font-family: 'VT323'; font-size: 1.25em; line-height: 1.05; }
+  /* ---- option 3: storybook ---- */
+  .o3 .t { font-family: 'Grenze Gotisch'; font-weight: 600; letter-spacing: .5px; }
+  .o3 .b { font-family: 'Alegreya Sans'; font-weight: 700; }
+  /* ---- option 4: pixel titles + clean body ---- */
+  .o4 .t { font-family: 'Pixelify Sans'; font-weight: 700; letter-spacing: .5px; }
+  .o4 .b { font-family: 'Lexend'; font-weight: 600; }
+  /* ---- option 5: old-fantasy titles + clean body ---- */
+  .o5 .t { font-family: 'MedievalSharp'; }
+  .o5 .b { font-family: 'Alegreya Sans'; font-weight: 700; }
+
+  .sz-title { font-size: 26px; }
+  .sz-pill { font-size: 16px; }
+  .sz-sm { font-size: 12px; }
+  .sz-md { font-size: 14px; }
+  .sz-dmg { font-size: 22px; }
+</style>
+</head>
+<body>
+<h1>Wildwick font options</h1>
+<p class="sub">Each one shown on a mock-up of the in-game screen: a title, a party card, a name tag, damage numbers, health bars, a tip box and a button.</p>
+<div class="grid" id="grid"></div>
+<script>
+const OPTIONS = [
+  ['o1', 'Pixel everywhere', 'Pixelify Sans (titles + text)', 'Matches the logo exactly. Chunky and cosy; text is a little wider.'],
+  ['o2', 'Retro arcade', 'Jersey 10 + VT323', 'Classic old-computer pixel feel. Tall, narrow letters; very "retro game".'],
+  ['o3', 'Storybook', 'Grenze Gotisch + Alegreya Sans', 'Hand-lettered fairytale titles with warm, easy-to-read text.'],
+  ['o4', 'Pixel titles + clean text', 'Pixelify Sans + Lexend', 'Pixel feel for titles, buttons and numbers; the smoothest reading for small text.'],
+  ['o5', 'Old fantasy + clean text', 'MedievalSharp + Alegreya Sans', 'Rustic medieval titles, readable body text.'],
+];
+document.getElementById('grid').innerHTML = OPTIONS.map(([cls, name, fonts, desc], i) => `
+  <div class="card ${cls}">
+    <div class="label"><span class="num">${i + 1}</span><span class="name">${name}</span><span class="fonts">${fonts}</span></div>
+    <div class="scene">
+      <div class="pill glass"><b class="t sz-pill">Thornwood II · 03:12</b><small class="b sz-sm">Find and defeat the Alpha Thornwolf</small></div>
+      <div class="party glass"><b class="b sz-md">Sasukubi (you)</b><small class="b sz-sm">Bramble · Warrior</small></div>
+      <div class="banner t sz-title">Wildfire ready!</div>
+      <div class="name-tag b sz-md">TestFriend</div>
+      <div class="dmg t sz-dmg">42</div>
+      <div class="dmg2 t sz-md">12</div>
+      <div class="bars glass">
+        <div class="bar"><i></i><span class="b sz-sm">Flame 72 / 100</span></div>
+        <div class="b sz-sm" style="color:#ff9a70">Dark Fury +34% damage</div>
+      </div>
+      <div class="tip glass"><b class="t sz-md">Spell weaving</b><p class="b sz-sm">Cast two different spells quickly and they fuse into a stronger one.</p><span class="btn t sz-md">Host a game</span></div>
+    </div>
+    <div class="label" style="border:none"><span class="b sz-md" style="color:#c5d2c8">${desc}</span></div>
+  </div>`).join('');
+</script>
+</body>
+</html>

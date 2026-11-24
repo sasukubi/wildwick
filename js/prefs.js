@@ -6,21 +6,30 @@
 export const DEFAULT_KEYS = {
   up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
   dash: 'Space', skill1: 'KeyE', skill3: 'KeyQ', ult: 'KeyR',
-  interact: 'KeyF', tree: 'KeyT', strike: '', skill2: '',
+  interact: 'KeyF', tree: 'KeyT', controls: 'KeyH', strike: '', skill2: '',
 };
 
 export const KEY_ACTIONS = [
   { id: 'up', name: 'Move up' }, { id: 'down', name: 'Move down' },
   { id: 'left', name: 'Move left' }, { id: 'right', name: 'Move right' },
   { id: 'dash', name: 'Dash' },
-  { id: 'strike', name: 'Strike / staff (also left click)' },
-  { id: 'skill2', name: 'Guard / Gale (also right click)' },
-  { id: 'skill1', name: 'Cinder Quake / Fire' },
-  { id: 'skill3', name: 'Frost (Sorcerer)' },
+  { id: 'strike', name: 'Attack (also left click)' },
+  { id: 'skill2', name: 'Skill 2: Guard / Gale / Rain / Smoke (also right click)' },
+  { id: 'skill1', name: 'Skill 1: Quake / Fire / Mark / Shadowstep' },
+  { id: 'skill3', name: 'Skill 3: Frost (Sorcerer)' },
   { id: 'ult', name: 'Wildfire ultimate' },
   { id: 'interact', name: 'Interact' },
   { id: 'tree', name: 'Skill tree' },
+  { id: 'controls', name: 'Show controls' },
 ];
+
+// Room code: reuse your last one (so friends can rejoin) or set your own.
+export function getRoomPref() {
+  try { return JSON.parse(localStorage.getItem('wildwick.room') || '{}'); } catch { return {}; }
+}
+export function setRoomPref(v) {
+  try { localStorage.setItem('wildwick.room', JSON.stringify({ ...getRoomPref(), ...v })); } catch { /* ignore */ }
+}
 
 const DEFAULTS = {
   brightness: 1,        // 0.5 .. 1.5

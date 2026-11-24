@@ -40,6 +40,17 @@ class AudioEngine {
     this.master.connect(ctx.destination);
     this.bus = {};
     for (const k of ['music', 'sfx', 'amb', 'ui']) { this.bus[k] = ctx.createGain(); this.bus[k].connect(this.master); }
+    // a soft forest echo on sound effects makes them feel less "synthetic"
+    const irLen = Math.floor(ctx.sampleRate * 1.4);
+    const ir = ctx.createBuffer(2, irLen, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < irLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 3.2) * (i < 40 ? i / 40 : 1);
+    }
+    const verb = ctx.createConvolver(); verb.buffer = ir;
+    const wet = ctx.createGain(); wet.gain.value = 0.22;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3500;
+    this.bus.sfx.connect(lp); lp.connect(verb); verb.connect(wet); wet.connect(this.master);
     const len = ctx.sampleRate * 2;
     this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
@@ -126,18 +137,18 @@ class AudioEngine {
     const T = (f, d, p = {}) => this.tone(f, d, { ...p, gain: (p.gain ?? 0.3) * v });
     const N = (d, p = {}) => this.noise(d, { ...p, gain: (p.gain ?? 0.3) * v });
     switch (name) {
-      case 'swing': N(0.13, { freq: 900, slide: 3200, q: 1.2, gain: 0.22 }); break;
+      case 'swing': N(0.16, { freq: 700, slide: 2400, q: 0.7, gain: 0.2, attack: 0.02 }); N(0.1, { filter: 'lowpass', freq: 400, gain: 0.08, attack: 0.02 }); break;
       case 'heavy': N(0.2, { freq: 500, slide: 2200, q: 1, gain: 0.3 }); T(140, 0.18, { slide: 70, type: 'triangle', gain: 0.2 }); break;
-      case 'hit': T(190, 0.1, { slide: 60, gain: 0.35 }); N(0.05, { filter: 'highpass', freq: 2500, gain: 0.15 }); break;
-      case 'hitBig': T(140, 0.16, { slide: 45, gain: 0.45 }); N(0.08, { filter: 'highpass', freq: 1800, gain: 0.22 }); break;
-      case 'die': N(0.35, { filter: 'lowpass', freq: 900, slide: 200, gain: 0.25 }); T(320, 0.3, { slide: 90, type: 'triangle', gain: 0.15 }); break;
-      case 'growl': T(85, 0.45, { type: 'sawtooth', lp: 500, vib: 22, vibDepth: 18, gain: o.big ? 0.3 : 0.18 }); break;
-      case 'howl': T(300, 1.5, { slide: 430, type: 'triangle', vib: 5, vibDepth: 14, attack: 0.25, gain: 0.16 }); N(1.2, { freq: 600, q: 4, gain: 0.04, attack: 0.3 }); break;
-      case 'hurt': T(230, 0.16, { slide: 110, type: 'square', lp: 1200, gain: 0.2 }); N(0.08, { freq: 1500, gain: 0.12 }); break;
-      case 'dash': N(0.2, { freq: 400, slide: 2600, q: 0.8, gain: 0.18 }); break;
-      case 'quake': T(72, 0.55, { slide: 28, gain: 0.6 }); N(0.45, { filter: 'lowpass', freq: 380, slide: 80, gain: 0.45 }); break;
+      case 'hit': N(0.06, { filter: 'lowpass', freq: 1800, slide: 400, gain: 0.4 }); T(150 + Math.random() * 40, 0.09, { slide: 70, gain: 0.25 }); N(0.025, { filter: 'highpass', freq: 3500, gain: 0.12 }); break;
+      case 'hitBig': N(0.1, { filter: 'lowpass', freq: 1400, slide: 250, gain: 0.55 }); T(110, 0.16, { slide: 45, gain: 0.4 }); N(0.04, { filter: 'highpass', freq: 2800, gain: 0.18 }); break;
+      case 'die': N(0.4, { filter: 'bandpass', freq: 500, slide: 180, q: 2, gain: 0.3, attack: 0.02 }); N(0.25, { filter: 'lowpass', freq: 700, gain: 0.15, delay: 0.05 }); break;
+      case 'growl': { const g = o.big ? 0.45 : 0.3; N(0.55, { filter: 'bandpass', freq: o.big ? 160 : 240, slide: o.big ? 120 : 180, q: 6, gain: g, attack: 0.08 }); N(0.5, { filter: 'bandpass', freq: o.big ? 420 : 600, q: 8, gain: g * 0.4, attack: 0.1 }); break; }
+      case 'howl': T(330, 1.6, { slide: 470, type: 'sawtooth', lp: 900, vib: 5, vibDepth: 10, attack: 0.35, gain: 0.07 }); N(1.5, { filter: 'bandpass', freq: 800, slide: 1100, q: 9, gain: 0.12, attack: 0.35 }); break;
+      case 'hurt': N(0.12, { filter: 'lowpass', freq: 1200, slide: 300, gain: 0.35 }); T(180, 0.12, { slide: 90, gain: 0.18 }); break;
+      case 'dash': N(0.24, { freq: 500, slide: 1800, q: 0.6, gain: 0.16, attack: 0.03 }); N(0.08, { filter: 'lowpass', freq: 300, gain: 0.08 }); break;
+      case 'quake': N(0.7, { filter: 'lowpass', freq: 260, slide: 60, gain: 0.7, attack: 0.01 }); T(55, 0.5, { slide: 30, gain: 0.45 }); for (let i = 0; i < 6; i++) N(0.05, { filter: 'bandpass', freq: 900, q: 2, gain: 0.12, delay: 0.05 + Math.random() * 0.3 }); break;
       case 'guardOn': for (const f of [880, 1330, 1990]) T(f, 0.09, { gain: 0.07 }); break;
-      case 'block': for (const f of [610, 935, 1540, 2210]) T(f, 0.38, { gain: 0.09, type: 'triangle' }); N(0.04, { filter: 'highpass', freq: 3000, gain: 0.2 }); break;
+      case 'block': N(0.05, { filter: 'highpass', freq: 2500, gain: 0.3 }); for (const f of [823, 1290, 1977]) T(f * (0.98 + Math.random() * 0.04), 0.3, { gain: 0.05 }); N(0.2, { filter: 'bandpass', freq: 2200, q: 12, gain: 0.15 }); break;
       case 'perfect': for (const f of [1046, 1568, 2093]) T(f, 0.5, { gain: 0.09 }); break;
       case 'counter': N(0.25, { freq: 700, slide: 3600, q: 1, gain: 0.3 }); T(300, 0.22, { slide: 660, type: 'triangle', gain: 0.2 }); break;
       case 'pyre':
@@ -162,7 +173,21 @@ class AudioEngine {
       case 'defeat': [440, 392, 349, 262].forEach((f, i) => T(f, 0.7, { type: 'triangle', gain: 0.14, delay: i * 0.25 })); break;
       case 'nope': T(140, 0.12, { type: 'square', lp: 800, gain: 0.12 }); break;
       case 'boon': [784, 988, 1175].forEach((f, i) => T(f, 0.4, { gain: 0.12, delay: i * 0.05 })); break;
-      case 'step': N(0.05, { filter: 'lowpass', freq: 500, gain: 0.05 }); break;
+      case 'step': N(0.06, { filter: 'bandpass', freq: 900 + Math.random() * 600, q: 1.5, gain: 0.035 }); break;
+      case 'fizzle': N(0.18, { filter: 'bandpass', freq: 1800, slide: 500, q: 3, gain: 0.18 }); T(160, 0.12, { type: 'square', lp: 600, gain: 0.06 }); break;
+      case 'bow': N(0.08, { filter: 'bandpass', freq: 1500, q: 4, gain: 0.18 }); T(240, 0.08, { slide: 140, type: 'triangle', gain: 0.12 }); break;
+      case 'bowFull': N(0.12, { filter: 'bandpass', freq: 1100, q: 3, gain: 0.3 }); T(180, 0.14, { slide: 90, type: 'triangle', gain: 0.18 }); N(0.3, { freq: 2000, slide: 600, q: 1, gain: 0.1, delay: 0.03 }); break;
+      case 'thunk': N(0.06, { filter: 'lowpass', freq: 700, gain: 0.25 }); T(260, 0.05, { slide: 140, gain: 0.1 }); break;
+      case 'mark': [880, 1320].forEach((f, i) => T(f, 0.25, { gain: 0.08, delay: i * 0.06 })); break;
+      case 'rain': for (let i = 0; i < 10; i++) N(0.06, { filter: 'bandpass', freq: 1400 + Math.random() * 800, q: 3, gain: 0.1, delay: 0.1 + i * 0.18 }); break;
+      case 'hawk': T(1400, 0.5, { slide: 900, type: 'triangle', vib: 12, vibDepth: 40, gain: 0.08 }); N(0.4, { freq: 3000, slide: 1500, q: 3, gain: 0.08 }); break;
+      case 'stab': N(0.1, { freq: 1600, slide: 3000, q: 2, gain: 0.18 }); N(0.06, { filter: 'lowpass', freq: 600, gain: 0.1, delay: 0.05 }); break;
+      case 'spin': N(0.3, { freq: 900, slide: 2800, q: 1, gain: 0.22, attack: 0.03 }); break;
+      case 'backstab': N(0.08, { filter: 'lowpass', freq: 900, gain: 0.35 }); T(90, 0.2, { slide: 45, gain: 0.3 }); T(1900, 0.15, { gain: 0.05 }); break;
+      case 'step2': N(0.3, { freq: 300, slide: 1600, q: 1.5, gain: 0.18 }); T(500, 0.2, { slide: 180, type: 'sine', gain: 0.06 }); break;
+      case 'smoke': N(1.0, { filter: 'lowpass', freq: 900, slide: 300, gain: 0.35, attack: 0.02 }); N(0.06, { filter: 'highpass', freq: 2500, gain: 0.15 }); break;
+      case 'pop': N(0.15, { freq: 1200, slide: 400, q: 2, gain: 0.15 }); break;
+      case 'cuts': for (let i = 0; i < 7; i++) N(0.08, { freq: 1800, slide: 3500, q: 2, gain: 0.16, delay: i * 0.06 }); break;
       case 'dodge': N(0.15, { freq: 2500, slide: 5000, q: 2, gain: 0.12 }); break;
       // Sorcerer
       case 'staff': N(0.12, { freq: 600, slide: 1600, q: 1.5, gain: 0.16 }); T(220, 0.08, { type: 'triangle', gain: 0.08 }); break;

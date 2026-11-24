@@ -2,7 +2,7 @@
 //  UI panels: toasts, wardrobe, skill tree, boon picker,
 //  settings and a yes/no dialog. (HTML in index.html.)
 // =============================================================
-import { CLOAKS, HATS, FLAMES, BOONS, TREES, CAP_REQUIREMENT, byId, canBuy, branchSpent } from './data.js';
+import { CLOAKS, HATS, FLAMES, BOONS, TREES, CLASSES, CAP_REQUIREMENT, byId, canBuy, branchSpent } from './data.js';
 import { drawPreview } from './render.js';
 import { audio } from './audio.js';
 import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName } from './prefs.js';
@@ -319,20 +319,30 @@ export class BoonPanel {
     this.el = $('#boons');
     this.lastKey = '';
     this.el.querySelector('[data-tree]').onclick = () => game.tree.toggle();
+    $('#vote-go').onclick = () => game.vote('go');
+    $('#vote-camp').onclick = async () => {
+      if (await confirmDialog('Return to camp? This ends the run for the whole party.', 'Return to camp')) game.vote('camp');
+    };
   }
   refresh(snap, me) {
     const resting = snap.st === 'rest';
     this.el.classList.toggle('hidden', !resting);
     if (!resting) { this.lastKey = ''; return; }
-    const picked = snap.ps.filter((p) => !p.bc).length;
-    $('#boons-wait').textContent = `${picked}/${snap.ps.length} ready · next forest in ${snap.stt}s`;
+    const nextIsBoss = snap.stg >= 3;
+    const ready = snap.ps.filter((p) => p.vt === 'go').length;
+    $('#boons-wait').textContent = `${ready}/${snap.ps.length} ready to continue · carrying on automatically in ${snap.stt}s`;
     $('#boons-pts').textContent = me.pts ? `You have ${me.pts} skill point${me.pts > 1 ? 's' : ''} to spend.` : '';
+    // after picking a boon: continue into the next forest (or the boss), or head back to camp
+    const showVote = !me.bc;
+    $('#vote-row').classList.toggle('hidden', !showVote);
+    $('#vote-go').textContent = me.vt === 'go' ? 'Waiting for the party…' : nextIsBoss ? 'Face the Elder Treant' : 'Continue into the forest';
+    $('#vote-go').disabled = me.vt === 'go';
     const key = JSON.stringify(me.bc);
     if (key === this.lastKey) return;
     this.lastKey = key;
     const cards = $('#boon-cards');
     cards.innerHTML = '';
-    $('#boons-title').textContent = me.bc ? 'Choose a boon' : 'Boon chosen. Waiting for the party…';
+    $('#boons-title').textContent = me.bc ? 'Choose a boon' : nextIsBoss ? 'The heart of the wood awaits' : 'Continue?';
     if (!me.bc) return;
     me.bc.forEach((id, i) => {
       const b = byId(BOONS, id);
@@ -346,4 +356,69 @@ export class BoonPanel {
       cards.appendChild(el);
     });
   }
+}
+
+// ---------------------------------------------------------- controls screen (H) and class tips
+export const CLASS_GUIDE = {
+  warrior: {
+    trick: 'Dark Fury: the lower your flame, the harder you hit. Block hits with Smoulder Guard, then let go to swing back.',
+    moves: [['strike', 'Sword combo (every 3rd swing is heavy)'], ['skill2', 'Smoulder Guard: hold to block, let go to counter'], ['skill1', 'Cinder Quake: burn some flame to slam the ground'], ['dash', 'Dash'], ['ult', 'Pyre Cleave: giant flaming sweep (Wildfire)']],
+  },
+  sorcerer: {
+    trick: 'Weaving: cast two different spells quickly and they fuse. Fire + Frost = Steam Burst, Fire + Gale = Firestorm, Frost + Gale = Blizzard. Fusing costs extra mana.',
+    moves: [['strike', 'Staff: weak swing that pushes enemies back'], ['skill1', 'Fire: exploding fireball'], ['skill3', 'Frost: slowing shards'], ['skill2', 'Gale: blast of wind'], ['dash', 'Dash'], ['ult', 'Starfall: meteors hunt the monsters where you aim (Wildfire)']],
+  },
+  bowman: {
+    trick: 'Hold to draw your bow. A quick tap is a weak arrow; a full draw hits hard and pierces a whole line, but you wait longer before the next shot. You walk slower while drawing.',
+    moves: [['strike', 'Hold to draw, let go to shoot'], ['skill1', 'Mark: the party deals extra damage to the enemy you aim at'], ['skill2', 'Rain of Arrows: arrows fall where you aim'], ['dash', 'Dash'], ['ult', 'Hawk Eye: every shot is full strength and seeks enemies (Wildfire)']],
+  },
+  rogue: {
+    trick: 'Backstab: hits from behind deal double damage. A red dagger appears over enemies when you are in position. Dashing leaves a decoy that enemies chase.',
+    moves: [['strike', 'Heavy stabs (every 4th is a spin)'], ['skill1', 'Shadowstep: teleport behind the enemy you aim at'], ['skill2', 'Smoke Bomb: enemies inside crawl and can\'t see anyone'], ['dash', 'Dash (leaves a decoy)'], ['ult', 'Thousand Cuts: slash up to 6 nearby enemies (Wildfire)']],
+  },
+};
+const COMMON = [['interact', 'Interact'], ['tree', 'Skill tree'], ['controls', 'Show / hide this screen']];
+
+function fillGuide(box, game, cls) {
+  const g = CLASS_GUIDE[cls] || CLASS_GUIDE.warrior;
+  box.querySelector('.guide-title').textContent = byId(CLASSES_LIST(), cls).name;
+  box.querySelector('.guide-trick').textContent = g.trick;
+  const list = box.querySelector('.guide-moves');
+  list.innerHTML = '';
+  for (const [key, text] of [...g.moves, ...COMMON]) {
+    const row = document.createElement('div');
+    row.className = 'move';
+    const k = document.createElement('kbd');
+    k.textContent = game ? game.keyLabel(key) : keyName(prefs.keys[key]);
+    const s = document.createElement('span');
+    s.textContent = text;
+    row.append(k, s);
+    list.appendChild(row);
+  }
+}
+let classesRef = CLASSES;
+function CLASSES_LIST() { return classesRef; }
+export function setClassList(list) { classesRef = list; }
+
+export class ControlsPanel {
+  constructor(game) {
+    this.game = game;
+    this.el = $('#controls');
+    this.open = false;
+    this.el.querySelector('[data-close]').onclick = () => this.close();
+  }
+  toggle(cls) { if (this.open) this.close(); else this.show(cls); }
+  show(cls) { this.open = true; fillGuide(this.el, this.game, cls); this.el.classList.remove('hidden'); audio.play('open'); }
+  close() { if (!this.open) return; this.open = false; this.el.classList.add('hidden'); audio.play('close'); }
+}
+
+// the first time you pick a class, a little card explains it
+export function showClassTips(cls, game = null) {
+  const key = 'wildwick.tips.' + cls;
+  try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch { /* ignore */ }
+  const box = $('#tips');
+  fillGuide(box, game, cls);
+  box.classList.remove('hidden');
+  audio.play('open');
+  box.querySelector('[data-close]').onclick = () => { box.classList.add('hidden'); audio.play('close'); };
 }

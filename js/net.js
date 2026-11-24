@@ -26,18 +26,23 @@ function ensurePeer() {
   if (typeof Peer === 'undefined') throw new Error('The networking library did not load. Check your internet connection and refresh.');
 }
 
-export function hostRoom() {
+// preferred: a code to try first (your last code, or one you typed). If it's busy, a random one is used.
+export function hostRoom(preferred = null) {
   ensurePeer();
   return new Promise((resolve, reject) => {
     let tries = 0;
+    let want = preferred && /^[A-Z0-9]{5}$/.test(preferred) ? preferred : null;
     const attempt = () => {
-      const code = makeCode();
+      const code = want || makeCode();
+      const wasPreferred = !!want;
+      want = null;
       const peer = new Peer(PREFIX + code, { debug: 1 });
       const conns = new Map();
       let opened = false;
       const room = {
         isHost: true,
         code,
+        codeChanged: !!preferred && !wasPreferred,
         handlers: {},
         broadcast(msg) { for (const c of conns.values()) if (c.open) c.send(msg); },
         sendTo(id, msg) { const c = conns.get(id); if (c && c.open) c.send(msg); },
@@ -56,7 +61,7 @@ export function hostRoom() {
         if (!room.closing) setTimeout(() => { try { peer.reconnect(); } catch (e) { /* ignore */ } }, 2000);
       });
       peer.on('error', (err) => {
-        if (!opened && err.type === 'unavailable-id' && tries++ < 5) { peer.destroy(); attempt(); }
+        if (!opened && err.type === 'unavailable-id' && tries++ < 6) { peer.destroy(); attempt(); }
         else if (!opened) { peer.destroy(); reject(new Error(friendly(err))); }
         else console.warn('PeerJS:', err.type, err);
       });

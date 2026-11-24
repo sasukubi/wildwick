@@ -4,12 +4,12 @@
 //  - On the host: also runs the Sim and sends snapshots.
 //  - On friends' computers: shows the host's snapshots smoothly.
 // =============================================================
-import { WARRIOR, SORCERER, CLOAKS, FLAMES, CLASSES, BOONS, ELEMENTS, PLAYER_RADIUS, MAX_PLAYERS, classStats, byId } from './data.js';
+import { WARRIOR, SORCERER, BOWMAN, ROGUE, CLOAKS, FLAMES, CLASSES, BOONS, ELEMENTS, PLAYER_RADIUS, MAX_PLAYERS, classStats, byId } from './data.js';
 import { World } from './world.js';
 import { Sim } from './sim.js';
 import { Input } from './input.js';
 import { Renderer } from './render.js';
-import { toast, Wardrobe, TreePanel, BoonPanel, settings } from './ui.js';
+import { toast, Wardrobe, TreePanel, BoonPanel, ControlsPanel, settings, showClassTips } from './ui.js';
 import { buildHud, updateHud } from './hud.js';
 import { audio } from './audio.js';
 import { prefs, keyName } from './prefs.js';
@@ -47,8 +47,9 @@ export class Game {
     this.wardrobe = new Wardrobe(this);
     this.tree = new TreePanel(this);
     this.boons = new BoonPanel(this);
+    this.controls = new ControlsPanel(this);
     this.myId = isHost ? 'host' : null;
-    this.lp = { x: 0, y: 0, aim: 0, aimD: 100, moving: false, dashT: 0, dashCd: 0, ddx: 0, ddy: 0, atkCd: 0, combo: 0, comboT: 0, stepT: 0 };
+    this.lp = { x: 0, y: 0, aim: 0, aimD: 100, moving: false, dashT: 0, dashCd: 0, ddx: 0, ddy: 0, atkCd: 0, combo: 0, comboT: 0, stepT: 0, charge: 0, drawing: false, stabN: 0 };
     this.cnt = { ac: 0, sc: 0, s2c: 0, s3c: 0, uc: 0, ic: 0 };
     this.lastCounts = { ...this.input.counts };
     this.edges = {};
@@ -154,6 +155,7 @@ export class Game {
       }
       case 'tree': this.sim.buyNode(from, msg.node); break;
       case 'pick': this.sim.pickBoon(from, msg.i); break;
+      case 'vote': this.sim.vote(from, msg.v); break;
     }
   }
 
@@ -199,6 +201,8 @@ export class Game {
     this.camSnap = true;
     this.wardrobe.close();
     document.getElementById('help').classList.toggle('hidden', world.kind !== 'lobby' || !prefs.hint);
+    document.getElementById('help-key').textContent = keyName(prefs.keys.controls);
+    this.controls.close();
   }
 
   requestCosmetic(field, value) {
@@ -220,10 +224,16 @@ export class Game {
     else this.room.send({ t: 'pick', i });
   }
 
+  // between forests: 'go' to continue, 'camp' to head back
+  vote(v) {
+    if (this.isHost) this.sim.vote('host', v);
+    else this.room.send({ t: 'vote', v });
+  }
+
   saveCosmetic(field, value) {
     this.char[field] = value;
     this.backend.saveChar(this.char).catch((e) => console.warn('save failed', e));
-    if (field === 'cls') toast(`You are now a ${byId(CLASSES, value).name}.`);
+    if (field === 'cls') { toast(`You are now a ${byId(CLASSES, value).name}.`); showClassTips(value, this); }
   }
 
   myStats() { return this.stats; }
@@ -302,7 +312,9 @@ export class Game {
     updateHud(this, snap, me);
   }
 
+  // Only the pause menu (Esc) stops you moving; skill tree, wardrobe and controls don't.
   uiOpen() { return this.wardrobe.open || this.tree.open || settings.open; }
+  moveBlocked() { return settings.open; }
 
   // ---------------------------------------------------- your character
   updateLocal(dt, me, snap) {
@@ -310,20 +322,21 @@ export class Game {
     const pressed = (k) => c[k] > this.lastCounts[k];
     const blocked = this.uiOpen();
     const P = (k) => pressed(k) && !blocked;
-    const atkPressed = P('atk'), s1 = P('s1'), s2 = P('s2'), s3 = P('s3'), dashPressed = P('dash'), ultPressed = P('ult');
-    this.edges = { interact: pressed('interact') && !settings.open, esc: pressed('esc'), back: pressed('back'), tree: pressed('tree') };
+    const atkPressed = P('atk'), s1 = P('s1'), s2 = P('s2'), s3 = P('s3'), dashPressed = pressed('dash') && !settings.open, ultPressed = P('ult');
+    this.edges = { interact: pressed('interact') && !settings.open, esc: pressed('esc'), back: pressed('back'), tree: pressed('tree'), controls: pressed('controls') };
     this.lastCounts = { ...c };
 
     if (this.edges.esc) {
-      if (this.wardrobe.open || this.tree.open) { this.wardrobe.close(); this.tree.close(); }
+      if (this.wardrobe.open || this.tree.open || this.controls.open) { this.wardrobe.close(); this.tree.close(); this.controls.close(); }
       else settings.toggle(true);
     }
-    if (this.edges.back) { if (settings.open) settings.close(); else { this.wardrobe.close(); this.tree.close(); } }
+    if (this.edges.back) { if (settings.open) settings.close(); else { this.wardrobe.close(); this.tree.close(); this.controls.close(); } }
     if (this.edges.tree && !settings.open) this.tree.toggle();
+    if (this.edges.controls && !settings.open) this.controls.toggle(me.k);
 
     lp.dashCd -= dt; lp.atkCd -= dt; lp.comboT -= dt;
     const down = !!me.dn;
-    const mv = blocked ? { x: 0, y: 0 } : inp.moveVector();
+    const mv = this.moveBlocked() ? { x: 0, y: 0 } : inp.moveVector();
     lp.moving = !down && (mv.x !== 0 || mv.y !== 0);
     const Z = this.renderer.zoom;
     if (inp.device === 'pad') {
@@ -334,17 +347,30 @@ export class Game {
       lp.aim = Math.atan2(wy - (lp.y - 14), wx - lp.x);
       lp.aimD = Math.hypot(wy - (lp.y - 14), wx - lp.x);
     }
-    if (down) { lp.dashT = 0; return; }
+    if (down) { lp.dashT = 0; lp.drawing = false; lp.charge = 0; return; }
 
-    const warrior = this.cls !== 'sorcerer';
-    const guarding = warrior && (!!me.g || (inp.guardHeld() && !blocked && me.c2 <= 0));
+    const cls = this.cls;
+    const held = inp.attackHeld() && !blocked;
+    const guarding = cls === 'warrior' && (!!me.g || (inp.guardHeld() && !blocked && me.c2 <= 0));
+    // Bowman: hold to draw (walk slower), let go to shoot
+    if (cls === 'bowman') {
+      if (me.hk > 0) { lp.drawing = false; lp.charge = 0; }
+      else if (held && lp.atkCd <= 0) { lp.drawing = true; lp.charge = Math.min(1, lp.charge + dt / S.drawTime); }
+      else if (lp.drawing && !held) {
+        const ch = Math.max(0.05, lp.charge);
+        lp.atkCd = (BOWMAN.minRecover + (BOWMAN.maxRecover - BOWMAN.minRecover) * ch) * S.recoverMult;
+        this.startShot(this.myId, lp.aim, ch);
+        lp.drawing = false; lp.charge = 0;
+      }
+    }
+
     if (dashPressed && lp.dashCd <= 0 && !guarding) {
       const dx = lp.moving ? mv.x : Math.cos(lp.aim), dy = lp.moving ? mv.y : Math.sin(lp.aim);
       const l = Math.hypot(dx, dy) || 1;
       lp.ddx = dx / l; lp.ddy = dy / l;
       lp.dashT = WARRIOR.dashTime;
       lp.dashCd = S.dashCd;
-      this.burst(lp.x, lp.y - 8, 8, { color: byId(FLAMES, me.f).mid, speed: 80, life: 0.4, glow: true });
+      this.burst(lp.x, lp.y - 8, 8, { color: cls === 'rogue' ? '#b08cff' : byId(FLAMES, me.f).mid, speed: 80, life: 0.4, glow: true });
       audio.play('dash');
     }
     let vx, vy;
@@ -352,9 +378,12 @@ export class Game {
       lp.dashT -= dt;
       vx = lp.ddx * WARRIOR.dashSpeed;
       vy = lp.ddy * WARRIOR.dashSpeed;
-      this.particles.push({ x: lp.x + (Math.random() - 0.5) * 8, y: lp.y - 12 + (Math.random() - 0.5) * 12, vx: 0, vy: 0, life: 0.3, max: 0.3, size: 2, color: byId(FLAMES, me.f).mid, glow: true, shrink: true });
+      this.particles.push({ x: lp.x + (Math.random() - 0.5) * 8, y: lp.y - 12 + (Math.random() - 0.5) * 12, vx: 0, vy: 0, life: 0.3, max: 0.3, size: 2, color: cls === 'rogue' ? '#b08cff' : byId(FLAMES, me.f).mid, glow: true, shrink: true });
     } else {
-      const sp = S.speed * (guarding ? WARRIOR.guardSlow : 1) * (this.world.kind === 'lobby' ? 1.15 : 1);
+      let sp = S.speed * (this.world.kind === 'lobby' ? 1.15 : 1);
+      if (guarding) sp *= WARRIOR.guardSlow;
+      if (cls === 'bowman' && lp.drawing) sp *= S.drawSlow;
+      if (cls === 'rogue' && (snap.zn || []).some((z) => z.k === 'smoke' && Math.hypot(lp.x - z.x, lp.y - z.y) < z.r)) sp *= ROGUE.smokeSpeed;
       vx = mv.x * sp;
       vy = mv.y * sp;
     }
@@ -374,19 +403,24 @@ export class Game {
     if (s3) this.cnt.s3c++;
     if (ultPressed) this.cnt.uc++;
     if (this.edges.interact && this.world.kind !== 'lobby') this.cnt.ic++;
-    // show your own swing straight away (the host decides if it hit)
-    if ((atkPressed || (inp.attackHeld() && !blocked)) && lp.atkCd <= 0 && !guarding) {
+    // show your own attack straight away (the host decides if it hit)
+    if (cls !== 'bowman' && (atkPressed || held) && lp.atkCd <= 0 && !guarding) {
       lp.atkCd = S.atkCd;
-      if (warrior) {
+      if (cls === 'warrior') {
         lp.combo = lp.comboT > 0 ? (lp.combo % 3) + 1 : 1;
         lp.comboT = 1.1;
         this.startSwing(this.myId, lp.aim, lp.combo === 3);
         audio.play(lp.combo === 3 ? 'heavy' : 'swing');
+      } else if (cls === 'rogue') {
+        lp.stabN = (lp.stabN % ROGUE.spinEvery) + 1;
+        if (lp.stabN === ROGUE.spinEvery) { this.startSpin(this.myId, S.spinR); audio.play('spin'); }
+        else { this.startStab(this.myId, lp.aim); audio.play('stab'); }
       } else {
         this.startStaff(this.myId, lp.aim);
         audio.play('staff');
       }
     }
+    if (cls === 'bowman' && me.hk > 0 && (atkPressed || held) && lp.atkCd <= 0) { lp.atkCd = BOWMAN.hawkRecover; this.startShot(this.myId, lp.aim, 1); }
   }
 
   sendInput() {
@@ -424,9 +458,12 @@ export class Game {
     const mine = p.id === this.myId;
     const sw = (this.t - v.swingT) / SWING_TIME;
     const cast = (this.t - v.castT) / 0.3;
+    const spin = (this.t - (v.spinT ?? -9)) / 0.3;
     return {
       look: { cloak: byId(CLOAKS, p.c).hex, hat: p.h },
       cls: p.k,
+      charge: mine ? this.lp.charge : p.ch,
+      spin: spin >= 0 && spin < 1 ? spin : -1,
       aim: mine ? this.lp.aim : p.a,
       moving: mine ? this.lp.moving : !!p.m,
       swing: sw >= 0 && sw < 1 ? sw : -1,
@@ -478,6 +515,34 @@ export class Game {
     this.effects.push({ k: 'staff', id, aim, t0: this.t, life: 0.22 });
   }
 
+  startStab(id, aim) {
+    const v = this.viewFor(id);
+    v.swingT = this.t;
+    this.effects.push({ k: 'stab', id, aim, t0: this.t, life: 0.2 });
+  }
+
+  startSpin(id, r) {
+    const v = this.viewFor(id);
+    v.spinT = this.t;
+    this.effects.push({ k: 'spin', id, aim: 0, r, t0: this.t, life: 0.3 });
+  }
+
+  startShot(id, aim, c) {
+    const v = this.viewFor(id);
+    audio.play(c >= 0.95 ? 'bowFull' : 'bow', this.viewPos(id));
+    if (c >= 0.95) this.burst(v.x + Math.cos(aim) * 14, v.y - 14 + Math.sin(aim) * 14, 8, { color: '#fff3c0', speed: 90, life: 0.3, glow: true });
+  }
+
+  // a skill button flashes red when you can't use it (no mana, no target...)
+  deny(slot) {
+    audio.play('fizzle');
+    const map = { s1: ['sk-quake', 'sk-fire', 'sk-mark', 'sk-step'], s2: ['sk-gale', 'sk-rain', 'sk-smoke'], s3: ['sk-frost'], ult: ['sk-ult'] };
+    for (const id of map[slot] || []) {
+      const el = document.getElementById(id);
+      if (el) { el.classList.remove('denied'); void el.offsetWidth; el.classList.add('denied'); }
+    }
+  }
+
   banner(text, secs, sub = '') { this.bannerText = text; this.bannerSub = sub; this.bannerT = secs; }
 
   addShake(v) { this.shake = Math.max(this.shake, v * prefs.shake); }
@@ -506,10 +571,11 @@ export class Game {
         if (!mine) { this.startStaff(f.id, f.a); const v = this.viewFor(f.id); audio.play('staff', { x: v.x, y: v.y, vol: 0.7 }); }
         break;
       case 'hit': {
-        const col = f.el === 'frost' ? '#bfeaff' : f.el === 'fire' ? '#ffb060' : '#ffe6b0';
+        const col = f.el === 'frost' ? '#bfeaff' : f.el === 'fire' ? '#ffb060' : f.el === 'back' ? '#ff6a7a' : '#ffe6b0';
+        if (f.el === 'back') { f.big = 1; if (f.by === this.myId) audio.play('backstab', at); }
         this.burst(f.x, f.y, f.big ? 12 : 7, { color: col, speed: f.big ? 170 : 120, life: 0.35, glow: true });
         this.spark(f.x, f.y, f.el === 'frost' ? '190,235,255' : '255,240,200', f.big ? 16 : 11);
-        if (prefs.dmgNums) this.effects.push({ k: 'num', x: f.x, y: f.y - 8, dx: (f.kx || 0), text: String(f.d), t0: this.t, life: 0.85, big: !!f.big, color: f.big ? '#ffb347' : '#ffffff' });
+        if (prefs.dmgNums) this.effects.push({ k: 'num', x: f.x, y: f.y - 8, dx: (f.kx || 0), text: f.el === 'back' ? 'Backstab ' + f.d : String(f.d), t0: this.t, life: 0.85, big: !!f.big, color: f.el === 'back' ? '#ff7a8a' : f.big ? '#ffb347' : '#ffffff' });
         audio.play(f.big ? 'hitBig' : 'hit', at);
         if (f.by === this.myId) { this.hitstop = Math.max(this.hitstop, f.big ? 0.07 : 0.04); this.addShake(f.big ? 3 : 1.5); }
         break;
@@ -605,10 +671,55 @@ export class Game {
         audio.play('meteor', at);
         break;
       case 'nope':
-        if (mine) {
-          audio.play('nope');
-          toast(f.what === 'ult' ? 'Wildfire isn\'t full yet. Defeat glowing elites and bosses, or light a Heartwood shrine.' : f.what === 'mana' ? 'Not enough mana.' : 'Your flame is too weak for Cinder Quake.');
-        }
+        // no pop-up text: the button gleams red and makes a fizzle sound
+        if (mine) this.deny(f.what === 'ult' ? 'ult' : f.slot || 's1');
+        break;
+      case 'shoot':
+        if (!mine) this.startShot(f.id, f.a, f.c);
+        break;
+      case 'thunk': this.burst(f.x, f.y, 3, { color: '#b89a6a', speed: 40, life: 0.3 }); audio.play('thunk', at); break;
+      case 'mark': audio.play('mark', at); this.effects.push({ k: 'ring', x: f.x, y: f.y - 10, r: 22, t0: this.t, life: 0.4, color: 'rgba(255,210,100,1)' }); break;
+      case 'rain': audio.play('rain', at); break;
+      case 'hawk':
+        audio.play('hawk', at);
+        this.burst(f.x, f.y - 16, 24, { color: '#ffe6a0', speed: 120, life: 0.6, glow: true });
+        if (mine) this.banner('HAWK EYE', 1.2, 'Every shot is full strength and seeks enemies');
+        break;
+      case 'stab':
+        if (!mine) { this.startStab(f.id, f.a); audio.play('stab', this.viewPos(f.id)); }
+        break;
+      case 'spin':
+        if (!mine) { this.startSpin(f.id, f.r); audio.play('spin', this.viewPos(f.id)); }
+        break;
+      case 'tp':
+        this.effects.push({ k: 'blink', x: f.fx, y: f.fy - 12, x2: f.x, y2: f.y - 12, t0: this.t, life: 0.35 });
+        this.burst(f.fx, f.fy - 12, 12, { color: '#8a6cc8', speed: 70, life: 0.5 });
+        this.burst(f.x, f.y - 12, 12, { color: '#b08cff', speed: 90, life: 0.5, glow: true });
+        audio.play('step2', at);
+        if (mine) { this.lp.x = f.x; this.lp.y = f.y; this.lp.aim = f.a; this.viewFor(f.id).init = false; }
+        break;
+      case 'smoke':
+        audio.play('smoke', at);
+        this.burst(f.x, f.y - 8, 26, { color: '#b9bccb', speed: 90, life: 1, up: 10 });
+        break;
+      case 'decoyPop':
+        this.burst(f.x, f.y - 12, f.boom ? 24 : 10, { color: f.boom ? '#ff9a6a' : '#b08cff', speed: f.boom ? 160 : 80, life: 0.5, glow: true });
+        audio.play(f.boom ? 'boom' : 'pop', at);
+        break;
+      case 'cuts': {
+        audio.play('cuts', at);
+        let px = f.x, py = f.y - 12;
+        f.pts.forEach(([x, y], i) => {
+          this.effects.push({ k: 'blink', x: px, y: py, x2: x, y2: y, t0: this.t + i * 0.06, life: 0.3 });
+          this.effects.push({ k: 'slash', x, y, t0: this.t + i * 0.06, life: 0.3 });
+          px = x; py = y;
+        });
+        if (f.pts.length) this.effects.push({ k: 'blink', x: px, y: py, x2: f.x, y2: f.y - 12, t0: this.t + f.pts.length * 0.06, life: 0.3 });
+        if (mine) { this.banner('THOUSAND CUTS', 1.2); this.addShake(6); }
+        break;
+      }
+      case 'vote':
+        if (f.v === 'camp') toast(`${f.n} wants to return to camp`);
         break;
       case 'wfReady':
         if (mine) { audio.play('wfReady'); this.banner('Wildfire ready!', 1.6, `Press ${this.keyLabel('ult')} to unleash it`); }

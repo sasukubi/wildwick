@@ -10,11 +10,26 @@ import { prefs } from './prefs.js';
 import {
   grassTile, dirtTile, paintDecor, treeSprite, boulderSprite, charSprite, downSprite, swordSprite, staffSprite, whiteOf,
   wolfSprite, wolfEye, treantSprite, TREANT_EYES, propSprite, TORCH, CHAR_W,
+  bowSprite, daggerSprite, archwaySprite, ARCH_LANTERNS, lanternSprite,
 } from './sprites.js';
 
+// a stable pseudo-random number for jagged shapes
+function jag(i, seed) { const h = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453; return h - Math.floor(h); }
+
+// a ragged, organic outline around (x, y) for attack warnings
+function jaggedBlob(ctx, x, y, r, ry, seed, grow = 1, spikes = 18) {
+  ctx.beginPath();
+  for (let i = 0; i <= spikes; i++) {
+    const a = (i / spikes) * TAU;
+    const k = (0.72 + 0.4 * jag(i % spikes, seed)) * grow;
+    ctx.lineTo(x + Math.cos(a) * r * k, y + Math.sin(a) * ry * k);
+  }
+  ctx.closePath();
+}
+
 const TAU = Math.PI * 2;
-const FONT = 'Nunito, system-ui, sans-serif';
-const TITLE = 'Cinzel, Georgia, serif';
+const FONT = "'Pixelify Sans', system-ui, sans-serif";
+const TITLE = "'Pixelify Sans', system-ui, sans-serif";
 
 export function hexRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -92,6 +107,37 @@ export function drawCharacter(ctx, x, y, o, t) {
   const hand = HAND[dir];
   const sorc = o.cls === 'sorcerer';
   const weapon = () => {
+    if (o.cls === 'bowman') {
+      // the bow points where you aim; the string pulls back as you draw
+      ctx.save();
+      ctx.translate(x + hand[0] * 0.6 + Math.cos(o.aim) * 4, y + hand[1] + bob + Math.sin(o.aim) * 3);
+      ctx.rotate(o.aim);
+      const pull = (o.charge || 0) * 7;
+      ctx.drawImage(bowSprite(), -2, -13);
+      ctx.strokeStyle = 'rgba(240,235,220,0.9)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-1, -13); ctx.lineTo(-1 - pull, 0); ctx.lineTo(-1, 13); ctx.stroke();
+      if (o.charge > 0) { ctx.fillStyle = '#e8e0c8'; ctx.fillRect(-1 - pull, -0.5, 14, 1); ctx.fillStyle = '#c9d1da'; ctx.fillRect(12 - pull, -1, 3, 2); }
+      ctx.restore();
+      return;
+    }
+    if (o.cls === 'rogue') {
+      const dg = daggerSprite();
+      let ang = o.aim, reach = 4;
+      if (o.spin >= 0) ang = o.aim + o.spin * TAU;
+      else if (o.swing >= 0) reach = 4 + Math.sin(o.swing * Math.PI) * 10; // a forward thrust
+      else ang = o.aim + 0.9 * (Math.cos(o.aim) >= 0 ? 1 : -1);
+      ctx.save();
+      ctx.translate(x + hand[0] + Math.cos(ang) * (reach - 4), y + hand[1] + bob + Math.sin(ang) * (reach - 4) * 0.7);
+      ctx.rotate(ang);
+      ctx.drawImage(dg, -2, -2.5);
+      ctx.restore();
+      ctx.save();
+      ctx.translate(x - hand[0] * 0.7, y + hand[1] + bob + 1);
+      ctx.rotate(ang + Math.PI * 0.15);
+      ctx.drawImage(dg, -2, -2.5);
+      ctx.restore();
+      return;
+    }
     const sw = sorc ? staffSprite() : swordSprite(o.heavy && o.swing >= 0);
     let ang;
     if (o.guard) ang = o.aim - (Math.PI / 2) * (Math.cos(o.aim) >= 0 ? 1 : -1);
@@ -269,10 +315,21 @@ export class Renderer {
       const v = game.playerView(p);
       if (vis(v.x, v.y)) list.push({ y: v.y, d: () => drawCharacter(ctx, v.x, v.y, game.charOpts(p, v), t) });
     }
+    // Rogue decoys: a flickering see-through copy
+    for (const d of snap.dc || []) {
+      if (!vis(d.x, d.y)) continue;
+      list.push({ y: d.y, d: () => {
+        ctx.save();
+        ctx.globalAlpha = 0.45 + Math.sin(t * 20) * 0.1;
+        drawCharacter(ctx, d.x, d.y, { look: { cloak: byId(CLOAKS, d.c).hex, hat: 'hood' }, cls: 'rogue', aim: 1.5, moving: false, swing: -1, cast: -1, spin: -1 }, t);
+        ctx.restore();
+      } });
+    }
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.d();
     this.drawParticles(ctx, game.particles, false);
     this.blit(this.gfx.canopy, ox, oy, vw, vh);
+    if (world.readyZone) this.drawArch(ctx, world.readyZone, snap, t);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawLighting(game, snap, toS, W, H, t);
@@ -336,21 +393,59 @@ export class Renderer {
   }
 
   drawHazard(ctx, h, t) {
+    const seed = h.id % 97;
     if (h.k === 'root') {
       if (h.done) { ctx.drawImage(propSprite('roots'), h.x - 20, h.y - 28); return; }
-      ctx.fillStyle = warn(0.12 + h.p * 0.3);
-      ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r * 0.7, 0, 0, TAU); ctx.fill();
-      ctx.strokeStyle = warn(0.5 + h.p * 0.5);
+      // the ground splits open: a ragged dark patch with cracks spreading out
+      ctx.fillStyle = prefs.cbSafe ? `rgba(40,70,120,${0.25 + h.p * 0.35})` : `rgba(60,22,12,${0.25 + h.p * 0.4})`;
+      jaggedBlob(ctx, h.x, h.y, h.r, h.r * 0.7, seed, 0.5 + h.p * 0.5);
+      ctx.fill();
+      ctx.strokeStyle = warn(0.35 + h.p * 0.55);
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r * h.p, h.r * 0.7 * h.p, 0, 0, TAU); ctx.stroke();
+      jaggedBlob(ctx, h.x, h.y, h.r, h.r * 0.7, seed + 3, 1);
+      ctx.stroke();
+      ctx.strokeStyle = prefs.cbSafe ? `rgba(160,200,255,${0.5 + h.p * 0.5})` : `rgba(255,140,80,${0.4 + h.p * 0.6})`;
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * TAU + jag(i, seed) * 0.8, len = h.r * (0.4 + 0.6 * jag(i + 9, seed)) * h.p;
+        ctx.beginPath(); ctx.moveTo(h.x, h.y);
+        ctx.lineTo(h.x + Math.cos(a + 0.25) * len * 0.5, h.y + Math.sin(a + 0.25) * len * 0.35);
+        ctx.lineTo(h.x + Math.cos(a) * len, h.y + Math.sin(a) * len * 0.7);
+        ctx.stroke();
+      }
+      if (h.p > 0.6) { ctx.fillStyle = 'rgba(90,60,40,0.8)'; for (let i = 0; i < 4; i++) ctx.fillRect(Math.round(h.x - 10 + jag(i, Math.floor(t * 20)) * 20), Math.round(h.y - 4 - jag(i + 4, Math.floor(t * 20)) * 6), 1, 1); }
     } else if (h.k === 'cone') {
-      ctx.fillStyle = warn(0.1 + h.p * 0.3);
-      ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.arc(h.x, h.y, h.r, h.a - h.arc / 2, h.a + h.arc / 2); ctx.closePath(); ctx.fill();
+      // a ragged shadow of the sweeping branch
+      const steps = 22;
+      ctx.beginPath();
+      ctx.moveTo(h.x, h.y);
+      for (let i = 0; i <= steps; i++) {
+        const a = h.a - h.arc / 2 + (h.arc * i) / steps;
+        const rr = h.r * (0.82 + 0.22 * jag(i, seed)) * (0.6 + 0.4 * h.p);
+        ctx.lineTo(h.x + Math.cos(a) * rr, h.y + Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      const g = ctx.createRadialGradient(h.x, h.y, 10, h.x, h.y, h.r);
+      g.addColorStop(0, warn(0.05)); g.addColorStop(1, warn(0.15 + h.p * 0.35));
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = warn(0.3 + h.p * 0.5); ctx.lineWidth = 1; ctx.stroke();
+      // twig-like streaks inside
+      ctx.strokeStyle = warn(0.2 + h.p * 0.3);
+      for (let i = 0; i < 6; i++) {
+        const a = h.a - h.arc / 2 + h.arc * jag(i, seed + 5), r0 = h.r * 0.3, r1 = h.r * (0.6 + 0.3 * jag(i + 2, seed));
+        ctx.beginPath(); ctx.moveTo(h.x + Math.cos(a) * r0, h.y + Math.sin(a) * r0);
+        ctx.lineTo(h.x + Math.cos(a + 0.06) * (r0 + r1) / 2, h.y + Math.sin(a + 0.06) * (r0 + r1) / 2);
+        ctx.lineTo(h.x + Math.cos(a - 0.03) * r1, h.y + Math.sin(a - 0.03) * r1); ctx.stroke();
+      }
     }
   }
 
   drawZoneGround(ctx, z, t) {
     const fade = Math.min(1, z.t / 0.5);
+    if (z.k === 'rain') {
+      ctx.fillStyle = `rgba(30,20,10,${0.25 * fade})`;
+      jaggedBlob(ctx, z.x, z.y, z.r, z.r * 0.7, z.id % 50, 1, 20); ctx.fill();
+      return;
+    }
     if (z.k === 'pyre') { ctx.fillStyle = `rgba(40,15,5,${0.45 * fade})`; ctx.fillRect(z.x - 9, z.y - 3, 18, 6); }
     else if (z.k === 'blizzard') {
       ctx.fillStyle = `rgba(170,220,255,${0.18 * fade})`;
@@ -384,16 +479,30 @@ export class Renderer {
     }
   }
 
+  // under the archway: a soft glow on the path and some old stepping stones
   drawReadyZone(ctx, z, t) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(120,200,255,0.10)';
-    ctx.fillRect(z.x + 6, z.y + 6, z.w - 12, z.h - 12);
-    ctx.setLineDash([4, 4]);
-    ctx.lineDashOffset = -t * 10;
-    ctx.strokeStyle = 'rgba(150,220,255,0.55)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(z.x + 6.5, z.y + 6.5, z.w - 13, z.h - 13);
-    ctx.restore();
+    const cx = z.x + z.w / 2, cy = z.y + z.h * 0.6;
+    const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, z.w * 0.6);
+    g.addColorStop(0, 'rgba(255,210,140,0.14)'); g.addColorStop(1, 'rgba(255,210,140,0)');
+    ctx.fillStyle = g; ctx.fillRect(z.x - 20, z.y - 10, z.w + 40, z.h + 20);
+    for (let i = 0; i < 6; i++) {
+      const sx = Math.round(cx - 10 + jag(i, 4) * 20), sy = Math.round(z.y + 14 + i * 16);
+      ctx.fillStyle = '#5a5e58'; ctx.fillRect(sx - 4, sy, 9, 4);
+      ctx.fillStyle = '#7b8078'; ctx.fillRect(sx - 3, sy, 7, 1);
+    }
+  }
+
+  // the archway is drawn after the players, so you walk under it
+  drawArch(ctx, z, snap, t) {
+    const img = archwaySprite();
+    const ax = Math.round(z.x + z.w / 2 - img.width / 2), ay = Math.round(z.y + z.h - img.height + 18);
+    ctx.drawImage(img, ax, ay);
+    const ready = snap.ps.filter((p) => p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h).length;
+    ARCH_LANTERNS.forEach(([lx, ly], i) => {
+      const lit = i < Math.ceil((ready / Math.max(1, snap.ps.length)) * 4 - 0.001) || snap.cd > 0;
+      ctx.drawImage(lanternSprite(lit), Math.round(ax + lx - 3 + Math.sin(t * 2 + i) * 0.8), Math.round(ay + ly));
+    });
+    this.archLights = ARCH_LANTERNS.map(([lx, ly], i) => ({ x: ax + lx, y: ay + ly + 5, lit: i < Math.ceil((ready / Math.max(1, snap.ps.length)) * 4 - 0.001) || snap.cd > 0 }));
   }
 
   drawGateGround(ctx, ex, open, t) {
@@ -438,7 +547,8 @@ export class Renderer {
     }
     if (world.exit) L.push({ x: world.exit.x, y: world.exit.y - 20, r: snap.go ? 220 : 120, col: snap.go ? [160, 255, 170] : [255, 100, 80], i: 0.85 });
     world.shrines.forEach((s, i) => { if (!snap.sh[i]) L.push({ x: s.x, y: s.y - 16, r: 110, col: [255, 170, 90], i: 0.85 }); });
-    if (world.readyZone) { const z = world.readyZone; L.push({ x: z.x + z.w / 2, y: z.y + z.h / 2, r: 120, col: [120, 200, 255], i: 0.8 }); }
+    if (world.readyZone && this.archLights) for (const a of this.archLights) L.push({ x: a.x, y: a.y, r: a.lit ? 90 : 26, col: [255, 200, 120], i: a.lit ? 0.9 : 0.4 });
+    for (const p of snap.ps) if (p.hk > 0) { const v = game.playerView(p); L.push({ x: v.x, y: v.y - 16, r: 140, col: [255, 220, 140], i: 0.7 }); }
     for (const p of world.props) {
       if (p.type !== 'shrine') continue;
       const c = byId(CLASSES, p.cls);
@@ -517,6 +627,17 @@ export class Renderer {
       drawFlame(ctx, x + 5, y - 3, 0.8, FLAMES[0], t * 1.1, false, 2);
       drawFlame(ctx, x, y - 2, 1.5, FLAMES[0], t * 0.9, false, 3);
     }
+    if (this.archLights && world.readyZone) {
+      for (const a of this.archLights) if (a.lit) drawFlame(ctx, a.x, a.y + 2, 0.25, FLAMES[0], t, false, a.x, 0.8);
+      if (snap.cd > 0) {
+        // mist rolls in under the archway as the run is about to start
+        const z = world.readyZone;
+        for (let i = 0; i < 12; i++) {
+          ctx.fillStyle = `rgba(210,225,220,${0.12 + 0.05 * Math.sin(t * 2 + i)})`;
+          circle(ctx, z.x + jag(i, 3) * z.w + Math.sin(t * 0.8 + i) * 8, z.y + 20 + jag(i, 8) * z.h, 16 + jag(i, 11) * 12);
+        }
+      }
+    }
     for (const p of world.props) {
       if (p.type !== 'shrine' || !vis(p.x, p.y)) continue;
       const c = byId(CLASSES, p.cls);
@@ -571,6 +692,24 @@ export class Renderer {
           const sx = z.x + (hash2(i, z.id) - 0.5) * z.r * 2, sy = z.y - z.r * 0.6 + ((t * 40 + hash2(z.id, i) * 200) % (z.r * 1.2));
           if (Math.hypot((sx - z.x) / z.r, (sy - z.y) / (z.r * 0.7)) < 1) ctx.fillRect(Math.round(sx), Math.round(sy), 1, 1);
         }
+      } else if (z.k === 'rain') {
+        // arrows streaking down into the circle
+        ctx.strokeStyle = `rgba(240,230,200,${0.9 * fade})`; ctx.lineWidth = 1;
+        for (let i = 0; i < 10; i++) {
+          const k = (t * 3 + jag(i, z.id)) % 1;
+          const ax = z.x + (jag(i + 20, z.id) - 0.5) * z.r * 1.6, ay = z.y + (jag(i + 40, z.id) - 0.5) * z.r;
+          const top = ay - 70 * (1 - k);
+          ctx.beginPath(); ctx.moveTo(ax - 6 * (1 - k), top - 10); ctx.lineTo(ax - 6 * (1 - k) + 2, top); ctx.stroke();
+        }
+      } else if (z.k === 'smoke') {
+        // thick grey clouds (drawn over everything inside)
+        for (let i = 0; i < 14; i++) {
+          const a = (i / 14) * TAU + t * 0.25 + jag(i, z.id), rr = z.r * (0.25 + 0.6 * jag(i + 7, z.id));
+          const cx = z.x + Math.cos(a) * rr, cy = z.y - 8 + Math.sin(a) * rr * 0.6;
+          const s = 14 + 10 * jag(i + 3, z.id);
+          ctx.fillStyle = `rgba(${150 + i * 4},${150 + i * 4},${165 + i * 3},${0.55 * fade})`;
+          circle(ctx, cx, cy, s);
+        }
       }
     }
     // projectiles and falling meteors
@@ -580,6 +719,14 @@ export class Renderer {
         const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 10);
         g.addColorStop(0, 'rgba(255,245,200,1)'); g.addColorStop(0.4, 'rgba(255,150,50,0.9)'); g.addColorStop(1, 'rgba(255,80,20,0)');
         ctx.fillStyle = g; circle(ctx, s.x, s.y, 10);
+      } else if (s.k === 'arrow') {
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
+        ctx.strokeStyle = 'rgba(255,230,170,0.35)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-18, 0); ctx.lineTo(-6, 0); ctx.stroke();
+        ctx.fillStyle = '#d8c39a'; ctx.fillRect(-8, -0.5, 11, 1);
+        ctx.fillStyle = '#e9eef3'; ctx.fillRect(3, -1, 3, 2);
+        ctx.fillStyle = '#c4533a'; ctx.fillRect(-9, -1.5, 2, 1); ctx.fillRect(-9, 0.5, 2, 1);
+        ctx.restore();
       } else {
         ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
         ctx.fillStyle = '#d9f4ff'; ctx.fillRect(-5, -1, 9, 2); ctx.fillStyle = '#8fd8ff'; ctx.fillRect(-7, -1, 3, 2);
@@ -601,15 +748,45 @@ export class Renderer {
       const v = game.views.get('e' + e.id);
       if (!v || !vis(v.x, v.y, 150)) continue;
       if (e.s === 2 && e.t !== 'treant') {
+        // three ragged claw-streaks showing where it's about to pounce
         const range = e.t === 'alpha' ? 140 : WOLF.lungeRange;
         ctx.save();
-        ctx.translate(v.x, v.y - 6);
+        ctx.translate(v.x, v.y - 4);
         ctx.rotate(Math.atan2(e.dy, e.dx));
-        const g = ctx.createLinearGradient(0, 0, range + 24, 0);
-        g.addColorStop(0, warn(0.45)); g.addColorStop(1, warn(0));
+        const g = ctx.createLinearGradient(0, 0, range + 20, 0);
+        g.addColorStop(0, warn(0.55)); g.addColorStop(1, warn(0));
         ctx.fillStyle = g;
-        ctx.fillRect(0, -8, range + 24, 16);
+        for (const off of [-6, 0, 6]) {
+          ctx.beginPath();
+          ctx.moveTo(4, off);
+          const n = 8;
+          for (let i = 1; i <= n; i++) ctx.lineTo(4 + ((range + 16) * i) / n, off + (jag(i + off, e.id) - 0.5) * 4 - (off * i) / n * 0.3);
+          for (let i = n; i >= 0; i--) ctx.lineTo(4 + ((range + 16) * i) / n, off + (jag(i + off + 30, e.id) - 0.5) * 4 + 2.2 * (1 - i / n));
+          ctx.closePath();
+          ctx.fill();
+        }
         ctx.restore();
+      }
+      // Bowman's mark: a pulsing gold target the whole party can see
+      if (e.mk) {
+        const r = e.t === 'treant' ? 40 : e.t === 'alpha' ? 22 : 15, py = v.y - (e.t === 'treant' ? 50 : 10);
+        ctx.strokeStyle = `rgba(255,210,100,${0.7 + Math.sin(t * 8) * 0.25})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(v.x, py, r, 0, TAU); ctx.stroke();
+        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + t; ctx.beginPath(); ctx.moveTo(v.x + Math.cos(a) * (r - 4), py + Math.sin(a) * (r - 4)); ctx.lineTo(v.x + Math.cos(a) * (r + 4), py + Math.sin(a) * (r + 4)); ctx.stroke(); }
+      }
+      // Rogue only: a dagger over enemies you're behind (your stab will be a backstab)
+      if (me.k === 'rogue' && !me.dn && Math.hypot(v.x - game.lp.x, v.y - game.lp.y) < 90) {
+        let d = Math.atan2(game.lp.y - v.y, game.lp.x - v.x) - e.fa;
+        while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+        if (Math.abs(d) > Math.PI / 2) {
+          const top = v.y - (e.t === 'treant' ? 125 : e.t === 'alpha' ? 48 : 34) + Math.sin(t * 6) * 1.5;
+          ctx.globalCompositeOperation = 'lighter';
+          const g = ctx.createRadialGradient(v.x, top, 0, v.x, top, 10);
+          g.addColorStop(0, 'rgba(255,90,90,0.8)'); g.addColorStop(1, 'rgba(255,90,90,0)');
+          ctx.fillStyle = g; circle(ctx, v.x, top, 10);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.save(); ctx.translate(v.x, top); ctx.rotate(Math.PI / 2); ctx.drawImage(daggerSprite(), -8, -2.5); ctx.restore();
+        }
       }
       const col = e.s === 2 || e.s === 5 ? '255,220,90' : e.el ? '255,170,60' : '255,60,45';
       for (const [ex, ey] of this.eyePos(e, v)) {
@@ -655,6 +832,22 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(v.x, v.y - 14, 22, o.aim - 0.9, o.aim + 0.9); ctx.stroke();
         ctx.globalCompositeOperation = 'source-over';
       }
+      if (p.k === 'bowman') {
+        // draw-strength ring around the bowman, bright when fully drawn
+        const ch = p.id === game.myId ? game.lp.charge : p.ch;
+        if (ch > 0) {
+          const full = ch >= 0.95;
+          ctx.strokeStyle = full ? `rgba(255,240,170,${0.8 + Math.sin(t * 25) * 0.2})` : 'rgba(255,220,150,0.7)';
+          ctx.lineWidth = full ? 2 : 1.5;
+          ctx.beginPath(); ctx.arc(v.x, v.y - 14, 16, -Math.PI / 2, -Math.PI / 2 + TAU * ch); ctx.stroke();
+        }
+        if (p.hk > 0) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.strokeStyle = `rgba(255,220,140,${0.4 + Math.sin(t * 10) * 0.2})`; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(v.x, v.y - 14, 22 + Math.sin(t * 6) * 2, 0, TAU); ctx.stroke();
+          ctx.globalCompositeOperation = 'source-over';
+        }
+      }
       if (p.k === 'sorcerer') {
         const [sx, sy] = staffTip(v.x, v.y, o);
         const col = p.le === 'fire' ? '255,150,60' : p.le === 'frost' ? '150,220,255' : p.le === 'gale' ? '190,245,210' : '127,224,255';
@@ -684,13 +877,13 @@ export class Renderer {
     for (const e of game.effects) {
       const p = (t - e.t0) / e.life;
       if (p < 0 || p > 1) continue;
-      if (e.k === 'arc' || e.k === 'counter' || e.k === 'staff') {
+      if (e.k === 'arc' || e.k === 'counter' || e.k === 'staff' || e.k === 'stab' || e.k === 'spin') {
         const v = game.viewFor(e.id);
-        const span = e.k === 'counter' ? 1.4 : e.k === 'staff' ? 0.95 : e.heavy ? 1.6 : 1.25;
-        const R = e.k === 'counter' ? 54 : e.k === 'staff' ? 34 : e.heavy ? 46 : 40;
+        const span = e.k === 'spin' ? Math.PI : e.k === 'stab' ? 0.45 : e.k === 'counter' ? 1.4 : e.k === 'staff' ? 0.95 : e.heavy ? 1.6 : 1.25;
+        const R = e.k === 'spin' ? (e.r || 50) : e.k === 'stab' ? 40 : e.k === 'counter' ? 54 : e.k === 'staff' ? 34 : e.heavy ? 46 : 40;
         const a0 = e.aim - span, a1 = a0 + span * 2 * easeOut(Math.min(1, p * 1.7));
         const tail = Math.max(a0, a1 - 1.6);
-        const col = e.k === 'counter' ? [255, 150, 60] : e.k === 'staff' ? [140, 230, 255] : e.heavy ? [255, 190, 100] : [255, 245, 225];
+        const col = e.k === 'spin' || e.k === 'stab' ? [255, 150, 170] : e.k === 'counter' ? [255, 150, 60] : e.k === 'staff' ? [140, 230, 255] : e.heavy ? [255, 190, 100] : [255, 245, 225];
         ctx.globalCompositeOperation = 'lighter';
         // filled crescent: thick at the blade, thin at the tail
         const steps = 14;
@@ -730,6 +923,19 @@ export class Renderer {
       } else if (e.k === 'cloud') {
         ctx.fillStyle = `rgba(235,240,245,${0.5 * (1 - p)})`;
         for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU + e.seed; circle(ctx, e.x + Math.cos(a) * e.r * 0.6 * easeOut(p), e.y - 6 + Math.sin(a) * e.r * 0.35 * easeOut(p), 10 + 10 * p); }
+      } else if (e.k === 'blink') {
+        // Shadowstep / Thousand Cuts: a smoky purple streak between two points
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(180,140,255,${0.8 * (1 - p)})`; ctx.lineWidth = 3 * (1 - p) + 1;
+        ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x2, e.y2); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (e.k === 'slash') {
+        // a quick X-shaped cut
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(255,120,140,${1 - p})`; ctx.lineWidth = 2;
+        const s = 10 + p * 6;
+        ctx.beginPath(); ctx.moveTo(e.x - s, e.y - s); ctx.lineTo(e.x + s, e.y + s); ctx.moveTo(e.x + s, e.y - s); ctx.lineTo(e.x - s, e.y + s); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
       } else if (e.k === 'gust') {
         const v = game.viewFor(e.id);
         ctx.strokeStyle = `rgba(200,250,220,${0.8 * (1 - p)})`; ctx.lineWidth = 2;
@@ -750,7 +956,7 @@ export class Renderer {
       const c = byId(CLASSES, p.cls);
       if (Math.hypot(p.x - game.lp.x, p.y - game.lp.y) < 140) { const [x, y] = toS(p.x, p.y - 54); text(ctx, c.name, x, y, { size: 13, font: TITLE, color: c.available ? '#fff' : '#9aa3ad' }); }
     }
-    if (world.readyZone) { const z = world.readyZone; const [x, y] = toS(z.x + z.w / 2, z.y + z.h + 10); text(ctx, 'INTO THE WILDS', x, y, { size: 13, font: TITLE, color: '#bfe8ff' }); }
+    if (world.readyZone) { const z = world.readyZone; const [x, y] = toS(z.x + z.w / 2, z.y + 4); text(ctx, 'Into the Wilds', x, y, { size: 15, font: TITLE, color: '#ffe2b0' }); }
     if (world.exit && vis(world.exit.x, world.exit.y, 100)) { const [x, y] = toS(world.exit.x, world.exit.y - 64); text(ctx, snap.go ? 'Heartwood Gate (open)' : 'Heartwood Gate (sealed)', x, y, { size: 13, font: TITLE, color: snap.go ? '#d6ffc8' : '#ffb0a0' }); }
     world.shrines.forEach((s, i) => {
       if (snap.sh[i] || Math.hypot(s.x - game.lp.x, s.y - game.lp.y) > 60) return;
