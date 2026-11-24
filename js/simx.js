@@ -429,7 +429,8 @@ const X = {
   warriorTick(p, dt) {
     // Fury fades a little at a time once the fighting stops
     if (this.time - (p.lastFight || -99) > WARRIOR.fury.fadeAfter) p.mana = Math.max(0, (p.mana || 0) - WARRIOR.fury.fade * dt);
-    if (p.down) { p.storm = null; p.after = null; return; }
+    if (p.down) { p.storm = null; p.after = null; p.cryT = 0; return; }
+    if (p.cryT > this.time && !(p.cryTick > this.time)) { p.cryTick = this.time + 0.25; this.cryPull(p); }
     if (p.after && this.time >= p.after.t) {
       const a = p.after; p.after = null;
       this.emit({ k: 'slam', id: p.id, x: Math.round(a.x), y: Math.round(a.y), r: Math.round(a.r), after: 1 });
@@ -451,15 +452,21 @@ const X = {
   battleCry(p) {
     const C = WARRIOR.cry;
     p.cd.s3 = p.stats.cryCd;
+    p.cryT = this.time + C.time * (p.stats.slot ? p.stats.slot.s3 : 1);
+    const n = this.cryPull(p);
+    this.emit({ k: 'cry', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: C.r, n });
+  },
+  // pull every enemy in range onto the Warrior until the cry ends
+  cryPull(p) {
     let n = 0;
     for (const e of this.enemies) {
       if (e.dead || e.type === 'dummy' || e.type === 'duelist' || e.type === 'treant') continue;
-      if (Math.hypot(e.x - p.x, e.y - p.y) > C.r) continue;
-      e.target = p.id; e.unseen = 0; e.tauntT = this.time + C.time * (p.stats.slot ? p.stats.slot.s3 : 1);
+      if (Math.hypot(e.x - p.x, e.y - p.y) > WARRIOR.cry.r) continue;
+      if (e.target !== p.id || !(e.tauntT >= p.cryT)) n++;
+      e.target = p.id; e.unseen = 0; e.tauntT = p.cryT;
       if (e.state === 'idle' || e.state === 'ret') e.state = 'chase';
-      n++;
     }
-    this.emit({ k: 'cry', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: C.r, n });
+    return n;
   },
 
   // Aggro: if another player steps in between (much closer than the enemy's target),
@@ -635,7 +642,7 @@ const X = {
     return {
       lv: c.lv, xp: Math.floor(c.xp), nx: c.lv >= MAX_LEVEL ? 0 : xpNeed(c.lv), pts: pointsLeft(c), np: c.np, pr: c.pres, rb: c.reb,
       co: p.coins, it: p.items, bt: p.brewT > 0 ? 1 : 0, bo: p.boostT > 0 ? 1 : 0, dm: p.dimT > 0 ? 1 : 0, rt: p.rootT > 0 ? 1 : 0,
-      dr: p.duelReady ? 1 : 0, ct: p.cuts ? 1 : 0, bs: p.storm ? 1 : 0, uq: p.unqT > this.time ? 1 : 0,
+      dr: p.duelReady ? 1 : 0, ct: p.cuts ? 1 : 0, bs: p.storm ? 1 : 0, br: p.storm ? Math.round(WARRIOR.storm.r * Math.sqrt(p.stats.ultSize)) : 0, cr: p.cryT > this.time ? 1 : 0, uq: p.unqT > this.time ? 1 : 0,
     };
   },
   worldSnap() {

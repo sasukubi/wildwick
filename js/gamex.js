@@ -62,7 +62,8 @@ const X = {
       if (!p.bs) continue;
       const v = this.viewFor(p.id);
       if (this.t - (v.spinT ?? -9) > 0.26) { v.spinT = this.t; audio.play('spin', { x: v.x, y: v.y, vol: 0.55 }); }
-      if (Math.random() < dt * 30) { const a = Math.random() * Math.PI * 2; this.particles.push({ x: v.x + Math.cos(a) * 30, y: v.y - 10 + Math.sin(a) * 18, vx: -Math.sin(a) * 120, vy: Math.cos(a) * 70, life: 0.3, max: 0.3, size: 2, color: Math.random() < 0.5 ? '#ffd08a' : '#e8eef3', glow: true, shrink: true }); }
+      const R = p.br || 62;
+      if (Math.random() < dt * 40) { const a = Math.random() * Math.PI * 2, rr = R * (0.6 + Math.random() * 0.4); this.particles.push({ x: v.x + Math.cos(a) * rr, y: v.y - 4 + Math.sin(a) * rr, vx: -Math.sin(a) * 140, vy: Math.cos(a) * 140, life: 0.35, max: 0.35, size: 2, color: Math.random() < 0.6 ? '#9a1424' : '#1c0a0c', glow: Math.random() < 0.5, shrink: true }); }
     }
     this.updateFishing(dt, me);
     // photo mode: mouse wheel zooms
@@ -220,8 +221,10 @@ const X = {
         return true;
       case 'treeBuy': if (mine) audio.play('boon'); return true;
       case 'cry':
-        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 120, t0: this.t, life: 0.6, color: 'rgba(255,120,80,1)', light: 160 });
-        this.burst(f.x, f.y - 20, 18, { color: '#ffb080', speed: 140, life: 0.5, glow: true });
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 140, t0: this.t, life: 0.7, color: 'rgba(170,15,30,1)', light: 160, lcol: [200, 30, 40] });
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 80, t0: this.t + 0.1, life: 0.6, color: 'rgba(40,0,5,1)' });
+        this.burst(f.x, f.y - 20, 18, { color: '#b0162a', speed: 140, life: 0.6, glow: true });
+        this.burst(f.x, f.y - 16, 12, { color: '#1c0a0c', speed: 80, life: 0.9, up: 30 });
         audio.play('warcry', at);
         if (mine) { this.addShake(4); if (f.n) toast(`Battle Cry: ${f.n} enem${f.n === 1 ? 'y turns' : 'ies turn'} on you!`, 1800); }
         return true;
@@ -230,13 +233,14 @@ const X = {
         if (mine) { this.banner('BLADESTORM', 1.2); this.addShake(5); }
         return true;
       case 'unquench':
-        this.burst(f.x, f.y - 16, 24, { color: '#ff6a3a', speed: 120, life: 0.7, glow: true, up: 40 });
+        this.burst(f.x, f.y - 16, 24, { color: '#b0162a', speed: 120, life: 0.7, glow: true, up: 40 });
         audio.play('wfReady', at);
         if (mine) this.banner('Unquenchable!', 1.5, 'Your flame cannot go out for 2 seconds');
         return true;
       case 'furyUse': {
         const v = this.viewFor(f.id);
-        this.burst(v.x, v.y - 14, Math.min(20, 4 + f.v / 4), { color: '#ff5a3a', speed: 90, life: 0.45, glow: true });
+        this.burst(v.x, v.y - 14, Math.min(20, 4 + f.v / 4), { color: '#b0162a', speed: 90, life: 0.45, glow: true });
+        this.burst(v.x, v.y - 14, 5, { color: '#1c0a0c', speed: 50, life: 0.7, up: 20 });
         return true;
       }
       case 'reclaim': if (mine) { audio.play('ember'); toast('Point reclaimed. Spend it somewhere new!'); } return true;

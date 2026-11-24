@@ -1211,7 +1211,8 @@ export class Renderer {
         const R = e.k === 'spin' ? (e.r || 50) : e.k === 'stab' ? 40 : e.k === 'counter' ? 54 : e.k === 'staff' ? 34 : e.heavy ? 46 : 40;
         const a0 = e.aim - span, a1 = a0 + span * 2 * easeOut(Math.min(1, p * 1.7));
         const tail = Math.max(a0, a1 - 1.6);
-        const col = e.k === 'spin' || e.k === 'stab' ? [255, 150, 170] : e.k === 'counter' ? [255, 150, 60] : e.k === 'staff' ? [140, 230, 255] : e.heavy ? [255, 190, 100] : [255, 245, 225];
+        const war = (e.k === 'arc' || e.k === 'counter') && (snap.ps.find((q) => q.id === e.id) || {}).k === 'warrior';
+        const col = war ? (e.k === 'counter' || e.heavy ? [210, 25, 40] : [200, 60, 70]) : e.k === 'spin' || e.k === 'stab' ? [255, 150, 170] : e.k === 'counter' ? [255, 150, 60] : e.k === 'staff' ? [140, 230, 255] : e.heavy ? [255, 190, 100] : [255, 245, 225];
         ctx.globalCompositeOperation = 'lighter';
         // filled crescent: thick at the blade, thin at the tail
         const steps = 14;

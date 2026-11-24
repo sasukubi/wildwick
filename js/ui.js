@@ -5,7 +5,7 @@
 import { CLOAKS, HATS, FLAMES, BOONS, TREES, CLASSES, CAP_REQUIREMENT, byId, canBuy, branchSpent } from './data.js';
 import { drawPreview } from './render.js';
 import { audio } from './audio.js';
-import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName, getRoomPref } from './prefs.js';
+import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName, getRoomPref, ABILITY_KEYS, keysFor, activeKeys } from './prefs.js';
 import { KITS, iconCanvas } from './hud.js';
 import { skillIconName, PINGS, EMOJIS, pingSprite, emojiSprite } from './sprites.js';
 import { MAX_LEVEL, SLOTS, REBIRTHS, REBIRTH_EVERY, PRESTIGE, SHOP, MODES, todayKey } from './progress.js';
@@ -86,16 +86,15 @@ export const settings = {
     const c = $('#page-controls');
     c.innerHTML = '';
     c.append(toggle('Tap to block instead of hold (Warrior)', prefs.guardToggle, (x) => { prefs.guardToggle = x; }));
-    const list = document.createElement('div');
-    list.className = 'binds';
-    for (const a of KEY_ACTIONS) {
+    // one rebindable key: read() gives the current key, write(code) saves a new one
+    const bindRow = (labelText, read, write, clearable) => {
       const row = document.createElement('div');
       row.className = 'bind';
       const label = document.createElement('span');
-      label.textContent = a.name;
+      label.textContent = labelText;
       const b = document.createElement('button');
       b.className = 'gbtn small';
-      b.textContent = keyName(prefs.keys[a.id]);
+      b.textContent = keyName(read());
       b.onclick = () => {
         b.textContent = 'Press a key…';
         window.__rebinding = true;
@@ -104,20 +103,52 @@ export const settings = {
           removeEventListener('keydown', onKey, true);
           setTimeout(() => { window.__rebinding = false; }, 0);
           if (e.code !== 'Escape') {
-            if (e.code === 'Backspace' || e.code === 'Delete') prefs.keys[a.id] = a.id === 'strike' || a.id === 'skill2' ? '' : prefs.keys[a.id];
-            else prefs.keys[a.id] = e.code;
+            if (e.code === 'Backspace' || e.code === 'Delete') { if (clearable) write(''); }
+            else write(e.code);
             savePrefs();
           }
-          b.textContent = keyName(prefs.keys[a.id]);
+          b.textContent = keyName(read());
         };
         addEventListener('keydown', onKey, true);
       };
       row.append(label, b);
-      list.appendChild(row);
+      return row;
+    };
+    // general controls (the same for every class)
+    const genHead = document.createElement('h3'); genHead.textContent = 'General controls';
+    const gen = document.createElement('div');
+    gen.className = 'binds';
+    for (const a of KEY_ACTIONS) {
+      if (ABILITY_KEYS.includes(a.id)) continue;
+      gen.appendChild(bindRow(a.name, () => prefs.keys[a.id], (code) => { prefs.keys[a.id] = code; }, false));
     }
-    const kbHead = document.createElement('h3'); kbHead.textContent = 'Keyboard & mouse';
-    c.append(kbHead, list);
-    c.append(button('Reset keys to default', () => { prefs.keys = { ...DEFAULT_KEYS }; savePrefs(); this.fill(); }));
+    c.append(genHead, gen);
+    // abilities: pick a class from the dropdown, then change that class's keys
+    const abHead = document.createElement('h3'); abHead.textContent = 'Ability keys';
+    const pick = document.createElement('select');
+    pick.className = 'clspick';
+    for (const cl of CLASSES.filter((x) => x.available)) { const o = document.createElement('option'); o.value = cl.id; o.textContent = cl.name; pick.appendChild(o); }
+    this.keyCls = this.keyCls || (pause.game && pause.game.cls) || 'warrior';
+    pick.value = this.keyCls;
+    const ab = document.createElement('div');
+    ab.className = 'binds';
+    const fillAbilities = () => {
+      const cls = pick.value;
+      this.keyCls = cls;
+      ab.innerHTML = '';
+      const kit = KITS[cls] || KITS.warrior;
+      for (const id of ABILITY_KEYS) {
+        const k = kit.find((x) => x.key === id);
+        if (!k) continue; // e.g. no Q skill
+        const name = k.name.replace(/\s*\(.*\)$/, '');
+        const extra = id === 'strike' ? ' (also left click)' : id === 'skill2' ? ' (also right click)' : '';
+        ab.appendChild(bindRow(name + extra, () => keysFor(cls)[id], (code) => { prefs.classKeys[cls] = { ...(prefs.classKeys[cls] || {}), [id]: code }; }, id === 'strike' || id === 'skill2'));
+      }
+    };
+    pick.onchange = fillAbilities;
+    fillAbilities();
+    c.append(abHead, row('Class', pick), ab);
+    c.append(button('Reset keys to default', () => { prefs.keys = { ...DEFAULT_KEYS }; prefs.classKeys = {}; savePrefs(); this.fill(); }));
     // controller buttons get their own section
     const padHead = document.createElement('h3'); padHead.textContent = 'Controller';
     const pad = document.createElement('div');
@@ -451,7 +482,7 @@ export class BoonPanel {
 // ---------------------------------------------------------- controls screen (H) and class tips
 // Only your class's skills are listed, with the same icons as your skill buttons.
 const SKILL_TEXT = {
-  warrior: { atk: 'Strike: sword combo. Every 3rd swing is heavy (and slower to recover). Never uses Fury.', guard: 'Iron Guard: hold to block hits from the front (blocking builds Fury), let go for Retaliation.', quake: 'Shockwave: slam the ground around you to stun enemies.', cry: 'Battle Cry: every enemy nearby turns on you for a few seconds.', dash: 'Bash: dash and shove enemies you hit, breaking their attack. The start of it dodges attacks.', ult: 'Bladestorm: spin like a whirlwind for 4 seconds, cutting everything around you (needs full Wildfire).' },
+  warrior: { atk: 'Strike: sword combo. Every 3rd swing is heavy (and slower to recover). Never uses Fury.', guard: 'Iron Guard: hold to block hits from the front (blocking builds Fury), let go for Retaliation.', quake: 'Shockwave: slam the ground around you to stun enemies.', cry: 'Battle Cry: for 5 seconds, every enemy near you (even ones that arrive later) turns on you.', dash: 'Bash: dash and shove enemies you hit, breaking their attack. The start of it dodges attacks.', ult: 'Bladestorm: spin a giant sword for 4 seconds, cutting everything around you, moving twice as fast (no Bash while spinning). Needs full Wildfire.' },
   sorcerer: { atk: 'Shove: a weak staff swing that pushes enemies away.', gale: 'Gale: a blast of wind that knocks enemies back.', fire: 'Fireball: an exploding fireball.', frost: 'Frostbite: slowing ice shards.', dash: 'Gust: dash and leave a faint trail that speeds up allies who walk through it.', ult: 'Starfall: meteors hunt the monsters where you aim (needs full Wildfire).' },
   bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Barrage where you aim.', dash: 'Roll. Flicks a small arrow at the nearest enemy.', ult: 'Deadeye: every shot is full strength and seeks enemies (needs full Wildfire).' },
   rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Shadow Clone: dash and leave a clone behind that nearby enemies turn on for a moment.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
@@ -475,9 +506,11 @@ function fillGuide(box, game, cls) {
   box.querySelector('.guide-trick').textContent = CLASS_TRICK[cls] || '';
   const list = box.querySelector('.guide-moves');
   list.innerHTML = '';
-  const kb = (key) => (key === 'strike' ? (prefs.keys.strike ? `LMB / ${keyName(prefs.keys.strike)}` : 'LMB') : key === 'skill2' ? (prefs.keys.skill2 ? `RMB / ${keyName(prefs.keys.skill2)}` : 'RMB') : keyName(prefs.keys[key]));
-  const rows = [...kit.map((k) => ({ icon: skillIconName(cls, k.id), key: k.key, text: text[k.id] || k.name })),
-    { icon: 'interact', key: 'interact', text: 'Interact' }, { icon: 'tree', key: 'tree', text: 'Skill tree' }, { icon: 'help', key: 'controls', text: 'Show / hide this screen' }];
+  const K = keysFor(cls);
+  const kb = (key) => (key === 'strike' ? (K.strike ? `LMB / ${keyName(K.strike)}` : 'LMB') : key === 'skill2' ? (K.skill2 ? `RMB / ${keyName(K.skill2)}` : 'RMB') : keyName(K[key]));
+  const skillName = (k) => k.name.replace(/\s*\(.*\)$/, '');
+  const rows = [...kit.map((k) => ({ icon: skillIconName(cls, k.id), key: k.key, name: skillName(k), text: (text[k.id] || '').replace(new RegExp('^' + skillName(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.?:?\\s*', 'i'), '') })),
+    { icon: 'interact', key: 'interact', name: 'Interact', text: '' }, { icon: 'tree', key: 'tree', name: 'Skill tree', text: '' }, { icon: 'help', key: 'controls', name: 'Controls', text: 'show / hide this screen' }];
   for (const r of rows) {
     const row = document.createElement('div');
     row.className = 'move';
@@ -485,7 +518,10 @@ function fillGuide(box, game, cls) {
     row.querySelector('.mico').appendChild(iconCanvas(r.icon, 24));
     row.querySelector('.k1').textContent = kb(r.key);
     row.querySelector('.k2').textContent = PAD[r.key] || '—';
-    row.querySelector('.mtext').textContent = r.text;
+    const mt = row.querySelector('.mtext');
+    mt.innerHTML = '<b></b> <span></span>';
+    mt.querySelector('b').textContent = r.name;
+    mt.querySelector('span').textContent = r.text;
     list.appendChild(row);
   }
 }

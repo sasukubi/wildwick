@@ -417,3 +417,4 @@ body.in-game #chat { display: block; }
 body.photo #hud, body.photo #help, body.photo #chat, body.photo #toasts { display: none !important; }
 #tree { max-height: calc(100vh - 24px); overflow: auto; }
 #bars .mana.fury #mana-fill { background: linear-gradient(90deg, #6a1010, #e0402a, #ffb070); }
+.clspick { font: inherit; padding: 5px 10px; border-radius: 10px; background: rgba(0,0,0,0.35); color: var(--text); border: 1px solid rgba(255,255,255,0.25); text-transform: lowercase; }

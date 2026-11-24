@@ -7,7 +7,7 @@
 
 // The game's version. Friends can only play together on the same version.
 // (Raise this with every update.)
-export const VERSION = '1.3.0';
+export const VERSION = '1.4.0';
 import { PRESTIGE } from './progress.js';
 
 export const TILE = 32;
@@ -73,8 +73,9 @@ export const WARRIOR = {
   bashDmg: 8,                         // Bash hurts a little too
   // Bladestorm (Wildfire ultimate): spin like a whirlwind, hitting everything around you
   storm: { time: 4, every: 0.25, r: 62, dmg: 14, kb: 140 },
+  stormSpeed: 2,      // during Bladestorm you move twice as fast (but can't Bash)
   waveDmg: 16, waveSpeed: 300, waveRange: 220,  // Sword Master's slicing wave
-  cry: { cd: 14, r: 300, time: 4 },              // Battle Cry (Q): every enemy nearby turns on you for 4 seconds
+  cry: { cd: 14, r: 300, time: 5 },              // Battle Cry (Q): for 5 seconds, every enemy near you turns on you
   pyreDmg: 80, pyreRange: 125, pyreArc: 3.8, pyreTrail: 4, pyreTrailDps: 30, // (old Pyre Cleave, kept for its effect)
   furyMax: 0,        // (old Dark Fury: replaced by Bloodlust)
   lowGuard: 0.3,     // up to 30% less damage taken at almost no flame

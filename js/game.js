@@ -12,7 +12,7 @@ import { Renderer } from './render.js';
 import { toast, Wardrobe, TreePanel, BoonPanel, ControlsPanel, settings, pause, showClassTips, campPanel, signPanel, boardPanel, wheel } from './ui.js';
 import { buildHud, updateHud } from './hud.js';
 import { audio } from './audio.js';
-import { prefs, keyName } from './prefs.js';
+import { prefs, keyName, activeKeys, setKeyClass } from './prefs.js';
 import { installGameExtras } from './gamex.js';
 import { shopPanel, lboardPanel, modePanel, chat, devConsole } from './ui.js';
 
@@ -75,6 +75,7 @@ export class Game {
     this.statsKey = '';
     this.stats = classStats(character.cls || 'warrior');
     this.cls = character.cls || 'warrior';
+    setKeyClass(this.cls);
     settings.onLeave = () => this.leave();
     settings.roomCode = room ? room.code : null;
     pause.game = this;
@@ -340,9 +341,10 @@ export class Game {
 
   keyLabel(action) {
     if (this.input.device === 'pad') return PAD_LABEL[action] || '?';
-    if (action === 'strike') return prefs.keys.strike ? `LMB/${keyName(prefs.keys.strike)}` : 'LMB';
-    if (action === 'skill2') return prefs.keys.skill2 ? `RMB/${keyName(prefs.keys.skill2)}` : 'RMB';
-    return keyName(prefs.keys[action]);
+    const k = activeKeys();
+    if (action === 'strike') return k.strike ? `LMB/${keyName(k.strike)}` : 'LMB';
+    if (action === 'skill2') return k.skill2 ? `RMB/${keyName(k.skill2)}` : 'RMB';
+    return keyName(k[action]);
   }
 
   leave(msg) {
@@ -405,6 +407,7 @@ export class Game {
       this.statsKey = sk;
       this.stats = classStats(me.k, me.tr, me.bn, { pres: me.pr, reb: me.rb });
       if (me.k !== this.cls) { this.cls = me.k; buildHud(this.cls); }
+      setKeyClass(me.k);
     }
     audio.setScene(snap.st === 'rest' ? 'rest' : snap.sc === 'lobby' ? (this.firesideMusic(snap) ? 'fireside' : 'lobby') : snap.sc === 'arena' ? 'boss' : 'forest');
     audio.listener = { x: this.lp.x, y: this.lp.y };
@@ -503,14 +506,14 @@ export class Game {
       }
     }
 
-    if (dashPressed && lp.dashCd <= 0 && !guarding && !me.rt && !me.ct) {
+    if (dashPressed && lp.dashCd <= 0 && !guarding && !me.rt && !me.ct && !(cls === 'warrior' && me.bs)) { // no Bash mid Bladestorm
       const dx = lp.moving ? mv.x : Math.cos(lp.aim), dy = lp.moving ? mv.y : Math.sin(lp.aim);
       const l = Math.hypot(dx, dy) || 1;
       lp.ddx = dx / l; lp.ddy = dy / l;
       lp.dashMax = cls === 'warlock' ? WARLOCK.slipTime : WARRIOR.dashTime;
       lp.dashT = lp.dashMax;
       lp.dashCd = S.dashCd;
-      const dcol = cls === 'rogue' || cls === 'warlock' ? '#b08cff' : cls === 'cleric' ? '#ffe9a8' : byId(FLAMES, me.f).mid;
+      const dcol = cls === 'rogue' || cls === 'warlock' ? '#b08cff' : cls === 'cleric' ? '#ffe9a8' : cls === 'warrior' ? '#9a1424' : byId(FLAMES, me.f).mid;
       this.burst(lp.x, lp.y - 8, cls === 'warlock' ? 16 : 8, { color: dcol, speed: 80, life: 0.4, glow: true });
       audio.play(cls === 'warlock' ? 'slip' : cls === 'cleric' ? 'blessStep' : 'dash');
     }
@@ -521,10 +524,10 @@ export class Game {
       vx = lp.ddx * dsp;
       lp.vx = lp.ddx * S.speed; lp.vy = lp.ddy * S.speed; // carry some speed out of the dash
       vy = lp.ddy * dsp;
-      const pcol = cls === 'rogue' ? '#b08cff' : cls === 'warlock' ? (Math.random() < 0.5 ? '#3a2458' : '#9b6bff') : cls === 'cleric' ? '#fff1b8' : byId(FLAMES, me.f).mid;
+      const pcol = cls === 'rogue' ? '#b08cff' : cls === 'warlock' ? (Math.random() < 0.5 ? '#3a2458' : '#9b6bff') : cls === 'cleric' ? '#fff1b8' : cls === 'warrior' ? (Math.random() < 0.5 ? '#9a1424' : '#2a0a0e') : byId(FLAMES, me.f).mid;
       this.particles.push({ x: lp.x + (Math.random() - 0.5) * 8, y: lp.y - 12 + (Math.random() - 0.5) * 12, vx: 0, vy: 0, life: cls === 'cleric' ? 0.8 : 0.3, max: cls === 'cleric' ? 0.8 : 0.3, size: 2, color: pcol, glow: cls !== 'warlock', shrink: true });
     } else {
-      let sp = S.speed * (this.world.kind === 'lobby' ? 1.15 : 1) * (me.bt ? 1.2 : 1) * (me.bo ? 1.25 : 1);
+      let sp = S.speed * (this.world.kind === 'lobby' ? 1.15 : 1) * (me.bt ? 1.2 : 1) * (me.bo ? 1.25 : 1) * (cls === 'warrior' && me.bs ? WARRIOR.stormSpeed : 1); // Bladestorm: double speed
       if (guarding) sp *= WARRIOR.guardSlow;
       if (cls === 'bowman' && lp.drawing) sp *= S.drawSlow;
       if (cls === 'rogue' && (snap.zn || []).some((z) => z.k === 'smoke' && Math.hypot(lp.x - z.x, lp.y - z.y) < z.r)) sp *= ROGUE.smokeSpeed;
@@ -802,11 +805,13 @@ export class Game {
         if (mine) audio.play('dodge');
         break;
       case 'slam':
-        this.effects.push({ k: 'ring', x: f.x, y: f.y, t0: this.t, life: 0.45, r: f.r || WARRIOR.quakeRadius, light: 160 });
-        this.effects.push({ k: 'ring', x: f.x, y: f.y, t0: this.t + 0.06, life: 0.4, r: (f.r || 108) * 0.6, color: 'rgba(255,230,180,1)' });
+        // Shockwave: a crimson blast with dark smoke
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, t0: this.t, life: 0.45, r: f.r || WARRIOR.quakeRadius, light: 160, lcol: [200, 30, 40], color: 'rgba(190,20,35,1)' });
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, t0: this.t + 0.06, life: 0.4, r: (f.r || 108) * 0.6, color: 'rgba(60,5,10,1)' });
         this.effects.push({ k: 'crack', x: f.x, y: f.y, r: f.r || 108, seed: Math.random() * 3, t0: this.t, life: 1.2 });
-        this.burst(f.x, f.y - 4, 26, { color: '#ffb060', speed: 230, life: 0.6, glow: true });
-        this.burst(f.x, f.y, 18, { color: '#6b4f33', speed: 140, life: 0.6, up: 60, grav: 300 });
+        this.burst(f.x, f.y - 4, f.after ? 14 : 26, { color: '#b0162a', speed: 230, life: 0.6, glow: true });
+        this.burst(f.x, f.y - 6, f.after ? 10 : 20, { color: '#1c0a0c', speed: 110, life: 0.9, up: 50 });
+        this.burst(f.x, f.y, 10, { color: '#ff6a4a', speed: 160, life: 0.4, glow: true });
         if (near(f.x, f.y)) this.addShake(7);
         audio.play('quake', at);
         break;
@@ -821,7 +826,8 @@ export class Game {
       case 'counter': {
         this.effects.push({ k: 'counter', id: f.id, aim: f.a, t0: this.t, life: 0.28 });
         const v = this.viewFor(f.id);
-        this.effects.push({ k: 'ring', x: v.x, y: v.y - 10, r: 50, t0: this.t, life: 0.25, color: 'rgba(255,170,80,1)', light: 120 });
+        this.effects.push({ k: 'ring', x: v.x, y: v.y - 10, r: 50, t0: this.t, life: 0.25, color: 'rgba(190,20,35,1)', light: 120, lcol: [200, 30, 40] });
+        this.burst(v.x, v.y - 12, 12, { color: '#1c0a0c', speed: 90, life: 0.6, up: 30 });
         audio.play('counter', this.viewPos(f.id));
         if (mine) this.addShake(3);
         break;
@@ -1080,8 +1086,9 @@ export class Game {
         break;
       case 'plague': this.effects.push({ k: 'beam', x: f.x, y: f.y - 10, x2: f.x2, y2: f.y2 - 10, t0: this.t, life: 0.4, col: [176, 140, 255] }); break;
       case 'shove':
-        this.burst(f.x, f.y - 6, 10, { color: '#c9b08a', speed: 120, life: 0.4 });
-        this.spark(f.x, f.y - 12, '255,230,190', 12);
+        this.burst(f.x, f.y - 6, 10, { color: '#9a1424', speed: 120, life: 0.4, glow: true });
+        this.burst(f.x, f.y - 6, 6, { color: '#1c0a0c', speed: 70, life: 0.6 });
+        this.spark(f.x, f.y - 12, '220,60,60', 12);
         audio.play('shove', at);
         if (mine) this.addShake(2);
         break;
@@ -1199,11 +1206,11 @@ export class Game {
   updateInteract(me) {
     this.prompt = null;
     if (this.world.kind !== 'lobby') return;
-    const STATIONS = ['wardrobe', 'shrine', 'campfire', 'signpost', 'board', 'resetpost', 'fountain', 'skilltree', 'shop', 'lboard', 'pathstone', 'pond', 'duelring'];
+    const STATIONS = ['wardrobe', 'tent', 'shrine', 'campfire', 'signpost', 'board', 'resetpost', 'fountain', 'skilltree', 'shop', 'lboard', 'pathstone', 'pond', 'duelring'];
     let best = null, bd = 58;
     for (const p of this.world.props) {
       if (!STATIONS.includes(p.type)) continue;
-      const reach = p.type === 'skilltree' ? 30 : p.type === 'pond' ? 40 : p.type === 'duelring' ? p.r - 58 : p.type === 'shop' ? 14 : 0; // bigger things can be used from further away
+      const reach = p.type === 'skilltree' ? 30 : p.type === 'pond' ? 40 : p.type === 'duelring' ? p.r - 58 : p.type === 'shop' ? 14 : p.type === 'tent' ? 22 : 0; // bigger things can be used from further away
       const d = Math.hypot(p.x - this.lp.x, p.y - this.lp.y) - reach;
       if (d < bd) { bd = d; best = p; }
     }
@@ -1213,6 +1220,7 @@ export class Game {
     if (this.stationPrompt(best, me, key, go)) return;
     switch (best.type) {
       case 'wardrobe':
+      case 'tent':
         this.prompt = { x: best.x, y: best.y - 56, text: `[${key}] Tent`, sub: 'Change your cloak, hat and flame' };
         if (go) this.wardrobe.toggle();
         break;

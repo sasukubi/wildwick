@@ -295,8 +295,7 @@ export function makeLobby() {
   });
   world.props.push({ type: 'sign', x: 29.5 * T, y: 16.6 * T, text: 'Class Hall', solidR: 7 });
   // wardrobe tent
-  world.props.push({ type: 'tent', x: 12 * T, y: 28.4 * T, solidR: 0 });
-  world.props.push({ type: 'wardrobe', x: 12 * T, y: 29.3 * T, solidR: 15 });
+  world.props.push({ type: 'tent', x: 12 * T, y: 28.4 * T, solidR: 22 }); // the tent is the wardrobe
   // the stats board
   world.props.push({ type: 'board', x: (cx - 2.2) * T, y: 28.6 * T, solidR: 12 });
   // the Skilltree: a great old tree where you spend skill points and prestige

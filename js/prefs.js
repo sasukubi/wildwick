@@ -45,6 +45,7 @@ const DEFAULTS = {
   cbSafe: false,        // colour-blind friendly warnings
   guardToggle: false,   // tap to raise / lower block instead of holding
   keys: { ...DEFAULT_KEYS },
+  classKeys: {},        // each class can have its own ability keys: { warrior: { skill1: 'KeyE', ... } }
 };
 
 function load() {
@@ -57,6 +58,14 @@ function load() {
 }
 
 export const prefs = load();
+if (!prefs.classKeys || typeof prefs.classKeys !== 'object') prefs.classKeys = {};
+
+// keys for abilities can be different for each class
+export const ABILITY_KEYS = ['strike', 'skill2', 'skill1', 'skill3', 'dash', 'ult'];
+let keyClass = 'warrior';
+export function setKeyClass(cls) { keyClass = cls; }
+export function keysFor(cls) { return { ...prefs.keys, ...(prefs.classKeys[cls] || {}) }; }
+export function activeKeys() { return keysFor(keyClass); }
 
 export function savePrefs() {
   try { localStorage.setItem('wildwick.prefs', JSON.stringify(prefs)); } catch { /* ignore */ }

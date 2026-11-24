@@ -3,7 +3,7 @@
 //  and gamepads (Xbox/PlayStation layout).
 //  Button presses are counted so a quick tap is never missed.
 // =============================================================
-import { prefs } from './prefs.js';
+import { prefs, activeKeys } from './prefs.js';
 
 const DEAD = 0.25;
 
@@ -26,7 +26,7 @@ export class Input {
     this.onKeyDown = (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
       if (window.__rebinding) return;
-      const k = prefs.keys, c = e.code;
+      const k = activeKeys(), c = e.code;
       if (!e.repeat) {
         if (c === k.dash) this.counts.dash++;
         if (c === k.controls) this.counts.controls++;
@@ -122,11 +122,12 @@ export class Input {
     return { x, y };
   }
 
-  attackHeld() { return this.mouse.left || this.padAtk || (prefs.keys.strike && this.keys.has(prefs.keys.strike)); }
+  attackHeld() { const k = activeKeys(); return this.mouse.left || this.padAtk || (k.strike && this.keys.has(k.strike)); }
   // Smoulder Guard: hold (or toggle, if chosen in settings)
   guardHeld() {
     if (prefs.guardToggle) return this.toggleGuard;
-    return this.mouse.right || this.padS2 || (prefs.keys.skill2 && this.keys.has(prefs.keys.skill2));
+    const k = activeKeys();
+    return this.mouse.right || this.padS2 || (k.skill2 && this.keys.has(k.skill2));
   }
 
   destroy() {

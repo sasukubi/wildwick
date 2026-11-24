@@ -326,19 +326,46 @@ export function drawWorldExtras(ctx, game, snap, me, t) {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(F.bx) - 1, Math.round(F.by + dip), 3, 1);
     }
   }
-  // Bladestorm: a whirl of steel and embers around the Warrior
+  // Bladestorm: the Warrior's sword grows huge and sweeps round. Its tip traces exactly how far the storm hits.
   for (const p of snap.ps) {
     if (!p.bs) continue;
     const v = game.playerView(p);
+    const R = p.br || 62, cx = v.x, cy = v.y - 4, a = t * 12;
+    ctx.save();
+    // faint edge of the danger circle
+    ctx.strokeStyle = 'rgba(150,15,30,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+    // crimson trail with a smoky dark edge
+    for (let i = 14; i >= 1; i--) {
+      const b = a - i * 0.11, k = 1 - i / 15;
+      ctx.strokeStyle = `rgba(25,4,8,${0.25 * k})`; ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(b) * (R - 6), cy + Math.sin(b) * (R - 6)); ctx.lineTo(cx + Math.cos(b) * R, cy + Math.sin(b) * R); ctx.stroke();
+      ctx.strokeStyle = `rgba(170,18,32,${0.5 * k})`; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(b) * 14, cy + Math.sin(b) * 14); ctx.lineTo(cx + Math.cos(b) * (R - 3), cy + Math.sin(b) * (R - 3)); ctx.stroke();
+    }
+    // the giant blade
+    ctx.translate(cx, cy); ctx.rotate(a);
+    ctx.fillStyle = '#1a0a0c';
+    ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(R - 10, -4); ctx.lineTo(R, 0); ctx.lineTo(R - 10, 4); ctx.lineTo(12, 5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c9d1da';
+    ctx.beginPath(); ctx.moveTo(13, -3.5); ctx.lineTo(R - 11, -3); ctx.lineTo(R - 2, 0); ctx.lineTo(R - 11, 3); ctx.lineTo(13, 3.5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#eef3f8'; ctx.fillRect(13, -3, R - 26, 1.5);
+    ctx.fillStyle = '#8a1020'; ctx.fillRect(16, -0.5, R - 34, 1);     // a dark-red fuller down the blade
+    ctx.fillStyle = '#1a0a0c'; ctx.fillRect(8, -8, 4, 16);             // crossguard
+    ctx.fillStyle = '#6a0f18'; ctx.fillRect(9, -7, 2, 14);
+    ctx.fillStyle = '#3a1a10'; ctx.fillRect(0, -2, 9, 4);              // grip
+    ctx.restore();
+  }
+  // Battle Cry: a subtle red pulse around the Warrior while it lasts
+  for (const p of snap.ps) {
+    if (!p.cr) continue;
+    const v = game.playerView(p);
+    const k = 0.5 + 0.5 * Math.sin(t * 6);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 3; i++) {
-      const a = t * 14 + (i * Math.PI * 2) / 3;
-      ctx.strokeStyle = `rgba(255,${200 - i * 30},${140 - i * 30},0.55)`; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.ellipse(v.x, v.y - 10, 34, 20, 0, a, a + 1.4); ctx.stroke();
-      ctx.strokeStyle = 'rgba(245,250,255,0.8)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.ellipse(v.x, v.y - 10, 30, 17, 0, a + 0.2, a + 1.2); ctx.stroke();
-    }
+    const g = ctx.createRadialGradient(v.x, v.y - 14, 2, v.x, v.y - 14, 26 + k * 4);
+    g.addColorStop(0, `rgba(200,20,35,${0.18 + 0.12 * k})`); g.addColorStop(1, 'rgba(120,0,10,0)');
+    ctx.fillStyle = g; ctx.fillRect(v.x - 32, v.y - 46, 64, 64);
     ctx.restore();
   }
   // Shadowstep: a brief, faint purple ring under who you'd jump behind
