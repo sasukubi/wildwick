@@ -294,7 +294,7 @@ export class TreePanel {
     const key = JSON.stringify([me.k, tree, me.pts]);
     if (key === this.lastKey) return;
     this.lastKey = key;
-    $('#tree-title').textContent = me.k === 'sorcerer' ? 'Sorcerer skills' : 'Warrior skills';
+    $('#tree-title').textContent = `${byId(CLASSES, me.k).name} skills`;
     $('#tree-pts').textContent = me.pts === 1 ? '1 point to spend' : `${me.pts} points to spend`;
     const cols = $('#tree-cols');
     cols.innerHTML = '';
@@ -377,12 +377,16 @@ const SKILL_TEXT = {
   sorcerer: { atk: 'Staff swing: weak, but pushes enemies away.', gale: 'Gale: a blast of wind that knocks enemies back.', fire: 'Fire: an exploding fireball.', frost: 'Frost: slowing ice shards.', dash: 'Dash.', ult: 'Starfall: meteors hunt the monsters where you aim (needs full Wildfire).' },
   bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Rain of Arrows where you aim.', dash: 'Dash.', ult: 'Hawk Eye: every shot is full strength and seeks enemies (needs full Wildfire).' },
   rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Dash. Leaves a decoy that enemies chase.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
+  cleric: { atk: 'Mace swing. Every hit builds Grace.', mend: 'Mending Light: heal the ally you aim at (or whoever needs it most, or yourself). Costs Grace.', judge: 'Judgement: slam your mace to stun enemies in front of you.', ground: 'Sanctified Ground: a ring of light that heals allies and slows enemies. Costs Grace.', dash: 'Blessed Step: dash and leave a spark that heals allies you pass.', ult: 'Dawn: heal everyone near you and rekindle fallen allies, who are safe for 3 seconds (needs full Wildfire).' },
+  warlock: { atk: 'Shadow bolt. Every 3rd bolt curses: cursed enemies take extra damage.', hands: 'Grasping Hands: shadow hands burst up where you aim, holding enemies in place.', imps: 'Summon Imps: 3 imps chase and bite for 8 seconds. Their bites give you mana.', siphon: 'Soul Siphon: drain the enemy you aim at, refilling your mana.', dash: 'Shadow Slip: a quick blink you cannot be hit during.', ult: 'Eclipse: a huge, tough familiar draws every enemy to it (needs full Wildfire).' },
 };
 export const CLASS_TRICK = {
   warrior: 'Dark Fury: the lower your flame, the harder you hit.',
   sorcerer: 'Weaving: cast two different spells quickly and they fuse. Fire + Frost = Steam Burst, Fire + Gale = Firestorm, Frost + Gale = Blizzard. Fusing costs extra mana.',
   bowman: 'Draw longer for stronger shots. You walk slower while drawing.',
   rogue: 'Backstab: hits from behind deal double damage. A red dagger shows over enemies you are behind.',
+  cleric: 'Grace: hit enemies to build it, spend it to heal. Heals past full flame become a shield. Grace fades when you stop fighting, but never below half.',
+  warlock: 'Curses and summons: your imps and hands do the dirty work while you keep your distance. Imp bites refill your mana.',
 };
 const PAD = { strike: 'RT', skill2: 'LT', skill1: 'X', skill3: 'LB', ult: 'RB', dash: 'A', interact: 'Y', tree: 'View', controls: '—', pause: 'Start' };
 

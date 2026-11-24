@@ -4,7 +4,7 @@
 //  - On the host: also runs the Sim and sends snapshots.
 //  - On friends' computers: shows the host's snapshots smoothly.
 // =============================================================
-import { WARRIOR, SORCERER, BOWMAN, ROGUE, CLOAKS, FLAMES, CLASSES, BOONS, ELEMENTS, PLAYER_RADIUS, MAX_PLAYERS, classStats, byId } from './data.js';
+import { WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, CLOAKS, FLAMES, CLASSES, BOONS, ELEMENTS, PLAYER_RADIUS, MAX_PLAYERS, classStats, byId } from './data.js';
 import { World } from './world.js';
 import { Sim } from './sim.js';
 import { Input } from './input.js';
@@ -476,18 +476,22 @@ export class Game {
       const dx = lp.moving ? mv.x : Math.cos(lp.aim), dy = lp.moving ? mv.y : Math.sin(lp.aim);
       const l = Math.hypot(dx, dy) || 1;
       lp.ddx = dx / l; lp.ddy = dy / l;
-      lp.dashT = WARRIOR.dashTime;
+      lp.dashMax = cls === 'warlock' ? WARLOCK.slipTime : WARRIOR.dashTime;
+      lp.dashT = lp.dashMax;
       lp.dashCd = S.dashCd;
-      this.burst(lp.x, lp.y - 8, 8, { color: cls === 'rogue' ? '#b08cff' : byId(FLAMES, me.f).mid, speed: 80, life: 0.4, glow: true });
-      audio.play('dash');
+      const dcol = cls === 'rogue' || cls === 'warlock' ? '#b08cff' : cls === 'cleric' ? '#ffe9a8' : byId(FLAMES, me.f).mid;
+      this.burst(lp.x, lp.y - 8, cls === 'warlock' ? 16 : 8, { color: dcol, speed: 80, life: 0.4, glow: true });
+      audio.play(cls === 'warlock' ? 'slip' : cls === 'cleric' ? 'blessStep' : 'dash');
     }
     let vx, vy;
     if (lp.dashT > 0) {
       lp.dashT -= dt;
-      vx = lp.ddx * WARRIOR.dashSpeed;
+      const dsp = cls === 'warlock' ? WARLOCK.slipSpeed : WARRIOR.dashSpeed;
+      vx = lp.ddx * dsp;
       lp.vx = lp.ddx * S.speed; lp.vy = lp.ddy * S.speed; // carry some speed out of the dash
-      vy = lp.ddy * WARRIOR.dashSpeed;
-      this.particles.push({ x: lp.x + (Math.random() - 0.5) * 8, y: lp.y - 12 + (Math.random() - 0.5) * 12, vx: 0, vy: 0, life: 0.3, max: 0.3, size: 2, color: cls === 'rogue' ? '#b08cff' : byId(FLAMES, me.f).mid, glow: true, shrink: true });
+      vy = lp.ddy * dsp;
+      const pcol = cls === 'rogue' ? '#b08cff' : cls === 'warlock' ? (Math.random() < 0.5 ? '#3a2458' : '#9b6bff') : cls === 'cleric' ? '#fff1b8' : byId(FLAMES, me.f).mid;
+      this.particles.push({ x: lp.x + (Math.random() - 0.5) * 8, y: lp.y - 12 + (Math.random() - 0.5) * 12, vx: 0, vy: 0, life: cls === 'cleric' ? 0.8 : 0.3, max: cls === 'cleric' ? 0.8 : 0.3, size: 2, color: pcol, glow: cls !== 'warlock', shrink: true });
     } else {
       let sp = S.speed * (this.world.kind === 'lobby' ? 1.15 : 1);
       if (guarding) sp *= WARRIOR.guardSlow;
@@ -533,10 +537,20 @@ export class Game {
         lp.stabN = (lp.stabN % ROGUE.spinEvery) + 1;
         if (lp.stabN === ROGUE.spinEvery) { this.startSpin(this.myId, S.spinR); audio.play('spin'); }
         else { this.startStab(this.myId, lp.aim); audio.play('stab'); }
+      } else if (cls === 'cleric') {
+        this.startSwing(this.myId, lp.aim, false);
+        audio.play('mace');
+      } else if (cls === 'warlock') {
+        this.startBolt(this.myId, lp.aim);
       } else {
         this.startStaff(this.myId, lp.aim);
         audio.play('staff');
       }
+    }
+    // Cleric: a faint glow briefly shows who Mending Light will go to
+    if (cls === 'cleric') {
+      const tid = this.mendTargetId(snap, me);
+      if (!this.mendAim || this.mendAim.id !== tid) this.mendAim = { id: tid, t0: this.t };
     }
     if (cls === 'bowman' && me.hk > 0 && (atkPressed || held) && lp.atkCd <= 0) { lp.atkCd = BOWMAN.hawkRecover; this.startShot(this.myId, lp.aim, 1); }
   }
@@ -550,7 +564,7 @@ export class Game {
       x: Math.round(lp.x * 10) / 10, y: Math.round(lp.y * 10) / 10,
       aim: Math.round(lp.aim * 1000) / 1000, ad: Math.round(lp.aimD),
       m: lp.moving ? 1 : 0,
-      d: lp.dashT > WARRIOR.dashTime - WARRIOR.dashSafe ? 1 : 0, // only the start of a dash dodges
+      d: this.cls === 'warlock' ? (lp.dashT > 0 ? 1 : 0) : lp.dashT > WARRIOR.dashTime - WARRIOR.dashSafe ? 1 : 0, // only the start of a dash dodges (all of a Shadow Slip)
       ...this.cnt,
       ah: this.input.attackHeld() && !blocked ? 1 : 0,
       g: this.input.guardHeld() && !blocked ? 1 : 0,
@@ -648,6 +662,36 @@ export class Game {
     this.effects.push({ k: 'spin', id, aim: 0, r, t0: this.t, life: 0.3 });
   }
 
+  startBolt(id, aim) {
+    const v = this.viewFor(id);
+    v.castT = this.t;
+    audio.play('bolt', this.viewPos(id));
+    this.burst(v.x + Math.cos(aim) * 12, v.y - 16 + Math.sin(aim) * 12, 5, { color: '#b08cff', speed: 60, life: 0.3, glow: true });
+  }
+
+  // same rule as the host: the ally you aim at, otherwise whoever nearby has the least flame (maybe you)
+  mendTargetId(snap, me) {
+    let best = null, ba = CLERIC.mendAim;
+    for (const p of snap.ps) {
+      if (p.id === this.myId || p.dn) continue;
+      const v = this.playerView(p);
+      const dx = v.x - this.lp.x, dy = v.y - this.lp.y;
+      if (Math.hypot(dx, dy) > CLERIC.mendRange) continue;
+      let da = Math.atan2(dy, dx) - this.lp.aim;
+      while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+      if (Math.abs(da) < ba) { ba = Math.abs(da); best = p.id; }
+    }
+    if (best) return best;
+    let low = this.myId, lr = me.hp / me.mx;
+    for (const p of snap.ps) {
+      if (p.id === this.myId || p.dn) continue;
+      const v = this.playerView(p);
+      if (Math.hypot(v.x - this.lp.x, v.y - this.lp.y) > CLERIC.mendRange) continue;
+      if (p.hp / p.mx < lr) { lr = p.hp / p.mx; low = p.id; }
+    }
+    return low;
+  }
+
   startShot(id, aim, c) {
     const v = this.viewFor(id);
     audio.play(c >= 0.95 ? 'bowFull' : 'bow', this.viewPos(id));
@@ -657,7 +701,7 @@ export class Game {
   // a skill button flashes red when you can't use it (no mana, no target...)
   deny(slot) {
     audio.play('fizzle');
-    const map = { s1: ['sk-quake', 'sk-fire', 'sk-mark', 'sk-smoke'], s2: ['sk-gale', 'sk-rain', 'sk-step'], s3: ['sk-frost'], ult: ['sk-ult'] };
+    const map = { s1: ['sk-quake', 'sk-fire', 'sk-mark', 'sk-smoke', 'sk-mend', 'sk-hands'], s2: ['sk-gale', 'sk-rain', 'sk-step', 'sk-judge', 'sk-imps'], s3: ['sk-frost', 'sk-ground', 'sk-siphon'], ult: ['sk-ult'] };
     for (const id of map[slot] || []) {
       const el = document.getElementById(id);
       if (el) { el.classList.remove('denied'); void el.offsetWidth; el.classList.add('denied'); }
@@ -692,7 +736,7 @@ export class Game {
         if (!mine) { this.startStaff(f.id, f.a); const v = this.viewFor(f.id); audio.play('staff', { x: v.x, y: v.y, vol: 0.7 }); }
         break;
       case 'hit': {
-        const col = f.el === 'frost' ? '#bfeaff' : f.el === 'fire' ? '#ffb060' : f.el === 'back' ? '#ff6a7a' : '#ffe6b0';
+        const col = f.el === 'frost' ? '#bfeaff' : f.el === 'fire' ? '#ffb060' : f.el === 'back' ? '#ff6a7a' : f.el === 'shadow' || f.el === 'imp' ? '#b08cff' : f.el === 'holy' ? '#fff1b8' : '#ffe6b0';
         if (f.el === 'back') { f.big = 1; if (f.by === this.myId) audio.play('backstab', at); }
         this.burst(f.x, f.y, f.big ? 12 : 7, { color: col, speed: f.big ? 170 : 120, life: 0.35, glow: true });
         this.spark(f.x, f.y, f.el === 'frost' ? '190,235,255' : '255,240,200', f.big ? 16 : 11);
@@ -914,6 +958,85 @@ export class Game {
       case 'boon': if (f.n !== this.user) toast(`${f.n} chose ${byId(BOONS, f.b).name}`); break;
       case 'victory': audio.play('victory'); break;
       case 'defeat': audio.play('defeat'); break;
+      // ---- Cleric
+      case 'heal': {
+        const v = this.viewFor(f.id);
+        this.burst(v.x, v.y - 14, 10, { color: '#fff1b8', speed: 50, life: 0.8, glow: true, up: 40 });
+        if (prefs.dmgNums && f.v >= 1) this.effects.push({ k: 'num', x: v.x, y: v.y - 30, dx: 0, text: '+' + f.v, t0: this.t, life: 0.9, big: false, color: '#9ff0a0' });
+        if (f.id === this.myId && f.by !== this.myId) audio.play('healed');
+        break;
+      }
+      case 'mend': {
+        const v = this.viewFor(f.id), tv = this.viewFor(f.tid);
+        v.castT = this.t;
+        this.effects.push({ k: 'beam', x: v.x, y: v.y - 20, x2: tv.x, y2: tv.y - 14, t0: this.t, life: 0.35, col: [255, 236, 160] });
+        this.effects.push({ k: 'ring', x: tv.x, y: tv.y, r: 26, t0: this.t, life: 0.5, color: 'rgba(255,236,160,1)', light: 110, lcol: [255, 230, 160] });
+        audio.play('mend', { x: v.x, y: v.y });
+        break;
+      }
+      case 'judge': {
+        this.effects.push({ k: 'judge', id: f.id, aim: f.a, t0: this.t, life: 0.4 });
+        const v = this.viewFor(f.id);
+        this.burst(v.x + Math.cos(f.a) * 40, v.y - 8 + Math.sin(f.a) * 40, 22, { color: '#fff1b8', speed: 170, life: 0.5, glow: true });
+        if (near(f.x, f.y)) this.addShake(5);
+        audio.play('judge', at);
+        break;
+      }
+      case 'sanct':
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: f.r, t0: this.t, life: 0.5, color: 'rgba(255,236,160,1)', light: 150, lcol: [255, 230, 160] });
+        this.burst(f.x, f.y - 6, 20, { color: '#fff1b8', speed: 90, life: 0.8, glow: true, up: 30 });
+        audio.play('sanct', at);
+        break;
+      case 'dawn':
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: f.r, t0: this.t, life: 0.9, color: 'rgba(255,240,190,1)', light: 300, lcol: [255, 240, 190] });
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: f.r * 0.6, t0: this.t + 0.1, life: 0.7, color: 'rgba(255,255,255,1)' });
+        this.burst(f.x, f.y - 20, 60, { color: '#fff4c8', speed: 260, life: 1.1, glow: true, up: 30 });
+        if (near(f.x, f.y)) this.flash = 0.8;
+        audio.play('dawn', at);
+        if (mine) this.banner('DAWN', 1.2, 'Light heals and rekindles your party');
+        break;
+      case 'shieldHit':
+        this.burst(f.x, f.y - 14, 8, { color: '#dff4ff', speed: 110, life: 0.3, glow: true });
+        audio.play('shieldHit', at);
+        break;
+      // ---- Warlock
+      case 'bolt':
+        if (!mine) this.startBolt(f.id, f.a);
+        if (f.c) { const v = this.viewFor(f.id); this.burst(v.x, v.y - 18, 8, { color: '#7a4fd0', speed: 70, life: 0.5, glow: true }); }
+        break;
+      case 'boltFizz': this.burst(f.x, f.y, 5, { color: '#9b6bff', speed: 50, life: 0.35, glow: true }); break;
+      case 'handsCast': {
+        const v = this.viewFor(f.id); v.castT = this.t;
+        audio.play('handsCast', at);
+        break;
+      }
+      case 'hands':
+        this.effects.push({ k: 'hands', x: f.x, y: f.y, r: f.r, seed: Math.random() * 9, t0: this.t, life: 1.2 });
+        this.burst(f.x, f.y - 4, 26, { color: '#3a2458', speed: 140, life: 0.6, up: 40, grav: 200 });
+        this.burst(f.x, f.y - 8, 14, { color: '#b08cff', speed: 110, life: 0.6, glow: true });
+        if (near(f.x, f.y)) this.addShake(4);
+        audio.play('hands', at);
+        break;
+      case 'imps':
+        for (const [x, y] of f.pts) this.burst(x, y - 6, 10, { color: '#7a4fd0', speed: 70, life: 0.5, glow: true, up: 20 });
+        audio.play('imps', this.viewPos(f.id));
+        break;
+      case 'siphon': audio.play('siphon', this.viewPos(f.id)); break;
+      case 'eclipse':
+        this.eclipseT = this.t;
+        this.burst(f.x, f.y - 20, 50, { color: '#3a2458', speed: 200, life: 1, up: 30 });
+        this.burst(f.x, f.y - 20, 30, { color: '#b08cff', speed: 160, life: 0.9, glow: true });
+        if (near(f.x, f.y)) this.addShake(8);
+        audio.play('eclipse', at);
+        if (mine) this.banner('ECLIPSE', 1.2, 'Your familiar draws every enemy to it');
+        break;
+      case 'famSwipe': audio.play('famSwipe', at); this.burst(f.x, f.y - 14, 10, { color: '#7a4fd0', speed: 120, life: 0.4, glow: true }); break;
+      case 'famHit': this.burst(f.x, f.y - 20, 6, { color: '#2a1a40', speed: 80, life: 0.4 }); audio.play('hit', { ...at, vol: 0.6 }); break;
+      case 'famDie':
+        this.burst(f.x, f.y - 20, 40, { color: '#3a2458', speed: 180, life: 1, up: 20 });
+        audio.play('famDie', at);
+        break;
+      case 'plague': this.effects.push({ k: 'beam', x: f.x, y: f.y - 10, x2: f.x2, y2: f.y2 - 10, t0: this.t, life: 0.4, col: [176, 140, 255] }); break;
       case 'msg': toast(f.text); break;
     }
   }

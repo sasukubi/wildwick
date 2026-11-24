@@ -41,11 +41,11 @@ export const FLAMES = [
 
 export const CLASSES = [
   { id: 'warrior',  name: 'Warrior',  available: true,  color: '#ff8a4c', blurb: 'Fights harder the dimmer their flame burns.' },
-  { id: 'warlock',  name: 'Warlock',  available: false, color: '#9b6bff', blurb: 'Commands a shadow familiar that feeds on darkness.' },
+  { id: 'warlock',  name: 'Warlock',  available: true,  color: '#9b6bff', blurb: 'Calls shadow hands and imps, and drains souls for mana.' },
   { id: 'bowman',   name: 'Bowman',   available: true,  color: '#8fd36b', blurb: 'Draw longer for stronger, piercing shots.' },
   { id: 'rogue',    name: 'Rogue',    available: true,  color: '#d0d4e0', blurb: 'Strikes from behind; dashes leave decoys.' },
   { id: 'sorcerer', name: 'Sorcerer', available: true,  color: '#58b8ff', blurb: 'Weaves two spells together into one.' },
-  { id: 'cleric',   name: 'Cleric',   available: false, color: '#ffe08a', blurb: 'Gives away their own flame to heal allies.' },
+  { id: 'cleric',   name: 'Cleric',   available: true,  color: '#ffe08a', blurb: 'Fights up close to build Grace, then spends it to heal.' },
 ];
 
 // ---- Warrior ------------------------------------------------
@@ -116,11 +116,38 @@ export const ROGUE = {
   backstab: 1.0,                                            // +100% from the back half
   dashCd: 0.9,                                              // Rogue dashes recharge faster
   execute: 0.1,                                             // +10% damage to enemies under half health
-  hopRange: 95,                                             // stabs hop toward enemies this far away
+  hopRange: 48,                                             // stabs hop toward enemies this far away
   decoyTime: 2.5,
-  stepCd: 7, stepRange: 220,                                // Shadowstep
+  stepCd: 4.5, stepRange: 220,                                // Shadowstep
   smokeCd: 14, smokeR: 72, smokeTime: 5, smokeSpeed: 1.4,   // Smoke Bomb
   cutsTargets: 6, cutsRange: 230, cutsDmg: 42,              // Thousand Cuts (ultimate)
+};
+
+// ---- Cleric -------------------------------------------------
+// A battle healer: mace hits build Grace, heals spend it.
+export const CLERIC = {
+  speed: 116, maxFlame: 100,
+  maceCd: 0.6, maceRange: 50, maceArc: 1.9, maceDmg: 12,
+  grace: 100, graceStart: 50, gracePerHit: 7, graceHitCap: 14,  // per swing, however many it hits
+  graceIdle: 4, graceDrain: 6, graceFloor: 0.5,                 // drains after 4s out of a fight, but never below 50%
+  overheal: 0.2, shieldTime: 8,                                 // heals past full become a shield (up to +20%)
+  mendCost: 35, mendCd: 2.5, mendHeal: 30, mendRange: 230, mendAim: 0.55,
+  judgeCd: 7, judgeRange: 72, judgeArc: 2.0, judgeDmg: 20, judgeStun: 1.0,
+  groundCost: 30, groundCd: 13, groundR: 78, groundTime: 5, groundHeal: 6, groundSlow: 0.5, groundRange: 160,
+  stepHeal: 10,                                                  // Blessed Step: allies you dash through
+  dawnR: 280, dawnHeal: 50, dawnRevive: 0.5, aegisTime: 3,      // Dawn (ultimate)
+};
+
+// ---- Warlock ------------------------------------------------
+export const WARLOCK = {
+  speed: 118, maxFlame: 85,
+  mana: 100, manaRegen: 9,
+  boltCd: 0.6, boltSpeed: 240, boltRange: 250, boltDmg: 12, curseEvery: 3, curseTime: 3, curseBonus: 0.15,
+  hands: { cost: 30, cd: 9, r: 58, range: 230, delay: 0.45, dmg: 22, root: 1.6 },
+  imps: { cost: 35, cd: 12, n: 3, life: 8, speed: 150, dmg: 6, biteCd: 0.7, mana: 2, aggro: 260 },
+  siphon: { cost: 0, cd: 8, range: 210, time: 1.6, dps: 20, mana: 15, breakRange: 260 },
+  slipTime: 0.14, slipSpeed: 720,                                // Shadow Slip: a quick untouchable blink
+  eclipse: { time: 8, hp: 900, r: 20, speed: 70, dmg: 6, swipeCd: 1, swipeR: 52, taunt: 320 },
 };
 
 // ---- Enemies ------------------------------------------------
@@ -250,6 +277,46 @@ export const TREES = {
     ] },
   ],
 };
+TREES.cleric = [
+  { id: 'devotion', name: 'Devotion', color: '#ffe08a', blurb: 'Stronger heals, bigger shields.', nodes: [
+    { id: 'mercy', name: 'Mercy', max: 3, desc: 'Mending Light heals 15% more.' },
+    { id: 'halo', name: 'Halo', max: 2, desc: 'Overheal shields can reach 10% higher.' },
+    { id: 'thrift', name: 'Thrift', max: 2, desc: 'Mending Light costs 5 less Grace.' },
+    { id: 'beacon', name: 'Beacon', max: 1, cap: true, desc: 'Mending Light also heals everyone near the target for half as much.' },
+  ] },
+  { id: 'zeal', name: 'Zeal', color: '#ff9a5a', blurb: 'Hit harder, earn Grace faster.', nodes: [
+    { id: 'zealous', name: 'Zealous', max: 3, desc: 'Mace hits deal +12% damage.' },
+    { id: 'fervor', name: 'Fervor', max: 3, desc: 'Mace hits build 20% more Grace.' },
+    { id: 'verdict', name: 'Verdict', max: 2, desc: 'Judgement stuns 0.4s longer and recharges 15% faster.' },
+    { id: 'smite', name: 'Smite', max: 1, cap: true, desc: 'Every 3rd mace hit calls down light for +60% damage.' },
+  ] },
+  { id: 'sanctum', name: 'Sanctum', color: '#bfe8ff', blurb: 'Holy ground and the dawn.', nodes: [
+    { id: 'hallowed', name: 'Hallowed', max: 3, desc: 'Sanctified Ground is 15% bigger and heals 20% more.' },
+    { id: 'lasting', name: 'Lasting Light', max: 2, desc: 'Sanctified Ground lasts 1.5s longer.' },
+    { id: 'blessed', name: 'Blessed Step', max: 2, desc: 'Your dash spark heals 50% more.' },
+    { id: 'sunrise', name: 'Sunrise', max: 1, cap: true, desc: 'Dawn shields everyone it touches for 20% of their flame.' },
+  ] },
+];
+TREES.warlock = [
+  { id: 'dread', name: 'Dread', color: '#b08cff', blurb: 'Bolts and curses.', nodes: [
+    { id: 'malice', name: 'Malice', max: 3, desc: 'Shadow bolts deal +12% damage.' },
+    { id: 'hex', name: 'Deep Hex', max: 2, desc: 'Cursed enemies take 8% more damage.' },
+    { id: 'quickhex', name: 'Quick Hex', max: 2, desc: 'Curse every 2nd bolt instead of every 3rd (at rank 2).' },
+    { id: 'plague', name: 'Plague', max: 1, cap: true, desc: 'Cursed enemies spread their curse to one nearby enemy when they die.' },
+  ] },
+  { id: 'legion', name: 'Legion', color: '#ff7a9a', blurb: 'More imps, meaner bites.', nodes: [
+    { id: 'brood', name: 'Brood', max: 2, desc: 'Summon 1 more imp.' },
+    { id: 'fangs', name: 'Sharp Fangs', max: 3, desc: 'Imps deal +20% damage.' },
+    { id: 'feast', name: 'Feast', max: 2, desc: 'Imp bites give 50% more mana.' },
+    { id: 'colossus', name: 'Colossus', max: 1, cap: true, desc: 'Eclipse lasts 3 seconds longer.' },
+  ] },
+  { id: 'void', name: 'Void', color: '#7fd0c0', blurb: 'Hands and soul drain.', nodes: [
+    { id: 'grip', name: 'Iron Grip', max: 3, desc: 'Grasping Hands hold enemies 0.3s longer and deal +15% damage.' },
+    { id: 'reach', name: 'Long Reach', max: 2, desc: 'Grasping Hands cover 15% more ground.' },
+    { id: 'thirst', name: 'Thirst', max: 3, desc: 'Soul Siphon drains 20% harder and gives more mana.' },
+    { id: 'lifetap', name: 'Lifetap', max: 1, cap: true, desc: 'Soul Siphon also restores your flame.' },
+  ] },
+];
 export const WARRIOR_TREE = TREES.warrior;
 
 export function treeNode(cls, id) {
@@ -280,6 +347,8 @@ export const BOONS = [
   { id: 'thorn',   name: 'Thornhide',      icon: '🌿', desc: 'Take 12% less damage' },
   { id: 'scholar', name: "Owl's Wisdom",   icon: '🦉', desc: '+25% EXP for the whole party' },
   { id: 'spring',  name: 'Mana Spring',    icon: '💧', desc: '+40% mana regeneration', cls: 'sorcerer' },
+  { id: 'wellw',   name: 'Dark Spring',    icon: '💧', desc: '+40% mana regeneration', cls: 'warlock' },
+  { id: 'psalm',   name: 'Psalm Book',     icon: '📖', desc: 'Mace hits build 25% more Grace', cls: 'cleric' },
 ];
 
 // Works out a player's real numbers from their class, skill tree and boons.
@@ -341,6 +410,58 @@ export function classStats(cls, tree = {}, boons = []) {
       rainR: B.rainR * (1 + 0.2 * r('widerain')),
       rainCd: B.rainCd * focus,
       hawkTime: B.hawkTime + (r('keen') ? 3 : 0),
+      furyMax: 0,
+    };
+  }
+  if (cls === 'cleric') {
+    const C = CLERIC;
+    return {
+      ...base,
+      maxFlame: C.maxFlame + 15 * b('wick'),
+      speed: C.speed * (1 + 0.1 * b('swift')),
+      atkCd: C.maceCd,
+      maxMana: C.grace, manaRegen: 0,
+      maceMult: 1 + 0.12 * r('zealous'),
+      graceMult: (1 + 0.2 * r('fervor')) * (1 + 0.25 * b('psalm')),
+      smite: r('smite') > 0,
+      mendHeal: C.mendHeal * (1 + 0.15 * r('mercy')),
+      mendCost: C.mendCost - 5 * r('thrift'),
+      mendCd: C.mendCd * focus,
+      beacon: r('beacon') > 0,
+      overheal: C.overheal + 0.1 * r('halo'),
+      judgeCd: C.judgeCd * Math.pow(0.85, r('verdict')) * focus,
+      judgeStun: C.judgeStun + 0.4 * r('verdict'),
+      groundR: C.groundR * (1 + 0.15 * r('hallowed')),
+      groundHeal: C.groundHeal * (1 + 0.2 * r('hallowed')),
+      groundTime: C.groundTime + 1.5 * r('lasting'),
+      groundCd: C.groundCd * focus,
+      stepHeal: C.stepHeal * (1 + 0.5 * r('blessed')),
+      sunrise: r('sunrise') > 0,
+      furyMax: 0,
+    };
+  }
+  if (cls === 'warlock') {
+    const L = WARLOCK;
+    return {
+      ...base,
+      maxFlame: L.maxFlame + 15 * b('wick'),
+      speed: L.speed * (1 + 0.1 * b('swift')),
+      atkCd: L.boltCd,
+      maxMana: L.mana, manaRegen: L.manaRegen * (1 + 0.4 * b('wellw')),
+      spellCd: focus,
+      boltMult: 1 + 0.12 * r('malice'),
+      curseBonus: L.curseBonus + 0.08 * r('hex'),
+      curseEvery: r('quickhex') >= 2 ? 2 : L.curseEvery,
+      plague: r('plague') > 0,
+      imps: L.imps.n + r('brood'),
+      impMult: 1 + 0.2 * r('fangs'),
+      impMana: L.imps.mana * (1 + 0.5 * r('feast')),
+      eclipseTime: L.eclipse.time + (r('colossus') ? 3 : 0),
+      handsRoot: L.hands.root + 0.3 * r('grip'),
+      handsMult: 1 + 0.15 * r('grip'),
+      handsR: L.hands.r * (1 + 0.15 * r('reach')),
+      siphonMult: 1 + 0.2 * r('thirst'),
+      lifetap: r('lifetap') > 0,
       furyMax: 0,
     };
   }

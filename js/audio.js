@@ -195,6 +195,25 @@ class AudioEngine {
       case 'steam': N(0.8, { filter: 'highpass', freq: 1500, slide: 600, gain: 0.3, attack: 0.02 }); T(90, 0.3, { slide: 45, gain: 0.3 }); break;
       case 'starfall': [523, 784, 1046, 1568].forEach((f, i) => T(f, 1.2, { gain: 0.07, delay: i * 0.09, vib: 5, vibDepth: 5 })); break;
       case 'meteor': T(70, 0.35, { slide: 30, gain: 0.45 }); N(0.3, { filter: 'lowpass', freq: 1200, slide: 150, gain: 0.3 }); break;
+      // Cleric
+      case 'mace': N(0.14, { freq: 500, slide: 1600, q: 0.8, gain: 0.2, attack: 0.02 }); T(120, 0.1, { slide: 80, type: 'triangle', gain: 0.1 }); break;
+      case 'mend': [659, 880, 1175].forEach((f, i) => T(f, 0.6, { type: 'triangle', gain: 0.07, delay: i * 0.05, vib: 5, vibDepth: 3 })); N(0.4, { filter: 'highpass', freq: 5000, gain: 0.04 }); break;
+      case 'healed': T(1046, 0.3, { type: 'triangle', gain: 0.06 }); break;
+      case 'judge': T(80, 0.35, { slide: 40, gain: 0.45 }); N(0.3, { filter: 'lowpass', freq: 1600, slide: 300, gain: 0.35 }); for (const f of [784, 1175]) T(f, 0.5, { gain: 0.05, delay: 0.03 }); break;
+      case 'sanct': [523, 659, 784].forEach((f, i) => T(f, 1.4, { gain: 0.06, delay: i * 0.08, attack: 0.1 })); break;
+      case 'dawn': [392, 523, 659, 784, 1046, 1318].forEach((f, i) => T(f, 1.6, { type: 'triangle', gain: 0.08, delay: i * 0.07, vib: 4, vibDepth: 4 })); N(1.2, { filter: 'highpass', freq: 3000, gain: 0.06, attack: 0.2 }); break;
+      case 'blessStep': N(0.2, { freq: 900, slide: 2400, q: 0.8, gain: 0.12 }); T(1320, 0.3, { type: 'triangle', gain: 0.05 }); break;
+      case 'shieldHit': for (const f of [1400, 2100]) T(f, 0.18, { type: 'triangle', gain: 0.06 }); N(0.05, { filter: 'highpass', freq: 3000, gain: 0.12 }); break;
+      // Warlock
+      case 'bolt': N(0.18, { filter: 'bandpass', freq: 700, slide: 300, q: 3, gain: 0.2 }); T(260, 0.18, { slide: 130, type: 'sawtooth', lp: 700, gain: 0.06 }); break;
+      case 'handsCast': N(0.45, { filter: 'lowpass', freq: 300, slide: 120, gain: 0.3, attack: 0.15 }); break;
+      case 'hands': T(70, 0.4, { slide: 35, gain: 0.4 }); N(0.3, { filter: 'bandpass', freq: 400, q: 2, gain: 0.3 }); for (let i = 0; i < 5; i++) N(0.04, { filter: 'highpass', freq: 2000, gain: 0.1, delay: 0.03 * i }); break;
+      case 'imps': for (let i = 0; i < 3; i++) T(900 + i * 140, 0.12, { slide: 1400 + i * 100, type: 'square', lp: 1800, gain: 0.04, delay: i * 0.08 }); break;
+      case 'siphon': T(180, 1.4, { slide: 360, type: 'sawtooth', lp: 600, vib: 7, vibDepth: 8, gain: 0.07, attack: 0.1 }); N(1.3, { filter: 'bandpass', freq: 900, q: 6, gain: 0.08, attack: 0.1 }); break;
+      case 'slip': N(0.18, { filter: 'bandpass', freq: 500, slide: 200, q: 2, gain: 0.18 }); T(300, 0.15, { slide: 120, gain: 0.05 }); break;
+      case 'eclipse': T(55, 2, { type: 'sawtooth', lp: 300, vib: 3, vibDepth: 6, attack: 0.3, gain: 0.35 }); T(82, 2, { type: 'sawtooth', lp: 300, attack: 0.3, gain: 0.2 }); N(1.8, { filter: 'lowpass', freq: 400, gain: 0.2, attack: 0.3 }); break;
+      case 'famSwipe': N(0.25, { filter: 'lowpass', freq: 600, slide: 1600, gain: 0.25 }); break;
+      case 'famDie': N(1.0, { filter: 'lowpass', freq: 500, slide: 120, gain: 0.3, attack: 0.05 }); T(120, 0.8, { slide: 40, type: 'triangle', gain: 0.15 }); break;
       // UI
       case 'click': this.tone(1250, 0.04, { gain: 0.12 * v, bus: 'ui' }); break;
       case 'hover': this.tone(1900, 0.025, { gain: 0.04 * v, bus: 'ui' }); break;

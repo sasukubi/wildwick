@@ -2,7 +2,7 @@
 //  The in-game HUD (HTML, glass style). Updated every frame, but
 //  only touches the page when a value actually changes.
 // =============================================================
-import { CLOAKS, FLAMES, SORCERER, ELEMENTS, RULES, byId } from './data.js';
+import { CLOAKS, FLAMES, SORCERER, CLERIC, WARLOCK, CLASSES, ELEMENTS, RULES, byId } from './data.js';
 import { iconSprite, skillIconName } from './sprites.js';
 
 // a crisp, scaled-up copy of a pixel-art icon
@@ -59,7 +59,24 @@ export const KITS = {
     { id: 'dash', name: 'Dash (leaves a decoy)', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Thousand Cuts (Wildfire)', key: 'ult', icon: '✴' },
   ],
+  cleric: [
+    { id: 'atk', name: 'Mace (builds Grace)', key: 'strike', icon: '' },
+    { id: 'judge', name: 'Judgement', key: 'skill2', icon: '' },
+    { id: 'mend', name: 'Mending Light', key: 'skill1', icon: '' },
+    { id: 'ground', name: 'Sanctified Ground', key: 'skill3', icon: '' },
+    { id: 'dash', name: 'Blessed Step', key: 'dash', icon: '' },
+    { id: 'ult', name: 'Dawn (Wildfire)', key: 'ult', icon: '' },
+  ],
+  warlock: [
+    { id: 'atk', name: 'Shadow bolt (every 3rd curses)', key: 'strike', icon: '' },
+    { id: 'imps', name: 'Summon Imps', key: 'skill2', icon: '' },
+    { id: 'hands', name: 'Grasping Hands', key: 'skill1', icon: '' },
+    { id: 'siphon', name: 'Soul Siphon', key: 'skill3', icon: '' },
+    { id: 'dash', name: 'Shadow Slip', key: 'dash', icon: '' },
+    { id: 'ult', name: 'Eclipse (Wildfire)', key: 'ult', icon: '' },
+  ],
 };
+const USES_BAR = { sorcerer: 'mana', warlock: 'shadow', cleric: 'grace' };
 const RING = 2 * Math.PI * 23;
 const readyAt = new Map();
 
@@ -76,7 +93,10 @@ export function buildHud(cls = 'warrior') {
     if (s.el) el.style.setProperty('--el', ELEMENTS[s.el].color);
     box.appendChild(el);
   }
-  $('#mana-row').classList.toggle('hidden', cls !== 'sorcerer');
+  const row = $('#mana-row');
+  row.classList.toggle('hidden', !USES_BAR[cls]);
+  row.classList.toggle('grace', cls === 'cleric');
+  row.classList.toggle('shadow', cls === 'warlock');
   last.clear();
   readyAt.clear();
 }
@@ -84,6 +104,7 @@ export function buildHud(cls = 'warrior') {
 export function updateHud(game, snap, me) {
   const stats = game.myStats();
   const sorc = me.k === 'sorcerer';
+  const bar = USES_BAR[me.k];
   // party
   const party = $('#party');
   const pk = snap.ps.map((p) => p.id).join(',');
@@ -103,7 +124,7 @@ export function updateHud(game, snap, me) {
     if (!c) continue;
     c.querySelector('.dot').style.background = byId(CLOAKS, p.c).hex;
     c.querySelector('b').textContent = p.u + (p.id === game.myId ? ' (you)' : '');
-    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Flame out!') : `${{ sorcerer: 'Sorcerer', bowman: 'Bowman', rogue: 'Rogue' }[p.k] || 'Warrior'}`;
+    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Flame out!') : byId(CLASSES, p.k).name + (p.sh > 0 ? ' · shielded' : '');
     c.classList.toggle('down', !!p.dn);
     const fill = c.querySelector('.mini i');
     fill.style.width = (p.hp / p.mx) * 100 + '%';
@@ -140,10 +161,11 @@ export function updateHud(game, snap, me) {
   const pal = byId(FLAMES, me.f);
   set($('#flame-fill'), 'width', ratio * 100 + '%');
   set($('#flame-fill'), 'background', `linear-gradient(90deg, ${pal.outer}, ${pal.mid} 60%, ${pal.core})`);
-  set($('#flame-text'), 'text', me.dn ? 'Flame out' : `Flame ${me.hp} / ${me.mx}`);
-  if (sorc) {
+  set($('#flame-shield'), 'width', Math.min(100, ((me.sh || 0) / me.mx) * 100) + '%');
+  set($('#flame-text'), 'text', me.dn ? 'Flame out' : me.sh > 0 ? `Flame ${me.hp} / ${me.mx}  +${me.sh} shield` : `Flame ${me.hp} / ${me.mx}`);
+  if (bar) {
     set($('#mana-fill'), 'width', (me.mn / me.mm) * 100 + '%');
-    set($('#mana-text'), 'text', `Mana ${me.mn} / ${me.mm}`);
+    set($('#mana-text'), 'text', `${bar === 'grace' ? 'Grace' : 'Mana'} ${me.mn} / ${me.mm}`);
   }
   const wf = me.wf / RULES.wildfireMax;
   set($('#wild-fill'), 'width', wf * 100 + '%');
@@ -183,6 +205,12 @@ export function updateHud(game, snap, me) {
     else if (s.id === 'fire') { rem = me.c1; total = SORCERER.fire.cd * stats.spellCd; noMana = me.mn < SORCERER.fire.cost; }
     else if (s.id === 'gale') { rem = me.c2; total = SORCERER.gale.cd * stats.spellCd; noMana = me.mn < SORCERER.gale.cost; }
     else if (s.id === 'frost') { rem = me.c3; total = SORCERER.frost.cd * stats.spellCd; noMana = me.mn < SORCERER.frost.cost; }
+    else if (s.id === 'mend') { rem = me.c1; total = stats.mendCd; noMana = me.mn < stats.mendCost; }
+    else if (s.id === 'judge') { rem = me.c2; total = stats.judgeCd; }
+    else if (s.id === 'ground') { rem = me.c3; total = stats.groundCd; noMana = me.mn < CLERIC.groundCost; }
+    else if (s.id === 'hands') { rem = me.c1; total = WARLOCK.hands.cd * stats.spellCd; noMana = me.mn < WARLOCK.hands.cost; }
+    else if (s.id === 'imps') { rem = me.c2; total = WARLOCK.imps.cd * stats.spellCd; noMana = me.mn < WARLOCK.imps.cost; }
+    else if (s.id === 'siphon') { rem = me.si ? 0 : me.c3; total = WARLOCK.siphon.cd * stats.spellCd; }
     else if (s.id === 'ult') { rem = 1 - wf; total = 1; }
     const frac = Math.max(0, Math.min(1, rem / total));
     const prog = el.querySelector('.prog');
@@ -196,7 +224,7 @@ export function updateHud(game, snap, me) {
     const key = el.querySelector('.key');
     const k = game.keyLabel(s.key);
     if (key.textContent !== k) key.textContent = k;
-    el.classList.toggle('active', s.id === 'guard' && !!me.g);
+    el.classList.toggle('active', (s.id === 'guard' && !!me.g) || (s.id === 'siphon' && !!me.si));
     el.classList.toggle('ready', s.id === 'ult' && wf >= 1);
     el.classList.toggle('primed', !!s.el && me.le === s.el);
     // little flash the moment a skill comes back

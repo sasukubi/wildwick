@@ -8,7 +8,7 @@
 //  or attack through trees and rocks.
 // =============================================================
 import {
-  WARRIOR, SORCERER, BOWMAN, ROGUE, WOLF, ELITE, ALPHA, TREANT, RULES, CLOAKS, HATS, FLAMES, CLASSES, BOONS,
+  WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, WOLF, ELITE, ALPHA, TREANT, RULES, CLOAKS, HATS, FLAMES, CLASSES, BOONS,
   PLAYER_RADIUS, TILE, xpToNext, classStats, canBuy, weaveOf,
 } from './data.js';
 import { makeLobby, makeForest, makeArena } from './world.js';
@@ -35,7 +35,8 @@ export class Sim {
     this.zones = [];       // ground effects: pyre fire, firestorm, blizzard
     this.shots = [];       // fireballs, frost shards
     this.strikes = [];     // Starfall meteors on their way down
-    this.decoys = [];      // Rogue afterimages that enemies chase
+    this.decoys = [];      // Rogue afterimages (and the Warlock's Eclipse familiar) that enemies chase
+    this.imps = [];        // Warlock imps
     this.waiting = new Map(); // players who joined mid-run, waiting at camp
     this.campVote = null;     // vote to head back to camp mid-run
     this.noRun = false;       // a waiting player's practice camp can't start runs
@@ -92,6 +93,7 @@ export class Sim {
     this.shots = [];
     this.strikes = [];
     this.decoys = [];
+    this.imps = [];
     this.flows.clear();
     this.countdown = -1;
     this.stageTime = 0;
@@ -102,8 +104,12 @@ export class Sim {
     p.tree = {}; p.boons = []; p.pts = 0; p.wf = 0; p.choices = null; p.picked = false;
     this.recalc(p);
     p.hp = p.max;
-    p.mana = p.stats.maxMana || 0;
+    p.sh = 0;
+    p.mana = this.startMana(p);
   }
+
+  // Clerics start with half their Grace; everyone else starts with full mana
+  startMana(p) { return p.cls === 'cleric' ? (p.stats.maxMana || 0) * CLERIC.graceStart / 100 : p.stats.maxMana || 0; }
 
   startRun() {
     this.xp = 0;
@@ -150,8 +156,8 @@ export class Sim {
       const pos = this.world.collide(this.world.spawn.x + Math.cos(a) * 32, this.world.spawn.y + Math.sin(a) * 32, PLAYER_RADIUS);
       p.x = pos.x; p.y = pos.y;
       if (p.down) { p.down = false; p.hp = p.max * 0.5; }
-      if (fullHeal) { p.hp = p.max; p.mana = p.stats.maxMana || 0; }
-      p.revive = 0; p.guard = false; p.glowT = 0;
+      if (fullHeal) { p.hp = p.max; p.mana = this.startMana(p); }
+      p.revive = 0; p.guard = false; p.glowT = 0; p.siphon = null; p.invT = 0;
       for (const k in p.cd) p.cd[k] = 0;
     }
   }
@@ -183,6 +189,7 @@ export class Sim {
       lastEl: null, lastElT: -9,
       emote: null, emoteAt: 0,
       charge: 0, drawing: false, hawkT: 0, stabN: 0, ambushT: 0, tpLock: 0, vote: null,
+      sh: 0, invT: 0, lastFight: -99, maceN: 0, stepT: 0, stepSet: null, boltN: 0, siphon: null,
       ac: null, sc: null, s2c: null, s3c: null, uc: null, ic: null, ah: false,
       want: { atk: 0, s1: 0, s2: 0, s3: 0, ult: 0, int: 0 },
       hurtT: 0, glowT: 0, lastSeen: performance.now(),
@@ -193,7 +200,7 @@ export class Sim {
     if (cls && cls.available) p.cls = cls.id;
     this.recalc(p);
     p.hp = p.max;
-    p.mana = p.stats.maxMana || 0;
+    p.mana = this.startMana(p);
     if (this.stage > 0) p.pts = this.lvl - 1;
     this.players.set(id, p);
     return p;
@@ -291,6 +298,7 @@ export class Sim {
     if (!p) return;
     p.lastSeen = performance.now();
     if (p.cls === 'rogue' && m.d && !p.dashing && !p.down && this.scene !== 'lobby') this.spawnDecoy(p);
+    if (p.cls === 'cleric' && m.d && !p.dashing && !p.down) this.blessedStep(p);
     if (m.sv === this.sv && !p.down && p.tpLock <= 0 && Number.isFinite(m.x) && Number.isFinite(m.y)) {
       p.x = Math.max(0, Math.min(this.world.pw, m.x));
       p.y = Math.max(0, Math.min(this.world.ph, m.y));
@@ -317,13 +325,22 @@ export class Sim {
     for (const p of this.players.values()) {
       for (const k in p.cd) p.cd[k] -= dt;
       for (const k in p.want) p.want[k] -= dt;
-      p.comboT -= dt; p.hurtT -= dt; p.glowT -= dt; p.hawkT -= dt; p.ambushT -= dt; p.tpLock -= dt;
+      p.comboT -= dt; p.hurtT -= dt; p.glowT -= dt; p.hawkT -= dt; p.ambushT -= dt; p.tpLock -= dt; p.invT -= dt; p.stepT -= dt;
+      // overheal shields slowly fade
+      if (p.sh > 0) p.sh = Math.max(0, p.sh - (p.max * CLERIC.overheal / CLERIC.shieldTime) * dt);
+      // a Cleric's Grace drains when they stop fighting, but never below half
+      if (p.cls === 'cleric' && this.time - p.lastFight > CLERIC.graceIdle) {
+        const floor = p.stats.maxMana * CLERIC.graceFloor;
+        if (p.mana > floor) p.mana = Math.max(floor, p.mana - CLERIC.graceDrain * dt);
+      }
       if (p.stats.maxMana) p.mana = Math.min(p.stats.maxMana, p.mana + p.stats.manaRegen * dt);
-      if (p.down || !active) { p.guard = false; p.drawing = false; p.charge = 0; continue; }
+      if (p.down || !active) { p.guard = false; p.drawing = false; p.charge = 0; p.siphon = null; continue; }
       if (p.stats.shroud && this.inSmoke(p.x, p.y)) p.hp = Math.min(p.max, p.hp + 3 * dt);
       if (p.cls === 'sorcerer') this.sorcererActions(p);
       else if (p.cls === 'bowman') this.bowmanActions(p, dt);
       else if (p.cls === 'rogue') this.rogueActions(p);
+      else if (p.cls === 'cleric') this.clericActions(p);
+      else if (p.cls === 'warlock') this.warlockActions(p, dt);
       else this.warriorActions(p, dt);
       if (p.want.ult > 0) { this.ultimate(p); p.want.ult = 0; }
       if (p.want.int > 0 && this.scene === 'forest') { this.useShrine(p); p.want.int = 0; }
@@ -338,6 +355,7 @@ export class Sim {
     if (this.scene === 'lobby') {
       this.updateLobby(dt);
       this.updateDummies(dt);
+      this.updateImps(dt);
       this.updateShots(dt);
       this.updateZones(dt);
       this.updateStrikes(dt);
@@ -352,7 +370,8 @@ export class Sim {
       this.updateHazards(dt);
       this.updateZones(dt);
       this.updatePickups(dt);
-      for (const d of this.decoys) d.t -= dt;
+      this.updateImps(dt);
+      for (const d of this.decoys) { d.t -= dt; if (d.kind === 'familiar') this.updateFamiliar(d, dt); }
       this.decoys = this.decoys.filter((d) => d.t > 0);
       if (this.scene === 'forest') this.updateWaves(dt);
       this.checkEnd();
@@ -425,6 +444,7 @@ export class Sim {
       if (opts.backstab && this.isBehind(p, e)) { hitDmg *= 1 + opts.backstab; el = 'back'; if (p.stats.bleed) e.bleedT = 3; }
       this.damageEnemy(e, hitDmg, dx / (d || 1), dy / (d || 1), kb, p, false, el);
       if (opts.slow) { e.slowT = opts.slow; }
+      if (opts.stun && e.type !== 'treant') e.stun = Math.max(e.stun, opts.stun);
       hits++;
     }
     if (hits && p.stats.leech) p.hp = Math.min(p.max, p.hp + p.stats.leech * hits);
@@ -699,22 +719,22 @@ export class Sim {
       if (e.dead) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d > ROGUE.hopRange + e.r || !this.los(p.x, p.y, e.x, e.y)) continue;
-      const backX = e.x + Math.cos((e.face || 0) + Math.PI) * (e.r + 12), backY = e.y + Math.sin((e.face || 0) + Math.PI) * (e.r + 12);
-      const canBack = this.isBehind(p, e) || Math.hypot(backX - p.x, backY - p.y) < ROGUE.hopRange;
+      const canBack = this.isBehind(p, e); // only if you're already behind it
       if (canBack && (!back || e.hp > back.hp || (e.hp === back.hp && d < back._d))) { back = e; back._d = d; }
       if (d < nd) { nd = d; near = e; }
     }
     return back || near;
   }
 
+  // a short hop to the nearest edge of the target (never around to its back:
+  // you get behind by walking there or with Shadowstep)
   rogueHop(p, e) {
     const d = Math.hypot(e.x - p.x, e.y - p.y);
-    const backA = (e.face || 0) + Math.PI;
-    const back = { x: e.x + Math.cos(backA) * (e.r + 12), y: e.y + Math.sin(backA) * (e.r + 12) };
-    let spot = null;
-    if (!this.isBehind(p, e) && Math.hypot(back.x - p.x, back.y - p.y) < ROGUE.hopRange && !this.world.isSolid(Math.floor(back.x / TILE), Math.floor(back.y / TILE))) spot = back;
-    else if (d > ROGUE.stabRange - 6) { const k = (d - (e.r + 14)) / d; spot = { x: p.x + (e.x - p.x) * k, y: p.y + (e.y - p.y) * k }; }
-    if (!spot || !this.world.lineOfSight(p.x, p.y - 8, spot.x, spot.y - 8)) return;
+    if (d <= ROGUE.stabRange - 6) return;
+    const k = (d - (e.r + 14)) / d;
+    if (k <= 0) return; // already touching it
+    const spot = { x: p.x + (e.x - p.x) * k, y: p.y + (e.y - p.y) * k };
+    if (!this.world.lineOfSight(p.x, p.y - 8, spot.x, spot.y - 8)) return;
     const pos = this.world.collide(spot.x, spot.y, PLAYER_RADIUS);
     const from = { x: Math.round(p.x), y: Math.round(p.y) };
     p.x = pos.x; p.y = pos.y;
@@ -757,6 +777,299 @@ export class Sim {
     if (d.phantom) this.hitCircle(this.players.get(d.owner) || null, d.x, d.y, 50, 25, 300);
   }
 
+  // ======================================================= healing (Cleric)
+  // Heal a player. With a Cleric's heal, anything past full flame becomes a shield.
+  heal(p, amount, src = null, quiet = false) {
+    if (!p || p.down) return 0;
+    const before = p.hp;
+    p.hp = Math.min(p.max, p.hp + amount);
+    const extra = amount - (p.hp - before);
+    const cap = src && src.stats && src.stats.overheal ? p.max * src.stats.overheal : 0;
+    if (extra > 0 && cap > 0) p.sh = Math.min(Math.max(p.sh, cap), p.sh + extra);
+    if (!quiet) this.emit({ k: 'heal', id: p.id, by: src ? src.id : null, x: Math.round(p.x), y: Math.round(p.y), v: Math.round(amount) });
+    return amount;
+  }
+
+  // who Mending Light goes to: the ally you aim at, otherwise whoever nearby has the least flame (maybe you)
+  mendTarget(p) {
+    const C = CLERIC;
+    let best = null, ba = C.mendAim;
+    for (const o of this.players.values()) {
+      if (o === p || o.down) continue;
+      const dx = o.x - p.x, dy = o.y - p.y, d = Math.hypot(dx, dy);
+      if (d > C.mendRange || !this.los(p.x, p.y, o.x, o.y)) continue;
+      const da = Math.abs(angDiff(Math.atan2(dy, dx), p.aim));
+      if (da < ba) { ba = da; best = o; }
+    }
+    if (best) return best;
+    let low = p, lr = p.hp / p.max;
+    for (const o of this.players.values()) {
+      if (o === p || o.down || Math.hypot(o.x - p.x, o.y - p.y) > C.mendRange || !this.los(p.x, p.y, o.x, o.y)) continue;
+      if (o.hp / o.max < lr) { lr = o.hp / o.max; low = o; }
+    }
+    return low;
+  }
+
+  clericActions(p) {
+    const C = CLERIC, st = p.stats;
+    if ((p.want.atk > 0 || p.ah) && p.cd.atk <= 0) {
+      p.want.atk = 0;
+      p.cd.atk = st.atkCd;
+      p.maceN = (p.maceN % 3) + 1;
+      const smite = st.smite && p.maceN === 3;
+      this.emit({ k: 'sw', id: p.id, a: r2(p.aim), h: smite ? 1 : 0 });
+      const hits = this.hitArc(p, C.maceRange, C.maceArc, C.maceDmg * st.maceMult * this.power(p) * (smite ? 1.6 : 1), smite ? 260 : 170, p.aim, { el: smite ? 'holy' : null });
+      if (hits) this.gainGrace(p, Math.min(C.graceHitCap, C.gracePerHit * hits));
+    }
+    if (p.want.s1 > 0 && p.cd.s1 <= 0) { p.want.s1 = 0; this.mendingLight(p); }
+    if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.judgement(p); }
+    if (p.want.s3 > 0 && p.cd.s3 <= 0) { p.want.s3 = 0; this.sanctify(p); }
+    // Blessed Step: allies you dash through get a little heal
+    if (p.stepT > 0) {
+      for (const o of this.players.values()) {
+        if (o === p || o.down || p.stepSet.has(o.id) || Math.hypot(o.x - p.x, o.y - p.y) > 24) continue;
+        p.stepSet.add(o.id);
+        this.heal(o, st.stepHeal, p);
+      }
+    }
+  }
+
+  gainGrace(p, v) {
+    p.mana = Math.min(p.stats.maxMana, p.mana + v * p.stats.graceMult);
+    p.lastFight = this.time;
+  }
+
+  mendingLight(p) {
+    const st = p.stats;
+    if (p.mana < st.mendCost) { p.cd.s1 = 0.3; this.emit({ k: 'nope', id: p.id, what: 'grace', slot: 's1' }); return; }
+    const t = this.mendTarget(p);
+    p.mana -= st.mendCost;
+    p.cd.s1 = st.mendCd;
+    this.emit({ k: 'mend', id: p.id, tid: t.id, x: Math.round(t.x), y: Math.round(t.y) });
+    this.heal(t, st.mendHeal, p);
+    if (st.beacon) for (const o of this.players.values()) if (o !== t && !o.down && Math.hypot(o.x - t.x, o.y - t.y) < 70) this.heal(o, st.mendHeal * 0.5, p);
+  }
+
+  judgement(p) {
+    const C = CLERIC, st = p.stats;
+    p.cd.s2 = st.judgeCd;
+    this.emit({ k: 'judge', id: p.id, a: r2(p.aim), x: Math.round(p.x), y: Math.round(p.y) });
+    const hits = this.hitArc(p, C.judgeRange, C.judgeArc, C.judgeDmg * st.maceMult * this.power(p), 220, p.aim, { stun: st.judgeStun, el: 'holy' });
+    if (hits) this.gainGrace(p, Math.min(C.graceHitCap, C.gracePerHit * hits));
+  }
+
+  sanctify(p) {
+    const C = CLERIC, st = p.stats;
+    if (p.mana < C.groundCost) { p.cd.s3 = 0.3; this.emit({ k: 'nope', id: p.id, what: 'grace', slot: 's3' }); return; }
+    p.mana -= C.groundCost;
+    p.cd.s3 = st.groundCd;
+    const c = this.aimPoint(p, C.groundRange);
+    this.emit({ k: 'sanct', id: p.id, x: Math.round(c.x), y: Math.round(c.y), r: Math.round(st.groundR) });
+    this.zones.push({ id: this.nextId++, kind: 'sanct', owner: p.id, x: c.x, y: c.y, vx: 0, vy: 0, r: st.groundR, t: st.groundTime, max: st.groundTime, dps: 0, heal: st.groundHeal });
+  }
+
+  blessedStep(p) {
+    p.stepT = 0.35;
+    p.stepSet = new Set();
+    this.zones.push({ id: this.nextId++, kind: 'spark', owner: p.id, x: p.x, y: p.y, vx: 0, vy: 0, r: 22, t: 1.6, max: 1.6, dps: 0, healed: p.stepSet });
+  }
+
+  dawn(p) {
+    const C = CLERIC, st = p.stats;
+    this.emit({ k: 'dawn', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: C.dawnR });
+    for (const o of this.players.values()) {
+      if (Math.hypot(o.x - p.x, o.y - p.y) > C.dawnR) continue;
+      if (o.down) {
+        // rekindled by the dawn, and safe inside a circle of light for a moment
+        o.down = false;
+        o.revive = 0;
+        o.hp = o.max * C.dawnRevive;
+        o.invT = C.aegisTime;
+        this.emit({ k: 'revive', id: o.id, by: p.id, n: o.user, x: Math.round(o.x), y: Math.round(o.y) });
+      } else this.heal(o, C.dawnHeal, p, true);
+      if (st.sunrise) o.sh = Math.max(o.sh, o.max * 0.2);
+    }
+  }
+
+  // ======================================================= Warlock
+  warlockActions(p, dt) {
+    const L = WARLOCK, st = p.stats;
+    if ((p.want.atk > 0 || p.ah) && p.cd.atk <= 0) {
+      p.want.atk = 0;
+      p.cd.atk = st.atkCd;
+      p.boltN = (p.boltN % st.curseEvery) + 1;
+      const curse = p.boltN === st.curseEvery;
+      this.emit({ k: 'bolt', id: p.id, a: r2(p.aim), c: curse ? 1 : 0 });
+      this.shots.push({ id: this.nextId++, kind: 'bolt', owner: p.id, x: p.x + Math.cos(p.aim) * 10, y: p.y - 12 + Math.sin(p.aim) * 10,
+        vx: Math.cos(p.aim) * L.boltSpeed, vy: Math.sin(p.aim) * L.boltSpeed, life: L.boltRange / L.boltSpeed, dmg: L.boltDmg * st.boltMult * this.power(p), curse });
+    }
+    if (p.want.s1 > 0 && p.cd.s1 <= 0) { p.want.s1 = 0; this.graspingHands(p); }
+    if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.summonImps(p); }
+    if (p.want.s3 > 0 && p.cd.s3 <= 0) { p.want.s3 = 0; this.soulSiphon(p); }
+    if (p.siphon) this.updateSiphon(p, dt);
+  }
+
+  spend(p, cost, slot) {
+    if (p.mana < cost) { p.cd[slot] = 0.3; this.emit({ k: 'nope', id: p.id, what: 'mana', slot }); return false; }
+    p.mana -= cost;
+    return true;
+  }
+
+  curse(e, owner) {
+    e.curseT = WARLOCK.curseTime;
+    e.curseBonus = owner ? owner.stats.curseBonus : WARLOCK.curseBonus;
+    e.plague = owner ? owner.stats.plague : false;
+    e.curseBy = owner ? owner.id : null;
+  }
+
+  graspingHands(p) {
+    const H = WARLOCK.hands, st = p.stats;
+    if (!this.spend(p, H.cost, 's1')) return;
+    p.cd.s1 = H.cd * st.spellCd;
+    const c = this.aimPoint(p, H.range);
+    this.emit({ k: 'handsCast', id: p.id, x: Math.round(c.x), y: Math.round(c.y), r: Math.round(st.handsR) });
+    this.zones.push({ id: this.nextId++, kind: 'hands', owner: p.id, x: c.x, y: c.y, vx: 0, vy: 0, r: st.handsR, t: H.delay + 1.1, max: H.delay + 1.1, dps: 0,
+      delay: H.delay, dmg: H.dmg * st.handsMult * this.power(p), root: st.handsRoot, done: false });
+  }
+
+  summonImps(p) {
+    const I = WARLOCK.imps, st = p.stats;
+    if (!this.spend(p, I.cost, 's2')) return;
+    p.cd.s2 = I.cd * st.spellCd;
+    // the old imps go back to the shadows
+    this.imps = this.imps.filter((m) => m.owner !== p.id);
+    const pts = [];
+    for (let i = 0; i < st.imps; i++) {
+      const a = p.aim + (i - (st.imps - 1) / 2) * 0.9;
+      const pos = this.world.collide(p.x + Math.cos(a) * 20, p.y + Math.sin(a) * 14, 5);
+      this.imps.push({ id: this.nextId++, owner: p.id, x: pos.x, y: pos.y, t: I.life, biteT: 0.3, ph: i });
+      pts.push([Math.round(pos.x), Math.round(pos.y)]);
+    }
+    this.emit({ k: 'imps', id: p.id, pts });
+  }
+
+  updateImps(dt) {
+    const I = WARLOCK.imps;
+    for (const m of this.imps) {
+      m.t -= dt; m.biteT -= dt;
+      const owner = this.players.get(m.owner);
+      if (!owner || owner.down) { m.t = 0; continue; }
+      let tgt = null, bd = I.aggro;
+      for (const e of this.enemies) {
+        if (e.dead) continue;
+        const d = Math.hypot(e.x - m.x, e.y - m.y);
+        if (d < bd && Math.hypot(e.x - owner.x, e.y - owner.y) < I.aggro + 80 && this.world.lineOfSight(m.x, m.y - 4, e.x, e.y - 8)) { bd = d; tgt = e; }
+      }
+      let tx, ty, sp = I.speed;
+      if (tgt) {
+        const a = Math.atan2(m.y - tgt.y, m.x - tgt.x) + Math.sin(this.time * 3 + m.ph) * 0.8;
+        tx = tgt.x + Math.cos(a) * (tgt.r + 5); ty = tgt.y + Math.sin(a) * (tgt.r + 5);
+        if (bd < tgt.r + 10 && m.biteT <= 0) {
+          m.biteT = I.biteCd;
+          const d = bd || 1;
+          this.damageEnemy(tgt, I.dmg * owner.stats.impMult * this.power(owner), (tgt.x - m.x) / d, (tgt.y - m.y) / d, 40, owner, false, 'imp');
+          if (owner.stats.maxMana) owner.mana = Math.min(owner.stats.maxMana, owner.mana + owner.stats.impMana);
+        }
+      } else {
+        // nothing to bite: flutter around the Warlock
+        const a = this.time * 2 + m.ph * 2.1;
+        tx = owner.x + Math.cos(a) * 26; ty = owner.y - 4 + Math.sin(a) * 16;
+        sp = I.speed * 0.8;
+      }
+      const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
+      if (d > 2) {
+        const step = Math.min(d, sp * dt);
+        const pos = this.world.collide(m.x + (dx / d) * step, m.y + (dy / d) * step, 4);
+        m.x = pos.x; m.y = pos.y;
+      }
+      m.fx = dx >= 0 ? 1 : -1;
+    }
+    this.imps = this.imps.filter((m) => m.t > 0);
+  }
+
+  soulSiphon(p) {
+    const S = WARLOCK.siphon, st = p.stats;
+    const e = this.aimedEnemy(p, S.range, 0.7);
+    if (!e) { p.cd.s3 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'siphon', slot: 's3' }); return; }
+    p.cd.s3 = S.cd * st.spellCd;
+    p.siphon = { tid: e.id, t: S.time, acc: 0, tick: 0 };
+    this.emit({ k: 'siphon', id: p.id, x: Math.round(e.x), y: Math.round(e.y) });
+  }
+
+  updateSiphon(p, dt) {
+    const S = WARLOCK.siphon, st = p.stats, sp = p.siphon;
+    const e = this.enemies.find((o) => o.id === sp.tid && !o.dead);
+    sp.t -= dt;
+    if (!e || sp.t <= 0 || Math.hypot(e.x - p.x, e.y - p.y) > S.breakRange || !this.los(p.x, p.y, e.x, e.y)) {
+      if (sp.acc > 0.5 && e) this.emit({ k: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), d: Math.round(sp.acc), big: 0, by: p.id, el: 'shadow', kx: 0, ky: 0 });
+      p.siphon = null;
+      return;
+    }
+    const dmg = S.dps * st.siphonMult * this.power(p) * dt;
+    sp.acc += dmg;
+    sp.tick += dt;
+    this.damageEnemy(e, dmg, 0, 0, 0, p, true);
+    e.hurtT = 0.05;
+    p.mana = Math.min(st.maxMana, p.mana + (S.mana * st.siphonMult / S.time) * dt);
+    if (st.lifetap) p.hp = Math.min(p.max, p.hp + 5 * dt);
+    if (sp.tick >= 0.4) {
+      this.emit({ k: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), d: Math.round(sp.acc), big: 0, by: p.id, el: 'shadow', kx: 0, ky: 0 });
+      sp.tick = 0; sp.acc = 0;
+    }
+    if (e.dead) p.siphon = null;
+  }
+
+  // Eclipse: a huge, tough familiar that every nearby enemy wants to fight
+  eclipse(p) {
+    const E = WARLOCK.eclipse;
+    const c = this.aimPoint({ ...p, aimD: 60 }, 60); // always a little in front of the Warlock
+    const hp = E.hp * (1 + 0.3 * (this.players.size - 1)) * (1 + 0.25 * Math.max(0, this.stage - 1));
+    const f = { id: 'decoy' + this.nextId++, kind: 'familiar', owner: p.id, x: c.x, y: c.y, t: p.stats.eclipseTime, max: p.stats.eclipseTime, hp, mhp: hp, down: false, swipeT: 0.6, cloak: p.cloak };
+    this.decoys.push(f);
+    for (const e of this.enemies) {
+      if (e.dead || e.type === 'treant' || e.type === 'dummy') continue;
+      if (Math.hypot(e.x - f.x, e.y - f.y) > E.taunt) continue;
+      e.target = f.id; e.unseen = 0;
+      if (e.state === 'idle' || e.state === 'ret' || e.state === 'chase') e.state = 'chase';
+    }
+    this.emit({ k: 'eclipse', id: p.id, x: Math.round(f.x), y: Math.round(f.y) });
+  }
+
+  updateFamiliar(f, dt) {
+    const E = WARLOCK.eclipse;
+    const owner = this.players.get(f.owner) || null;
+    f.swipeT -= dt;
+    let tgt = null, bd = 220;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - f.x, e.y - f.y);
+      if (d < bd) { bd = d; tgt = e; }
+    }
+    if (tgt && bd > tgt.r + E.r) {
+      const dx = tgt.x - f.x, dy = tgt.y - f.y;
+      const pos = this.world.collide(f.x + (dx / bd) * E.speed * dt, f.y + (dy / bd) * E.speed * dt, 10);
+      f.x = pos.x; f.y = pos.y;
+      f.fx = dx >= 0 ? 1 : -1;
+    }
+    if (f.swipeT <= 0) {
+      f.swipeT = E.swipeCd;
+      if (tgt && bd < E.swipeR + tgt.r) {
+        this.emit({ k: 'famSwipe', x: Math.round(f.x), y: Math.round(f.y) });
+        this.hitCircle(owner, f.x, f.y, E.swipeR, E.dmg * (owner ? this.power(owner) : 1), 120, { el: 'shadow' });
+      }
+      // it keeps pulling enemies towards itself
+      for (const e of this.enemies) {
+        if (!e.dead && e.type !== 'treant' && e.type !== 'dummy' && Math.hypot(e.x - f.x, e.y - f.y) < E.taunt * 0.7) { e.target = f.id; if (e.state === 'idle' || e.state === 'ret') e.state = 'chase'; }
+      }
+    }
+  }
+
+  hurtFamiliar(f, dmg) {
+    f.hp -= dmg;
+    this.emit({ k: 'famHit', x: Math.round(f.x), y: Math.round(f.y), d: Math.round(dmg) });
+    if (f.hp <= 0) { f.t = 0; this.emit({ k: 'famDie', x: Math.round(f.x), y: Math.round(f.y) }); }
+  }
+
   // ======================================================= training dummies (camp only)
   spawnDummy(d) {
     const e = this.baseEnemy('dummy', d.x, d.y, 11, 1);
@@ -770,7 +1083,7 @@ export class Sim {
   updateDummies(dt) {
     for (const e of this.enemies) {
       if (e.type !== 'dummy') continue;
-      e.hurtT -= dt; e.markT = (e.markT || 0) - dt; e.slowT -= dt; e.burnT -= dt; e.stun -= dt;
+      e.hurtT -= dt; e.markT = (e.markT || 0) - dt; e.slowT -= dt; e.burnT -= dt; e.stun -= dt; e.curseT = (e.curseT || 0) - dt;
       e.log = e.log.filter((l) => this.time - l[0] < 4);
       e.vx = 0; e.vy = 0;
       const near = this.nearestAlive(e.x, e.y, 120);
@@ -869,6 +1182,8 @@ export class Sim {
       }
       return;
     }
+    if (p.cls === 'cleric') { this.dawn(p); return; }
+    if (p.cls === 'warlock') { this.eclipse(p); return; }
     if (p.cls === 'bowman') {
       p.hawkT = p.stats.hawkTime;
       p.cd.atk = 0;
@@ -917,6 +1232,7 @@ export class Sim {
   // ======================================================= flame
   hurtPlayer(p, dmg, sx, sy, blockable = true, attacker = null) {
     if (p.down || this.state !== 'playing') return false;
+    if (p.invT > 0) { this.emit({ k: 'dodge', id: p.id, x: Math.round(p.x), y: Math.round(p.y) }); return false; }
     if (p.dashing) { this.emit({ k: 'dodge', id: p.id, x: Math.round(p.x), y: Math.round(p.y) }); return false; }
     if (blockable && p.guard) {
       const a = Math.atan2(sy - p.y, sx - p.x);
@@ -931,6 +1247,13 @@ export class Sim {
     dmg *= p.stats.dmgTaken;
     // Warriors toughen up as their flame burns low (pairs with Dark Fury)
     if (p.cls === 'warrior') dmg *= 1 - WARRIOR.lowGuard * (1 - p.hp / p.max);
+    p.lastFight = this.time;
+    // an overheal shield soaks damage first
+    if (p.sh > 0) {
+      const a = Math.min(p.sh, dmg);
+      p.sh -= a; dmg -= a;
+      if (dmg <= 0.01) { this.emit({ k: 'shieldHit', id: p.id, x: Math.round(p.x), y: Math.round(p.y) }); return true; }
+    }
     p.hp -= dmg;
     p.hurtT = 0.3;
     this.emit({ k: 'hurt', id: p.id, x: Math.round(p.x), y: Math.round(p.y), d: Math.round(dmg) });
@@ -1003,6 +1326,7 @@ export class Sim {
     if (e.type === 'dummy') {
       if (src && src.stats && src.stats.shatter && e.slowT > 0) dmg *= 1.3;
       if (e.markT > 0) dmg *= 1 + (e.markBonus || BOWMAN.markBonus);
+      if (e.curseT > 0) dmg *= 1 + (e.curseBonus || WARLOCK.curseBonus);
       e.log.push([this.time, dmg]);
       e.hurtT = 0.14;
       if (!silent) this.emit({ k: 'hit', x: Math.round(e.x), y: Math.round(e.y - 22), d: Math.round(dmg), big: dmg >= 25 ? 1 : 0, by: src ? src.id : null, el, kx: r2(kx), ky: r2(ky) });
@@ -1015,6 +1339,7 @@ export class Sim {
       const marker = this.players.get(e.markBy);
       if (!silent && marker && marker === src && marker.stats.predator) marker.hp = Math.min(marker.max, marker.hp + 2);
     }
+    if (e.curseT > 0) dmg *= 1 + (e.curseBonus || WARLOCK.curseBonus);
     e.hp -= dmg;
     if (e.type !== 'treant') {
       const heavyFoe = e.type === 'alpha' ? 0.35 : 1;
@@ -1054,6 +1379,11 @@ export class Sim {
       for (const o of this.enemies) if (o !== e) o.dead = true;
       this.emit({ k: 'victory', boss: 1 });
     }
+    if (e.curseT > 0 && e.plague) {
+      let near = null, nd = 130;
+      for (const o of this.enemies) { if (o === e || o.dead) continue; const d = Math.hypot(o.x - e.x, o.y - e.y); if (d < nd) { nd = d; near = o; } }
+      if (near) { this.curse(near, this.players.get(e.curseBy) || null); this.emit({ k: 'plague', x: Math.round(e.x), y: Math.round(e.y), x2: Math.round(near.x), y2: Math.round(near.y) }); }
+    }
     if (src && src.stats && src.stats.embersInDark && src.hp / src.max < 0.4) src.hp = Math.min(src.max, src.hp + 4);
   }
 
@@ -1067,7 +1397,7 @@ export class Sim {
       if (d < bd && this.los(e.x, e.y, p.x, p.y)) { bd = d; best = p; }
     }
     for (const dc of this.decoys) {
-      const d = Math.hypot(dc.x - e.x, dc.y - e.y) * 0.6; // decoys are extra tempting
+      const d = Math.hypot(dc.x - e.x, dc.y - e.y) * (dc.kind === 'familiar' ? 0.25 : 0.6); // decoys are extra tempting
       if (d < bd && this.los(e.x, e.y, dc.x, dc.y)) { bd = d; best = dc; }
     }
     return best;
@@ -1113,6 +1443,7 @@ export class Sim {
       if (e.dead) continue;
       e.t -= dt; e.cd -= dt; e.hurtT -= dt; e.stun -= dt; e.burnT -= dt; e.slowT -= dt;
       e.markT = (e.markT || 0) - dt;
+      e.curseT = (e.curseT || 0) - dt;
       if (e.bleedT > 0) { e.bleedT -= dt; this.damageEnemy(e, 8 * dt, 0, 0, 0, null, true); if (e.dead) continue; }
       e.smoked = this.inSmoke(e.x, e.y);
       if (e.type === 'treant') this.updateTreant(e, dt);
@@ -1217,7 +1548,7 @@ export class Sim {
               }
             }
             for (const d of this.decoys) {
-              if (!e.hit && d.t > 0 && Math.hypot(d.x - e.x, d.y - e.y) < e.r + PLAYER_RADIUS + 4) { e.hit = true; this.popDecoy(d); }
+              if (!e.hit && d.t > 0 && Math.hypot(d.x - e.x, d.y - e.y) < e.r + (d.kind === 'familiar' ? WARLOCK.eclipse.r : PLAYER_RADIUS) + 4) { e.hit = true; if (d.kind === 'familiar') this.hurtFamiliar(d, e.dmg); else this.popDecoy(d); }
             }
           }
           if (e.t <= 0) {
@@ -1379,6 +1710,18 @@ export class Sim {
         } else if (hit || s.life <= 0) { s.life = 0; this.emit({ k: 'thunk', x: Math.round(s.x), y: Math.round(s.y) }); }
         continue;
       }
+      if (s.kind === 'bolt') {
+        if (hit || s.life <= 0) {
+          s.life = 0;
+          if (target) {
+            const d = Math.hypot(s.vx, s.vy) || 1;
+            if (s.curse) this.curse(target, owner);
+            this.damageEnemy(target, s.dmg, s.vx / d, s.vy / d, 70, owner, false, 'shadow');
+            if (owner && owner.stats.leech) owner.hp = Math.min(owner.max, owner.hp + owner.stats.leech);
+          } else this.emit({ k: 'boltFizz', x: Math.round(s.x), y: Math.round(s.y) });
+        }
+        continue;
+      }
       if (hit || s.life <= 0) {
         s.life = 0;
         if (s.kind === 'fire') {
@@ -1440,6 +1783,28 @@ export class Sim {
       }
       const owner = this.players.get(z.owner) || null;
       if (z.kind === 'smoke') continue; // smoke works through inSmoke()
+      if (z.kind === 'sanct') {
+        // holy ground: allies inside heal, enemies inside are slowed
+        for (const o of this.players.values()) if (!o.down && Math.hypot(o.x - z.x, o.y - z.y) < z.r) this.heal(o, z.heal * dt, owner, true);
+        for (const e of this.enemies) if (!e.dead && Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r * 0.5) e.slowT = Math.max(e.slowT, 0.3);
+        continue;
+      }
+      if (z.kind === 'spark') {
+        for (const o of this.players.values()) {
+          if (o.id === z.owner || o.down || z.healed.has(o.id) || Math.hypot(o.x - z.x, o.y - z.y) > z.r + PLAYER_RADIUS) continue;
+          z.healed.add(o.id);
+          this.heal(o, owner ? owner.stats.stepHeal : CLERIC.stepHeal, owner);
+        }
+        continue;
+      }
+      if (z.kind === 'hands') {
+        if (!z.done && z.max - z.t >= z.delay) {
+          z.done = true;
+          this.emit({ k: 'hands', x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r) });
+          this.hitCircle(owner, z.x, z.y, z.r, z.dmg, 0, { stun: z.root, el: 'shadow' });
+        }
+        continue;
+      }
       if (z.kind === 'rain') {
         z.tick -= dt;
         while (z.tick <= 0 && z.t > 0) {
@@ -1545,6 +1910,7 @@ export class Sim {
       p.vote = null;
     }
     this.decoys = [];
+    this.imps = [];
     this.emit({ k: 'rest' });
   }
 
@@ -1584,13 +1950,15 @@ export class Sim {
         em: p.emote, ea: p.emote ? r1(this.time - p.emoteAt) : 0,
         vt: p.vote, pk: p.picked ? 1 : 0, cs: this.scene === 'lobby' ? p.cstats : undefined,
         ch: p.drawing ? r2(p.charge) : 0, hk: Math.max(0, r1(p.hawkT)), ca: Math.max(0, r2(p.cd.atk)),
+        sh: Math.ceil(p.sh || 0), iv: p.invT > 0 ? r1(p.invT) : 0, si: p.siphon ? p.siphon.tid : 0,
       })),
-      dc: this.decoys.map((d) => ({ x: Math.round(d.x), y: Math.round(d.y), c: d.cloak, t: r1(d.t) })),
+      dc: this.decoys.map((d) => ({ id: d.id, x: Math.round(d.x), y: Math.round(d.y), c: d.cloak, t: r1(d.t), k: d.kind || 'decoy', hp: d.kind === 'familiar' ? r2(Math.max(0, d.hp / d.mhp)) : 1, fx: d.fx || 1 })),
+      im: this.imps.map((m) => ({ id: m.id, x: Math.round(m.x), y: Math.round(m.y), fx: m.fx || 1, t: r1(m.t) })),
       es: this.enemies.map((e) => ({
         id: e.id, t: e.type, x: r1(e.x), y: r1(e.y), s: STATE_CODE[e.state], fx: e.fx, dx: r2(e.dx), dy: r2(e.dy),
         hp: Math.ceil(e.hp), mx: Math.ceil(e.max), hu: e.hurtT > 0 ? 1 : 0, b: e.burnT > 0 ? 1 : 0, sl: e.slowT > 0 ? 1 : 0,
         kd: e.kind, dps: e.type === 'dummy' ? Math.round(this.dps(e)) : undefined,
-        el: e.elite ? 1 : 0, sn: e.stun > 0 ? 1 : 0, mk: e.markT > 0 ? 1 : 0, fa: r2(e.face || 0), sm: e.smoked ? 1 : 0, bl: e.bleedT > 0 ? 1 : 0,
+        el: e.elite ? 1 : 0, sn: e.stun > 0 ? 1 : 0, mk: e.markT > 0 ? 1 : 0, cu: e.curseT > 0 ? 1 : 0, fa: r2(e.face || 0), sm: e.smoked ? 1 : 0, bl: e.bleedT > 0 ? 1 : 0,
       })),
       pk: this.pickups.map((k) => ({ id: k.id, k: k.kind, x: Math.round(k.x), y: Math.round(k.y) })),
       hz: this.hazards.map((h) => ({ id: h.id, k: h.kind, x: Math.round(h.x), y: Math.round(h.y), r: h.r, a: h.a, arc: h.arc, p: r2(Math.max(0, 1 - h.t / h.max)), done: h.done ? 1 : 0 })),
