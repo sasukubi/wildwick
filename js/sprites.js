@@ -154,6 +154,85 @@ export function treeSprite(kind, v) {
       px(tg, 17, 40, 6, 10, PAL.b1); px(tg, 17, 40, 2, 10, PAL.b2); px(tg, 15, 49, 10, 2, PAL.b0);
       return { canopy: c, trunk: t, ox: 20, oy: 46 };
     }
+    if (kind === 'birch') {
+      // pale trunk with dark marks, light airy leaves
+      const [c, g] = canvas(44, 54);
+      const cx = 22, cy = 19;
+      oval(g, cx, cy + 1, 17, 16, PAL.l1);
+      for (const [bx, by, rx, ry] of [[-7, -3, 9, 8], [7, -5, 9, 8], [0, -10, 9, 6], [-6, 7, 8, 6], [7, 6, 8, 6]]) {
+        oval(g, cx + bx, cy + by, rx, ry, '#4f7a2e'); oval(g, cx + bx - 2, cy + by - 2, rx - 3, ry - 3, '#6f9a3a'); px(g, cx + bx - 4, cy + by - 4, 3, 1, '#a6c95a');
+      }
+      for (let i = 0; i < 20; i++) px(g, cx - 14 + Math.floor(hash2(i, v + 11) * 28), cy - 12 + Math.floor(hash2(v + 13, i) * 24), 1, 1, hash2(i, 3) < 0.5 ? '#c9e07a' : PAL.l2);
+      const [t, tg] = canvas(44, 54);
+      px(tg, 19, 32, 6, 18, PAL.o); px(tg, 20, 33, 4, 17, '#e8e4da'); px(tg, 20, 33, 1, 17, '#ffffff');
+      for (let y = 35; y < 50; y += 4) px(tg, 20 + (y % 3), y, 3, 1, '#3b3a36');
+      px(tg, 15, 49, 14, 2, 'rgba(0,0,0,0.35)');
+      return { canopy: c, trunk: t, ox: 22, oy: 48 };
+    }
+    if (kind === 'autumn') {
+      // a round tree turning orange and red
+      const [c, g] = canvas(48, 52);
+      const cx = 24, cy = 20;
+      const pal = v === 0 ? ['#5a2a10', '#a04a1a', '#d0702a', '#f0a040'] : v === 1 ? ['#4a1a14', '#8a2a1a', '#c0402a', '#e87a4a'] : ['#5a4410', '#9a7a1a', '#c8a030', '#f0d060'];
+      oval(g, cx, cy + 1, 20, 17, pal[0]);
+      for (const [bx, by, rx, ry] of [[-9, -4, 10, 9], [8, -6, 11, 9], [0, -10, 12, 8], [-10, 6, 9, 7], [10, 6, 9, 7], [0, 5, 12, 9]]) {
+        oval(g, cx + bx, cy + by, rx, ry, pal[1]); oval(g, cx + bx - 2, cy + by - 2, rx - 3, ry - 3, pal[2]); px(g, cx + bx - 5, cy + by - 4, 3, 1, pal[3]);
+      }
+      for (let i = 0; i < 26; i++) px(g, cx - 17 + Math.floor(hash2(i, v + 21) * 34), cy - 14 + Math.floor(hash2(v + 23, i) * 28), 1, 1, hash2(i, 9) < 0.5 ? pal[0] : pal[3]);
+      const [t, tg] = canvas(48, 52);
+      px(tg, 21, 34, 7, 15, PAL.b1); px(tg, 21, 34, 2, 15, PAL.b2); px(tg, 26, 34, 2, 15, PAL.b0);
+      px(tg, 17, 49, 15, 2, 'rgba(0,0,0,0.35)');
+      // a few fallen leaves at the base
+      for (let i = 0; i < 5; i++) px(tg, 14 + Math.floor(hash2(i, v) * 20), 47 + Math.floor(hash2(v, i) * 4), 2, 1, pal[2]);
+      return { canopy: c, trunk: t, ox: 24, oy: 46 };
+    }
+    if (kind === 'dead') {
+      // a bare, twisted dead tree
+      const [c, g] = canvas(44, 54);
+      const branch = (x0, y0, x1, y1, w) => { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0)); for (let i = 0; i <= n; i++) { const k = i / n; px(g, x0 + (x1 - x0) * k, y0 + (y1 - y0) * k, w, w, PAL.b0); } };
+      branch(22, 40, 21, 14, 4); branch(21, 20, 10, 8, 2); branch(21, 18, 33, 6, 2); branch(14, 12, 9, 2, 1); branch(30, 9, 36, 3, 1); branch(21, 14, 23, 2, 2);
+      px(g, 20, 15, 2, 20, PAL.b1);
+      if (v === 1) { px(g, 9, 7, 3, 2, PAL.moss); px(g, 31, 6, 3, 2, PAL.moss); }
+      const [t, tg] = canvas(44, 54);
+      px(tg, 19, 36, 6, 14, PAL.b0); px(tg, 20, 36, 2, 14, PAL.b1); px(tg, 14, 49, 16, 2, 'rgba(0,0,0,0.35)');
+      return { canopy: c, trunk: t, ox: 22, oy: 48 };
+    }
+    if (kind === 'bigpine') {
+      // a tall, narrow fir
+      const [c, g] = canvas(36, 64);
+      const tiers = [[18, 2, 5], [18, 10, 8], [18, 19, 11], [18, 28, 13], [18, 37, 15]];
+      for (const [cx, top, half] of tiers) for (let y = 0; y < 11; y++) { const w = Math.round((half * (y + 1)) / 11); px(g, cx - w - 1, top + y, w * 2 + 3, 1, PAL.p0); }
+      for (const [cx, top, half] of tiers) for (let y = 0; y < 10; y++) {
+        const w = Math.round((half * (y + 1)) / 11);
+        px(g, cx - w, top + y, w * 2 + 1, 1, '#18352a'); px(g, cx - w, top + y, Math.max(1, w), 1, PAL.p1);
+        if (y > 2 && hash2(y, top + v) < 0.45) px(g, cx - w + 1, top + y, 2, 1, PAL.p2);
+      }
+      const [t, tg] = canvas(36, 64);
+      px(tg, 16, 48, 5, 12, PAL.b1); px(tg, 16, 48, 2, 12, PAL.b2); px(tg, 12, 59, 12, 2, 'rgba(0,0,0,0.35)');
+      return { canopy: c, trunk: t, ox: 18, oy: 58 };
+    }
+    if (kind === 'mushtree') {
+      // a giant glowing mushroom: a touch of magic in the forest
+      const [c, g] = canvas(44, 52);
+      const cap = v === 0 ? ['#3a1a4a', '#6a3a8a', '#9a6aca', '#d0a8ff'] : ['#1a3a4a', '#2a6a8a', '#4aa0c8', '#a8e8ff'];
+      oval(g, 22, 18, 20, 11, PAL.o); oval(g, 22, 17, 19, 10, cap[1]); oval(g, 20, 14, 14, 6, cap[2]); px(g, 12, 11, 6, 2, cap[3]);
+      px(g, 4, 22, 36, 3, cap[0]);
+      for (let i = 0; i < 6; i++) oval(g, 8 + Math.floor(hash2(i, v + 2) * 28), 12 + Math.floor(hash2(v + 4, i) * 8), 1, 1, cap[3]);
+      const [t, tg] = canvas(44, 52);
+      px(tg, 17, 24, 10, 25, PAL.o); px(tg, 18, 25, 8, 24, '#e8dcc8'); px(tg, 18, 25, 2, 24, '#ffffff'); px(tg, 24, 25, 2, 24, '#c8b8a0');
+      px(tg, 13, 48, 18, 2, 'rgba(0,0,0,0.35)');
+      return { canopy: c, trunk: t, ox: 22, oy: 46 };
+    }
+    if (kind === 'shrub') {
+      // a big leafy bush (still blocks the way, like a tree)
+      const [c, g] = canvas(44, 40);
+      oval(g, 22, 24, 19, 13, PAL.l0); oval(g, 22, 23, 18, 12, PAL.l1);
+      for (const [bx, by] of [[-8, -2], [7, -3], [0, -6], [-9, 5], [9, 5]]) { oval(g, 22 + bx, 23 + by, 8, 6, PAL.l2); oval(g, 20 + bx, 21 + by, 4, 3, PAL.l3); }
+      if (v === 2) for (let i = 0; i < 6; i++) px(g, 8 + Math.floor(hash2(i, 5) * 28), 14 + Math.floor(hash2(5, i) * 16), 2, 2, '#e8e0f0');
+      const [t, tg] = canvas(44, 40);
+      px(tg, 6, 36, 32, 2, 'rgba(0,0,0,0.35)');
+      return { canopy: c, trunk: t, ox: 22, oy: 36 };
+    }
     // round oak
     const [c, g] = canvas(48, 52);
     const cx = 24, cy = 20;
@@ -711,5 +790,148 @@ export function propSprite(kind, extra = 0) {
       return c;
     }
     return canvas(1, 1)[0];
+  });
+}
+
+// ---------------------------------------------------------- skill icons (16 x 16 pixel art)
+const ICON = {
+  sword(g) {
+    for (let i = 0; i < 9; i++) { px(g, 4 + i, 11 - i, 2, 2, PAL.o); px(g, 5 + i, 11 - i, 1, 1, PAL.steel3); }
+    px(g, 3, 9, 5, 2, PAL.gold); px(g, 4, 8, 2, 5, PAL.gold); px(g, 1, 13, 3, 2, '#6b4426');
+  },
+  flamesword(g) {
+    ICON.sword(g);
+    for (const [x, y] of [[9, 2], [12, 4], [7, 4], [11, 1]]) { px(g, x, y, 2, 2, '#ff7a2a'); px(g, x, y, 1, 1, '#ffe08a'); }
+  },
+  shield(g) {
+    px(g, 3, 2, 10, 2, PAL.o); px(g, 2, 3, 12, 6, PAL.o); px(g, 3, 9, 10, 2, PAL.o); px(g, 5, 11, 6, 2, PAL.o); px(g, 7, 13, 2, 1, PAL.o);
+    px(g, 3, 3, 10, 6, '#c0543a'); px(g, 4, 9, 8, 2, '#c0543a'); px(g, 6, 11, 4, 2, '#c0543a');
+    px(g, 7, 3, 2, 10, '#e8c45c'); px(g, 3, 6, 10, 2, '#e8c45c'); px(g, 4, 4, 2, 1, '#ff9a7a');
+  },
+  quake(g) {
+    px(g, 1, 11, 14, 3, '#6b4f33'); px(g, 1, 11, 14, 1, '#9c7a52');
+    px(g, 7, 9, 2, 4, PAL.o); px(g, 5, 12, 2, 2, PAL.o); px(g, 9, 12, 3, 1, PAL.o);
+    for (const [x, y] of [[3, 6], [11, 5], [7, 3], [13, 8], [2, 9]]) px(g, x, y, 2, 2, '#ffb060');
+  },
+  dash(g) {
+    px(g, 6, 5, 6, 6, PAL.o); px(g, 7, 6, 4, 4, '#8a6a4a'); px(g, 9, 9, 5, 3, PAL.o); px(g, 10, 10, 3, 1, '#5e432b');
+    for (let i = 0; i < 3; i++) px(g, 1, 4 + i * 3, 4 - i, 1, '#d8f0ff');
+  },
+  staff(g) {
+    for (let i = 0; i < 10; i++) px(g, 3 + i, 13 - i, 1, 1, PAL.b3);
+    px(g, 11, 1, 4, 4, PAL.o); px(g, 12, 2, 2, 2, '#7fe0ff'); px(g, 12, 2, 1, 1, '#ffffff');
+  },
+  fire(g) {
+    px(g, 5, 4, 6, 9, '#c4371a'); px(g, 4, 7, 8, 5, '#c4371a'); px(g, 7, 2, 2, 3, '#c4371a');
+    px(g, 6, 6, 4, 6, '#ff8a2a'); px(g, 7, 8, 2, 3, '#ffe08a'); px(g, 3, 12, 10, 2, PAL.o);
+  },
+  frost(g) {
+    for (let i = 0; i < 13; i++) { px(g, 7, 1 + i, 2, 1, '#bfeaff'); px(g, 1 + i, 7, 1, 2, '#bfeaff'); }
+    for (let i = 0; i < 9; i++) { px(g, 3 + i, 3 + i, 1, 1, '#8fd8ff'); px(g, 12 - i, 3 + i, 1, 1, '#8fd8ff'); }
+    px(g, 7, 7, 2, 2, '#ffffff');
+  },
+  gale(g) {
+    const ring = (r, col) => { for (let a = 0; a < 5.5; a += 0.25) px(g, 8 + Math.cos(a) * r, 8 + Math.sin(a) * r * 0.8, 1, 1, col); };
+    ring(6, '#bff5d2'); ring(4, '#8fdcb0'); ring(2, '#e8fff0');
+  },
+  starfall(g) {
+    for (let i = 0; i < 7; i++) px(g, 1 + i, 1 + i, 2, 1, '#ffd36a');
+    oval(g, 10, 10, 4, 4, PAL.o); oval(g, 10, 10, 3, 3, '#ff8a2a'); px(g, 9, 9, 2, 2, '#fff3c0');
+  },
+  bow(g) {
+    for (let y = 1; y < 15; y++) { const x = 4 + Math.round(5 * Math.sin(((y - 1) / 13) * Math.PI)); px(g, x, y, 2, 1, PAL.b3); }
+    px(g, 4, 1, 1, 14, '#e8e0c8'); px(g, 2, 7, 12, 1, '#d8c39a'); px(g, 13, 6, 2, 3, PAL.steel3);
+  },
+  mark(g) {
+    oval(g, 8, 8, 6, 6, '#c4372d'); oval(g, 8, 8, 4, 4, '#f4ece0'); oval(g, 8, 8, 2, 2, '#c4372d');
+    px(g, 7, 0, 2, 3, '#ffd36a'); px(g, 7, 13, 2, 3, '#ffd36a'); px(g, 0, 7, 3, 2, '#ffd36a'); px(g, 13, 7, 3, 2, '#ffd36a');
+  },
+  rain(g) {
+    for (const x of [2, 6, 10, 13]) { const y = (x * 3) % 5; px(g, x, y, 1, 7, '#d8c39a'); px(g, x - 1, y + 7, 3, 2, PAL.steel3); }
+    px(g, 0, 14, 16, 2, '#6b4f33');
+  },
+  hawk(g) {
+    px(g, 1, 6, 6, 3, '#8a6a4a'); px(g, 9, 6, 6, 3, '#8a6a4a'); px(g, 0, 7, 2, 1, '#5e432b'); px(g, 14, 7, 2, 1, '#5e432b');
+    oval(g, 8, 7, 3, 3, '#a07a50'); px(g, 7, 6, 1, 1, '#ffd36a'); px(g, 9, 6, 1, 1, '#ffd36a'); px(g, 8, 8, 1, 2, '#e8c45c');
+    px(g, 7, 10, 2, 4, '#8a6a4a');
+  },
+  dagger(g) {
+    for (let i = 0; i < 7; i++) { px(g, 6 + i, 9 - i, 2, 2, PAL.o); px(g, 7 + i, 9 - i, 1, 1, PAL.steel3); }
+    px(g, 4, 9, 4, 2, PAL.gold); px(g, 2, 11, 3, 3, '#3b2a1e');
+    for (let i = 0; i < 5; i++) px(g, 9 - i, 13 - i, 1, 1, 'rgba(255,120,140,0.9)');
+  },
+  smoke(g) {
+    oval(g, 6, 10, 5, 4, '#7a7f8c'); oval(g, 10, 8, 5, 5, '#9aa0ad'); oval(g, 8, 5, 4, 3, '#b9bfcb'); px(g, 7, 4, 2, 1, '#e0e4ec');
+  },
+  step(g) {
+    px(g, 2, 9, 3, 4, '#b08cff'); px(g, 3, 8, 2, 1, '#b08cff'); px(g, 7, 4, 3, 4, '#d0b8ff'); px(g, 8, 3, 2, 1, '#d0b8ff');
+    for (let i = 0; i < 4; i++) px(g, 11 + (i % 2), 2 + i * 3, 2, 2, 'rgba(180,140,255,0.8)');
+  },
+  cuts(g) {
+    for (let i = 0; i < 12; i++) { px(g, 2 + i, 2 + i, 1, 1, '#ff8a9a'); px(g, 13 - i, 2 + i, 1, 1, '#ff8a9a'); px(g, 2 + i, 8, 1, 1, '#ffd0d8'); }
+  },
+  interact(g) {
+    px(g, 5, 4, 2, 7, '#e8b994'); px(g, 7, 3, 2, 8, '#e8b994'); px(g, 9, 4, 2, 7, '#e8b994'); px(g, 11, 6, 2, 5, '#e8b994'); px(g, 4, 9, 9, 5, '#e8b994');
+    px(g, 3, 8, 2, 3, '#e8b994'); px(g, 4, 13, 9, 1, '#c48f6c');
+  },
+  tree(g) {
+    oval(g, 8, 6, 6, 5, PAL.l1); oval(g, 7, 5, 4, 3, PAL.l3); px(g, 7, 10, 2, 5, PAL.b2);
+  },
+  help(g) {
+    oval(g, 8, 8, 7, 7, '#2a4a6a'); px(g, 6, 4, 4, 2, '#ffffff'); px(g, 9, 6, 2, 2, '#ffffff'); px(g, 7, 8, 2, 2, '#ffffff'); px(g, 7, 11, 2, 2, '#ffffff');
+  },
+};
+// which picture each skill uses
+const SKILL_ICON = {
+  warrior: { atk: 'sword', guard: 'shield', quake: 'quake', dash: 'dash', ult: 'flamesword' },
+  sorcerer: { atk: 'staff', gale: 'gale', fire: 'fire', frost: 'frost', dash: 'dash', ult: 'starfall' },
+  bowman: { atk: 'bow', mark: 'mark', rain: 'rain', dash: 'dash', ult: 'hawk' },
+  rogue: { atk: 'dagger', smoke: 'smoke', step: 'step', dash: 'dash', ult: 'cuts' },
+};
+export function iconSprite(name) {
+  return cached('icon' + name, () => {
+    const [c, g] = canvas(16, 16);
+    (ICON[name] || ICON.help)(g);
+    return c;
+  });
+}
+export function skillIconName(cls, id) { return (SKILL_ICON[cls] || SKILL_ICON.warrior)[id] || id; }
+
+// ---------------------------------------------------------- emoji reactions + map pings (12 x 12)
+export const EMOJIS = ['laugh', 'wow', 'heart', 'thumbs', 'angry', 'fire', 'sad', 'cool'];
+export const PINGS = [
+  { id: 'here', label: 'Over here!', col: '#7fd0ff' },
+  { id: 'danger', label: 'Danger!', col: '#ff6a5a' },
+  { id: 'go', label: 'Go!', col: '#8fe07a' },
+  { id: 'help', label: 'Help!', col: '#ffd36a' },
+  { id: 'wait', label: 'Wait', col: '#e0e0e8' },
+  { id: 'attack', label: 'Attack this!', col: '#ff9a4c' },
+];
+function face(g, col) { oval(g, 6, 6, 5, 5, PAL.o); oval(g, 6, 6, 4, 4, col); }
+const EMO = {
+  laugh(g) { face(g, '#ffd36a'); px(g, 3, 4, 2, 1, PAL.o); px(g, 7, 4, 2, 1, PAL.o); px(g, 3, 7, 6, 2, PAL.o); px(g, 4, 8, 4, 1, '#c4372d'); px(g, 1, 4, 1, 2, '#7fd0ff'); },
+  wow(g) { face(g, '#ffd36a'); px(g, 3, 3, 2, 2, PAL.o); px(g, 7, 3, 2, 2, PAL.o); oval(g, 6, 8, 1, 1, PAL.o); },
+  heart(g) { px(g, 2, 3, 3, 3, '#e0405a'); px(g, 7, 3, 3, 3, '#e0405a'); px(g, 1, 4, 10, 3, '#e0405a'); px(g, 2, 7, 8, 1, '#e0405a'); px(g, 3, 8, 6, 1, '#e0405a'); px(g, 4, 9, 4, 1, '#e0405a'); px(g, 5, 10, 2, 1, '#e0405a'); px(g, 3, 4, 1, 1, '#ffb0c0'); },
+  thumbs(g) { px(g, 3, 5, 6, 6, '#e8b994'); px(g, 5, 1, 3, 5, '#e8b994'); px(g, 2, 5, 1, 6, PAL.o); px(g, 3, 11, 6, 1, PAL.o); px(g, 9, 5, 1, 6, PAL.o); px(g, 1, 6, 2, 5, '#2f6fa8'); },
+  angry(g) { face(g, '#ff7a5a'); px(g, 3, 3, 2, 1, PAL.o); px(g, 7, 3, 2, 1, PAL.o); px(g, 3, 4, 2, 1, PAL.o); px(g, 7, 4, 2, 1, PAL.o); px(g, 4, 8, 4, 1, PAL.o); },
+  fire(g) { px(g, 3, 4, 6, 7, '#c4371a'); px(g, 5, 1, 2, 4, '#c4371a'); px(g, 4, 6, 4, 4, '#ff8a2a'); px(g, 5, 8, 2, 2, '#ffe08a'); },
+  sad(g) { face(g, '#ffd36a'); px(g, 3, 4, 2, 1, PAL.o); px(g, 7, 4, 2, 1, PAL.o); px(g, 4, 8, 4, 1, PAL.o); px(g, 3, 9, 1, 1, PAL.o); px(g, 8, 9, 1, 1, PAL.o); px(g, 3, 5, 1, 2, '#5cc8ff'); },
+  cool(g) { face(g, '#ffd36a'); px(g, 2, 4, 8, 2, PAL.o); px(g, 3, 4, 2, 1, '#2a6dff'); px(g, 7, 4, 2, 1, '#2a6dff'); px(g, 4, 8, 4, 1, PAL.o); px(g, 7, 7, 1, 1, PAL.o); },
+};
+export function emojiSprite(name) {
+  return cached('emo' + name, () => { const [c, g] = canvas(12, 12); (EMO[name] || EMO.wow)(g); return c; });
+}
+export function pingSprite(id) {
+  return cached('ping' + id, () => {
+    const p = PINGS.find((x) => x.id === id) || PINGS[0];
+    const [c, g] = canvas(12, 16);
+    oval(g, 6, 6, 5, 5, PAL.o); oval(g, 6, 6, 4, 4, p.col);
+    px(g, 5, 11, 2, 4, PAL.o); px(g, 5, 11, 1, 3, p.col);
+    if (id === 'danger' || id === 'help') { px(g, 5, 3, 2, 4, PAL.o); px(g, 5, 8, 2, 1, PAL.o); }
+    else if (id === 'go') { px(g, 4, 3, 1, 6, PAL.o); px(g, 5, 4, 2, 4, PAL.o); px(g, 7, 5, 1, 2, PAL.o); }
+    else if (id === 'wait') { px(g, 4, 3, 1, 6, PAL.o); px(g, 7, 3, 1, 6, PAL.o); }
+    else if (id === 'attack') { px(g, 3, 3, 1, 1, PAL.o); px(g, 4, 4, 1, 1, PAL.o); px(g, 5, 5, 2, 2, PAL.o); px(g, 7, 7, 1, 1, PAL.o); px(g, 8, 8, 1, 1, PAL.o); px(g, 8, 3, 1, 1, PAL.o); px(g, 3, 8, 1, 1, PAL.o); }
+    else { px(g, 5, 3, 2, 2, PAL.o); px(g, 5, 6, 2, 3, PAL.o); }
+    return c;
   });
 }

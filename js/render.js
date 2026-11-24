@@ -10,7 +10,7 @@ import { prefs } from './prefs.js';
 import {
   grassTile, dirtTile, paintDecor, treeSprite, boulderSprite, charSprite, downSprite, swordSprite, staffSprite, whiteOf,
   wolfSprite, wolfEye, treantSprite, TREANT_EYES, propSprite, TORCH, CHAR_W,
-  bowSprite, daggerSprite, archwaySprite, ARCH_LANTERNS, lanternSprite,
+  bowSprite, daggerSprite, archwaySprite, ARCH_LANTERNS, lanternSprite, emojiSprite, pingSprite, PINGS,
 } from './sprites.js';
 
 // a stable pseudo-random number for jagged shapes
@@ -96,8 +96,31 @@ const HAND = {
 // o: { look:{cloak,hat}, cls, aim, moving, swing, heavy, down, hurt, dash, guard, cast }
 export function drawCharacter(ctx, x, y, o, t) {
   x = Math.round(x); y = Math.round(y);
-  if (o.down) { ctx.drawImage(downSprite(o.look), x - 16, y - 12); return; }
+  const em = o.emote, et = o.emoteT || 0;
+  if (o.down || em === 'nap') {
+    ctx.drawImage(downSprite(o.look), x - 16, y - 12);
+    if (em === 'nap' && !o.down) {
+      // little Z's drifting up
+      ctx.fillStyle = '#dfe8ff';
+      for (let i = 0; i < 3; i++) {
+        const k = (et * 0.6 + i / 3) % 1;
+        const zx = Math.round(x + 10 + k * 8), zy = Math.round(y - 14 - k * 16), zs = 2 + i;
+        ctx.globalAlpha = 1 - k;
+        ctx.fillRect(zx, zy, zs, 1); ctx.fillRect(zx + zs - 1, zy + 1, 1, 1); ctx.fillRect(zx, zy + 2, 1, 1); ctx.fillRect(zx, zy + 3, zs, 1);
+      }
+      ctx.globalAlpha = 1;
+    }
+    return;
+  }
+  // body movement for the other emotes
+  if (em) {
+    if (em === 'cheer' && et < 1.8) y -= Math.round(Math.abs(Math.sin(et * 9)) * 5);
+    if (em === 'dance') { y -= Math.round(Math.abs(Math.sin(et * 8)) * 3); x += Math.round(Math.sin(et * 4) * 3); o = { ...o, aim: Math.floor(et / 0.4) % 2 ? Math.PI : 0, moving: true }; }
+    if (em === 'flourish' && et < 2) o = { ...o, swing: -1, cast: -1, spinWeapon: et * 11 };
+  }
   ctx.save();
+  if (em === 'bow' && et < 1.4) { ctx.translate(x, y); ctx.rotate(Math.sin(Math.min(1, et / 0.5) * Math.PI / 2) * 0.35 * (et > 0.9 ? Math.max(0, (1.4 - et) / 0.5) : 1) * (Math.cos(o.aim) >= 0 ? 1 : -1)); ctx.translate(-x, -y); }
+  if (em === 'sit') { ctx.translate(x, y); ctx.scale(1, 0.78); ctx.translate(-x, -y); }
   if (o.hurt && Math.floor(t * 30) % 2) ctx.globalAlpha = 0.5;
   if (o.dash) ctx.globalAlpha = 0.75;
   const dir = facing(o.aim);
@@ -107,6 +130,20 @@ export function drawCharacter(ctx, x, y, o, t) {
   const hand = HAND[dir];
   const sorc = o.cls === 'sorcerer';
   const weapon = () => {
+    if (em === 'sit') return; // weapon put away while sitting
+    if (o.spinWeapon !== undefined) {
+      // showing off: the weapon twirls around the hand
+      const img = o.cls === 'bowman' ? bowSprite() : o.cls === 'rogue' ? daggerSprite() : o.cls === 'sorcerer' ? staffSprite() : swordSprite(true);
+      ctx.save(); ctx.translate(x + hand[0], y + hand[1] - 6); ctx.rotate(o.spinWeapon); ctx.drawImage(img, -img.width / 2, -img.height / 2); ctx.restore();
+      return;
+    }
+    if ((em === 'cheer' && et < 1.8) || (em === 'wave' && et < 1.6)) {
+      // arm raised: weapon held up high (cheer) or a waving hand (wave)
+      if (em === 'wave') { ctx.fillStyle = '#e8b994'; ctx.fillRect(Math.round(x + 7 + Math.sin(et * 14) * 2), y - 30, 3, 3); return; }
+      const img = o.cls === 'bowman' ? bowSprite() : o.cls === 'rogue' ? daggerSprite() : o.cls === 'sorcerer' ? staffSprite() : swordSprite(false);
+      ctx.save(); ctx.translate(x + 6, y - 24); ctx.rotate(-Math.PI / 2); ctx.drawImage(img, -2, -img.height / 2); ctx.restore();
+      return;
+    }
     if (o.cls === 'bowman') {
       // the bow points where you aim; the string pulls back as you draw
       ctx.save();
@@ -217,7 +254,13 @@ function buildWorldGfx(world) {
   }
   for (const d of world.decor) paintDecor(g, d);
   for (const m of world.glows) { g.fillStyle = '#d8d2c0'; g.fillRect(m.x, m.y - 3, 1, 4); }
-  const kindOf = (tx, ty) => (hash2(tx * 5 + 1, ty * 3 + 2) < 0.28 ? 'pine' : 'oak');
+  // lots of different trees: oaks, pines, birches, autumn trees, tall firs, shrubs, dead trees and the odd giant mushroom
+  const KINDS = [['oak', 0.34], ['pine', 0.2], ['birch', 0.11], ['autumn', 0.1], ['bigpine', 0.08], ['shrub', 0.08], ['dead', 0.05], ['mushtree', 0.04]];
+  const kindOf = (tx, ty) => {
+    let r = hash2(tx * 5 + 1, ty * 3 + 2);
+    for (const [k, w] of KINDS) { if (r < w) return k; r -= w; }
+    return 'oak';
+  };
   for (let ty = 0; ty < world.h; ty++) {
     for (let tx = 0; tx < world.w; tx++) {
       if (!world.isSolid(tx, ty)) continue;
@@ -231,7 +274,11 @@ function buildWorldGfx(world) {
   for (let ty = 0; ty < world.h; ty++) {
     for (let tx = 0; tx < world.w; tx++) {
       if (!world.isSolid(tx, ty) || world.rocks[world.idx(tx, ty)]) continue;
-      const s = treeSprite(kindOf(tx, ty), Math.floor(hash2(ty, tx) * 3));
+      // deep inside the forest only thick trees, so the wall of trees stays solid-looking
+      let deep = true;
+      for (let oy = -1; oy <= 1 && deep; oy++) for (let ox = -1; ox <= 1; ox++) if (!world.isSolid(tx + ox, ty + oy)) { deep = false; break; }
+      const kind = deep ? (hash2(tx, ty * 7) < 0.6 ? 'oak' : 'pine') : kindOf(tx, ty);
+      const s = treeSprite(kind, Math.floor(hash2(ty, tx) * 3));
       const jx = Math.round((hash2(tx, ty + 9) - 0.5) * 8), jy = Math.round((hash2(tx + 9, ty) - 0.5) * 6);
       c.drawImage(s.canopy, tx * T + 16 - s.ox + jx, ty * T + 30 - s.oy + jy);
     }
@@ -302,6 +349,29 @@ export class Renderer {
     for (const z of snap.zn || []) if (vis(z.x, z.y, 120)) this.drawZoneGround(ctx, z, t);
     for (const s of snap.sf || []) if (vis(s.x, s.y)) this.drawStrikeGround(ctx, s, t);
     for (const e of game.effects) if (e.k === 'crack') this.drawCrack(ctx, e, t);
+    // Rogue: a red glimmer on the ground behind nearby enemies shows where to stand for a backstab
+    if (me.k === 'rogue' && !me.dn) {
+      for (const e of snap.es) {
+        const v = game.views.get('e' + e.id);
+        if (!v || Math.hypot(v.x - game.lp.x, v.y - game.lp.y) > 170) continue;
+        const r = (e.t === 'treant' ? 40 : e.t === 'alpha' ? 18 : 11) + 12;
+        const back = e.fa + Math.PI;
+        let d = Math.atan2(game.lp.y - v.y, game.lp.x - v.x) - e.fa;
+        while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+        const inSpot = Math.abs(d) > Math.PI / 2;
+        const a = (inSpot ? 0.55 : 0.28) + Math.sin(t * 6 + e.id) * 0.08;
+        ctx.save();
+        ctx.translate(v.x, v.y);
+        ctx.scale(1, 0.6);
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = `rgba(255,60,70,${a})`;
+        ctx.lineWidth = inSpot ? 5 : 3;
+        ctx.beginPath(); ctx.arc(0, 0, r, back - 1.2, back + 1.2); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,170,170,${a * 0.8})`; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(0, 0, r + 4, back - 0.9, back + 0.9); ctx.stroke();
+        ctx.restore();
+      }
+    }
 
     const list = [];
     for (const p of world.props) if (vis(p.x, p.y)) list.push({ y: p.y, d: () => this.drawProp(ctx, p) });
@@ -974,6 +1044,22 @@ export class Renderer {
       } else if (e.k === 'cloud') {
         ctx.fillStyle = `rgba(235,240,245,${0.5 * (1 - p)})`;
         for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU + e.seed; circle(ctx, e.x + Math.cos(a) * e.r * 0.6 * easeOut(p), e.y - 6 + Math.sin(a) * e.r * 0.35 * easeOut(p), 10 + 10 * p); }
+      } else if (e.k === 'ping') {
+        // a map ping: a pin dropping in with a pulsing ring
+        const pin = PINGS.find((q) => q.id === e.v) || PINGS[0];
+        const drop = Math.max(0, 1 - (t - e.t0) / 0.2) * 20;
+        ctx.strokeStyle = pin.col; ctx.globalAlpha = Math.min(1, (1 - p) * 3);
+        for (let i = 0; i < 2; i++) { const k = ((t - e.t0) * 1.2 + i * 0.5) % 1; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(e.x, e.y, 6 + k * 22, (6 + k * 22) * 0.5, 0, 0, TAU); ctx.stroke(); }
+        ctx.drawImage(pingSprite(e.v), Math.round(e.x - 6), Math.round(e.y - 16 - drop));
+        ctx.globalAlpha = 1;
+      } else if (e.k === 'emoji') {
+        const v = game.viewFor(e.id);
+        const k = (t - e.t0) / e.life;
+        const pop = k < 0.12 ? 0.6 + k * 3.3 : 1;
+        const img = emojiSprite(e.v);
+        ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+        ctx.save(); ctx.translate(Math.round(v.x), Math.round(v.y - 50 - k * 10)); ctx.scale(pop, pop); ctx.drawImage(img, -6, -6); ctx.restore();
+        ctx.globalAlpha = 1;
       } else if (e.k === 'blink') {
         // Shadowstep / Thousand Cuts: a smoky purple streak between two points
         ctx.globalCompositeOperation = 'lighter';
@@ -1040,9 +1126,14 @@ export class Renderer {
     for (const p of snap.ps) {
       const v = game.playerView(p);
       if (!vis(v.x, v.y)) continue;
-      if (p.id !== game.myId && prefs.names) {
+      if (p.id !== game.myId && !p.dn) {
         const [x, y] = toS(v.x, v.y - (p.h === 'witch' || p.h === 'antlers' ? 50 : 44));
-        text(ctx, p.u, x, y, { size: 12, color: '#f4f1ea' });
+        if (prefs.names) text(ctx, p.u, x, y, { size: 12, color: '#f4f1ea' });
+        // their flame (health) bar, so you can see who needs help
+        const w = 34, by = y + 9, ratio = Math.max(0, p.hp / p.mx);
+        ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(by - 1), w + 2, 6);
+        ctx.fillStyle = ratio < 0.35 ? '#ff5a3a' : byId(FLAMES, p.f).mid;
+        ctx.fillRect(Math.round(x - w / 2), Math.round(by), Math.round(w * ratio), 4);
       }
       if (p.dn) {
         const [x, y] = toS(v.x, v.y - 30);
@@ -1057,6 +1148,13 @@ export class Renderer {
       const pop = p < 0.15 ? 1 + (0.15 - p) * 4 : 1;
       text(ctx, e.text, x, y, { size: Math.round((e.big ? 18 : 14) * pop), color: e.color, alpha: 1 - p * p });
     }
+    for (const e of game.effects) {
+      if (e.k !== 'ping') continue;
+      const p = (t - e.t0) / e.life;
+      const pin = PINGS.find((q) => q.id === e.v) || PINGS[0];
+      const [x, y] = toS(e.x, e.y - 24);
+      text(ctx, pin.label, x, y, { size: 13, color: pin.col, alpha: Math.min(1, (1 - p) * 3) });
+    }
     if (game.prompt) {
       const pr = game.prompt;
       const [x, y] = toS(pr.x, pr.y);
@@ -1066,6 +1164,31 @@ export class Renderer {
   }
 
   drawScreenFx(ctx, game, snap, me, W, H, t) {
+    // stage transitions: a warm flash as you step through the gate...
+    if (game.lightFlash) {
+      const p = (t - game.lightFlash.t0) / 1.6;
+      if (p >= 1) game.lightFlash = null;
+      else {
+        const a = p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7;
+        const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.75);
+        g.addColorStop(0, `rgba(255,248,220,${a})`); g.addColorStop(1, `rgba(255,200,120,${a * 0.85})`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      }
+    }
+    // ...and every new area fades in out of the darkness, with its name
+    if (game.fadeIn) {
+      const p = (t - game.fadeIn.t0) / 2.6;
+      if (p >= 1) game.fadeIn = null;
+      else {
+        const dark = p < 0.25 ? 1 : Math.max(0, 1 - (p - 0.25) / 0.6);
+        ctx.fillStyle = `rgba(4,6,10,${dark})`; ctx.fillRect(0, 0, W, H);
+        const name = game.fadeIn.kind === 'lobby' ? 'The Campfire' : game.fadeIn.kind === 'arena' ? 'The Heart of the Wood' : `Thornwood ${['I', 'II', 'III'][(snap.stg || 1) - 1] || ''}`;
+        const sub = game.fadeIn.kind === 'lobby' ? 'Home again' : game.fadeIn.kind === 'arena' ? 'The Elder Treant stirs' : snap.stg === 1 ? 'Keep your flame alive' : 'Deeper into the wilds';
+        const ta = p < 0.15 ? p / 0.15 : p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.3) : 1;
+        text(ctx, name, W / 2, H * 0.42, { size: 40, font: TITLE, color: '#ffe6b0', alpha: ta });
+        text(ctx, sub, W / 2, H * 0.42 + 38, { size: 17, color: '#d8e2da', alpha: ta * 0.9 });
+      }
+    }
     const ratio = me.hp / me.mx;
     if (snap.sc !== 'lobby' && !me.dn && ratio < 0.35) {
       const a = ((0.35 - ratio) / 0.35) * (0.55 + Math.sin(t * 5) * 0.15);

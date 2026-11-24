@@ -181,6 +181,8 @@ class AudioEngine {
       case 'step2': N(0.3, { freq: 300, slide: 1600, q: 1.5, gain: 0.18 }); T(500, 0.2, { slide: 180, type: 'sine', gain: 0.06 }); break;
       case 'smoke': N(1.0, { filter: 'lowpass', freq: 900, slide: 300, gain: 0.35, attack: 0.02 }); N(0.06, { filter: 'highpass', freq: 2500, gain: 0.15 }); break;
       case 'pop': N(0.15, { freq: 1200, slide: 400, q: 2, gain: 0.15 }); break;
+      case 'ping': T(990, 0.18, { type: 'triangle', gain: 0.14 }); T(1320, 0.25, { type: 'triangle', gain: 0.1, delay: 0.09 }); break;
+      case 'cancel': N(0.1, { filter: 'lowpass', freq: 800, gain: 0.15 }); break;
       case 'cuts': for (let i = 0; i < 7; i++) N(0.08, { freq: 1800, slide: 3500, q: 2, gain: 0.16, delay: i * 0.06 }); break;
       case 'dodge': N(0.15, { freq: 2500, slide: 5000, q: 2, gain: 0.12 }); break;
       // Sorcerer
@@ -254,7 +256,9 @@ class AudioEngine {
     }
     // music: schedule notes a little ahead of time
     const song = SONGS[this.track] || SONGS.forest;
-    const step = 60 / song.bpm / 2; // eighth notes
+    // the camp theme picks up a little as you walk towards the archway (tempo is set by the game)
+    const tempo = this.track === 'lobby' ? this.tempo || 1 : 1;
+    const step = 60 / (song.bpm * tempo) / 2; // eighth notes
     while (this.nextBeat < this.ctx.currentTime + 0.3) {
       this.playStep(song, this.beat, this.nextBeat, step);
       this.nextBeat += step;

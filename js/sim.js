@@ -181,11 +181,13 @@ export class Sim {
       combo: 0, comboT: 0,
       guard: false, guardT: 0, guardHeat: 0, guardStart: 0, gHeld: false,
       lastEl: null, lastElT: -9,
+      emote: null, emoteAt: 0,
       charge: 0, drawing: false, hawkT: 0, stabN: 0, ambushT: 0, tpLock: 0, vote: null,
       ac: null, sc: null, s2c: null, s3c: null, uc: null, ic: null, ah: false,
       want: { atk: 0, s1: 0, s2: 0, s3: 0, ult: 0, int: 0 },
       hurtT: 0, glowT: 0, lastSeen: performance.now(),
       tree: {}, boons: [], pts: 0, choices: null, picked: false, stats: null,
+      cstats: ch.stats && typeof ch.stats === 'object' ? { runs: +ch.stats.runs || 0, kills: +ch.stats.kills || 0, bosses: +ch.stats.bosses || 0, best: +ch.stats.best || 0 } : { runs: 0, kills: 0, bosses: 0, best: 0 },
     };
     const cls = CLASSES.find((c) => c.id === ch.cls);
     if (cls && cls.available) p.cls = cls.id;
@@ -258,6 +260,24 @@ export class Sim {
     return true;
   }
 
+  // reaction wheel: a ping on the map or an emoji over your head
+  react(id, r, v, x, y) {
+    const p = this.players.get(id);
+    if (!p || (r !== 'ping' && r !== 'emoji')) return;
+    const now = this.time;
+    if (p.lastReact && now - p.lastReact < 0.4) return; // no spamming
+    p.lastReact = now;
+    this.emit({ k: 'react', id, r, v: String(v).slice(0, 12), x: Math.round(+x || p.x), y: Math.round(+y || p.y) });
+  }
+
+  // emote wheel: wave, bow, cheer, dance, sit, nap, flourish
+  emote(id, v) {
+    const p = this.players.get(id);
+    if (!p || p.down) return;
+    p.emote = String(v).slice(0, 12);
+    p.emoteAt = this.time;
+  }
+
   // between forests: 'go' (continue) or 'camp' (everyone returns to camp)
   vote(id, v) {
     const p = this.players.get(id);
@@ -278,6 +298,7 @@ export class Sim {
     if (Number.isFinite(m.aim)) p.aim = m.aim;
     if (Number.isFinite(m.ad)) p.aimD = Math.max(0, Math.min(400, m.ad));
     p.moving = !!m.m;
+    if (p.moving || m.ah) p.emote = null; // moving or attacking ends an emote
     p.dashing = !!m.d;
     p.ah = !!m.ah;
     p.gHeld = !!m.g;
@@ -382,7 +403,7 @@ export class Sim {
           p.revive = 0;
           this.emit({ k: 'revive', id: p.id, by: helper.id, n: p.user, x: Math.round(p.x), y: Math.round(p.y) });
         }
-      } else p.revive = Math.max(0, p.revive - dt * 0.5);
+      } else p.revive = Math.max(0, p.revive - dt * 0.08); // progress drains slowly if the helper steps away
     }
   }
 
@@ -655,14 +676,50 @@ export class Sim {
       p.stabN = (p.stabN % G.spinEvery) + 1;
       const amb = p.ambushT > 0 ? 1 + st.ambush : 1;
       p.ambushT = 0;
+      // stabs find their own target: the best nearby enemy, preferring ones you can backstab,
+      // and hop you in close (behind it if you can make it)
+      const tgt = this.rogueTarget(p);
+      if (tgt) this.rogueHop(p, tgt);
+      const aim = tgt ? Math.atan2(tgt.y - p.y, tgt.x - p.x) : p.aim;
       if (p.stabN === G.spinEvery) {
         this.emit({ k: 'spin', id: p.id, r: Math.round(st.spinR) });
-        this.hitArc(p, st.spinR, Math.PI * 2 + 0.1, G.spinDmg * st.spinMult * this.power(p) * amb, 260, p.aim, { backstab: st.backstab });
+        this.hitArc(p, st.spinR, Math.PI * 2 + 0.1, G.spinDmg * st.spinMult * this.power(p) * amb, 260, aim, { backstab: st.backstab });
       } else {
-        this.emit({ k: 'stab', id: p.id, a: r2(p.aim) });
-        this.hitArc(p, G.stabRange, G.stabArc, G.stabDmg * st.stabMult * this.power(p) * amb, 160, p.aim, { backstab: st.backstab });
+        this.emit({ k: 'stab', id: p.id, a: r2(aim) });
+        this.hitArc(p, G.stabRange, G.stabArc, G.stabDmg * st.stabMult * this.power(p) * amb, 160, aim, { backstab: st.backstab });
       }
     }
+  }
+
+  // Who the Rogue's stab goes for: enemies you can backstab come first, and among
+  // those the one with the most health; otherwise simply the closest enemy.
+  rogueTarget(p) {
+    let back = null, near = null, nd = 1e9;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d > ROGUE.hopRange + e.r || !this.los(p.x, p.y, e.x, e.y)) continue;
+      const backX = e.x + Math.cos((e.face || 0) + Math.PI) * (e.r + 12), backY = e.y + Math.sin((e.face || 0) + Math.PI) * (e.r + 12);
+      const canBack = this.isBehind(p, e) || Math.hypot(backX - p.x, backY - p.y) < ROGUE.hopRange;
+      if (canBack && (!back || e.hp > back.hp || (e.hp === back.hp && d < back._d))) { back = e; back._d = d; }
+      if (d < nd) { nd = d; near = e; }
+    }
+    return back || near;
+  }
+
+  rogueHop(p, e) {
+    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    const backA = (e.face || 0) + Math.PI;
+    const back = { x: e.x + Math.cos(backA) * (e.r + 12), y: e.y + Math.sin(backA) * (e.r + 12) };
+    let spot = null;
+    if (!this.isBehind(p, e) && Math.hypot(back.x - p.x, back.y - p.y) < ROGUE.hopRange && !this.world.isSolid(Math.floor(back.x / TILE), Math.floor(back.y / TILE))) spot = back;
+    else if (d > ROGUE.stabRange - 6) { const k = (d - (e.r + 14)) / d; spot = { x: p.x + (e.x - p.x) * k, y: p.y + (e.y - p.y) * k }; }
+    if (!spot || !this.world.lineOfSight(p.x, p.y - 8, spot.x, spot.y - 8)) return;
+    const pos = this.world.collide(spot.x, spot.y, PLAYER_RADIUS);
+    const from = { x: Math.round(p.x), y: Math.round(p.y) };
+    p.x = pos.x; p.y = pos.y;
+    p.tpLock = 0.18;
+    this.emit({ k: 'tp', id: p.id, x: Math.round(p.x), y: Math.round(p.y), fx: from.x, fy: from.y, a: r2(Math.atan2(e.y - p.y, e.x - p.x)), hop: 1 });
   }
 
   shadowstep(p) {
@@ -784,7 +841,10 @@ export class Sim {
 
   // tell everyone how their run went (for the stats board)
   endRunStats(won) {
-    for (const p of this.players.values()) this.emit({ k: 'runEnd', id: p.id, kills: p.kills || 0, stage: this.stage, won: won ? 1 : 0 });
+    for (const p of this.players.values()) {
+      this.emit({ k: 'runEnd', id: p.id, kills: p.kills || 0, stage: this.stage, won: won ? 1 : 0 });
+      const c = p.cstats; c.runs++; c.kills += p.kills || 0; if (won) c.bosses++; c.best = Math.max(c.best, won ? 4 : this.stage);
+    }
     for (const p of this.players.values()) p.kills = 0;
   }
 
@@ -869,6 +929,8 @@ export class Sim {
       }
     }
     dmg *= p.stats.dmgTaken;
+    // Warriors toughen up as their flame burns low (pairs with Dark Fury)
+    if (p.cls === 'warrior') dmg *= 1 - WARRIOR.lowGuard * (1 - p.hp / p.max);
     p.hp -= dmg;
     p.hurtT = 0.3;
     this.emit({ k: 'hurt', id: p.id, x: Math.round(p.x), y: Math.round(p.y), d: Math.round(dmg) });
@@ -947,6 +1009,7 @@ export class Sim {
       return;
     }
     if (src && src.stats && src.stats.shatter && e.slowT > 0) dmg *= 1.3;
+    if (src && src.cls === 'rogue' && e.hp / e.max < 0.5) dmg *= 1 + ROGUE.execute; // Rogues finish off wounded enemies
     if (e.markT > 0) {
       dmg *= 1 + (e.markBonus || BOWMAN.markBonus);
       const marker = this.players.get(e.markBy);
@@ -1518,7 +1581,8 @@ export class Sim {
         lt: p.lastEl ? r2(Math.max(0, p.stats.weaveWindow - (this.time - p.lastElT))) : 0,
         pts: p.pts, tr: p.tree, bn: p.boons,
         bc: this.state === 'rest' && !p.picked ? p.choices : null,
-        vt: p.vote, pk: p.picked ? 1 : 0,
+        em: p.emote, ea: p.emote ? r1(this.time - p.emoteAt) : 0,
+        vt: p.vote, pk: p.picked ? 1 : 0, cs: this.scene === 'lobby' ? p.cstats : undefined,
         ch: p.drawing ? r2(p.charge) : 0, hk: Math.max(0, r1(p.hawkT)), ca: Math.max(0, r2(p.cd.atk)),
       })),
       dc: this.decoys.map((d) => ({ x: Math.round(d.x), y: Math.round(d.y), c: d.cloak, t: r1(d.t) })),

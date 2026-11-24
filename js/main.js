@@ -52,7 +52,7 @@ $('#login-form').addEventListener('submit', (e) => {
     try {
       await backend.logIn($('#username').value.trim(), $('#password').value);
       $('#password').value = '';
-      await showChars();
+      await enterAccount();
     } catch (err) { $('#login-error').textContent = err.message; }
   });
 });
@@ -63,12 +63,30 @@ $('#btn-signup').addEventListener('click', () => {
     try {
       await backend.signUp($('#username').value.trim(), $('#password').value);
       $('#password').value = '';
-      await showChars();
+      await enterAccount();
     } catch (err) { $('#login-error').textContent = err.message; }
   });
 });
 
 // ---------------------------------------------------- characters
+// One character per account: you play as your account. If you made several
+// characters before, the one you played most recently is kept.
+async function enterAccount() {
+  show(null);
+  let chars = [];
+  try { chars = await backend.listChars(); } catch (err) { toast(err.message); }
+  let c = chars.slice().sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0))[0];
+  if (chars.length && !chars.some((x) => x.lastPlayed)) c = chars[chars.length - 1];
+  if (!c) {
+    const cloak = CLOAKS[Math.floor(Math.random() * CLOAKS.length)].id;
+    c = await backend.createChar({ name: backend.username, cloak, hat: 'hood', flame: 'amber', cls: 'warrior' });
+  }
+  c.name = backend.username;
+  c.lastPlayed = Date.now();
+  backend.saveChar(c).catch(() => {});
+  startOwnCamp(c);
+}
+
 async function showChars() {
   show('screen-chars');
   audio.setScene('menu');
@@ -150,7 +168,6 @@ function campHooks() {
       const room = await joinRoom(code); // connect first, so a bad code keeps you in your camp
       startGame(room, false);
     },
-    toChars: () => { const g = game; game = null; if (g) { g.onLeave = () => {}; g.leave(''); } showChars(); },
     logout: async () => { const g = game; game = null; if (g) { g.onLeave = () => {}; g.leave(''); } await backend.logOut(); show('screen-login'); },
   };
 }
@@ -235,7 +252,7 @@ for (let i = 0; i < 26; i++) {
 
 (async () => {
   try {
-    if (await backend.restore()) { await showChars(); return; }
+    if (await backend.restore()) { await enterAccount(); return; }
   } catch (err) { $('#login-error').textContent = err.message; }
   show('screen-login');
 })();

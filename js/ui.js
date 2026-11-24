@@ -6,7 +6,8 @@ import { CLOAKS, HATS, FLAMES, BOONS, TREES, CLASSES, CAP_REQUIREMENT, byId, can
 import { drawPreview } from './render.js';
 import { audio } from './audio.js';
 import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName, getRoomPref } from './prefs.js';
-import { KITS } from './hud.js';
+import { KITS, iconCanvas } from './hud.js';
+import { skillIconName, PINGS, EMOJIS, pingSprite, emojiSprite } from './sprites.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -393,13 +394,13 @@ function fillGuide(box, game, cls) {
   const list = box.querySelector('.guide-moves');
   list.innerHTML = '';
   const kb = (key) => (key === 'strike' ? (prefs.keys.strike ? `LMB / ${keyName(prefs.keys.strike)}` : 'LMB') : key === 'skill2' ? (prefs.keys.skill2 ? `RMB / ${keyName(prefs.keys.skill2)}` : 'RMB') : keyName(prefs.keys[key]));
-  const rows = [...kit.map((k) => ({ icon: k.icon, key: k.key, text: text[k.id] || k.name })),
-    { icon: '✋', key: 'interact', text: 'Interact' }, { icon: '🌳', key: 'tree', text: 'Skill tree' }, { icon: '❔', key: 'controls', text: 'Show / hide this screen' }];
+  const rows = [...kit.map((k) => ({ icon: skillIconName(cls, k.id), key: k.key, text: text[k.id] || k.name })),
+    { icon: 'interact', key: 'interact', text: 'Interact' }, { icon: 'tree', key: 'tree', text: 'Skill tree' }, { icon: 'help', key: 'controls', text: 'Show / hide this screen' }];
   for (const r of rows) {
     const row = document.createElement('div');
     row.className = 'move';
     row.innerHTML = '<span class="mico"></span><span class="keys"><kbd class="k1"></kbd><kbd class="k2 pad"></kbd></span><span class="mtext"></span>';
-    row.querySelector('.mico').textContent = r.icon;
+    row.querySelector('.mico').appendChild(iconCanvas(r.icon, 24));
     row.querySelector('.k1').textContent = kb(r.key);
     row.querySelector('.k2').textContent = PAD[r.key] || '—';
     row.querySelector('.mtext').textContent = r.text;
@@ -481,7 +482,7 @@ pause.refresh = function (snap, me) {
     row.innerHTML = '<i class="dot"></i><b></b><span class="muted"></span>';
     row.querySelector('.dot').style.background = byId(CLOAKS, p.c).hex;
     row.querySelector('b').textContent = p.u + (p.id === g.myId ? ' (you)' : '') + (p.id === 'host' ? ' · host' : '');
-    row.querySelector('span').textContent = `${p.n} · ${byId(CLASSES, p.k).name}`;
+    row.querySelector('span').textContent = byId(CLASSES, p.k).name;
     if (g.isHost && g.room && p.id !== 'host') {
       const k = document.createElement('button');
       k.className = 'gbtn small';
@@ -518,7 +519,9 @@ pause.refresh = function (snap, me) {
   if (!g.isHost) { leave.textContent = 'Leave to my camp'; leave.classList.remove('hidden'); leave.onclick = () => { pause.close(); g.leave(''); }; }
   else if (g.room) { leave.textContent = 'Close my camp to friends'; leave.classList.remove('hidden'); leave.onclick = async () => { if (await confirmDialog('Close your camp? Friends will be sent back to their own camps.', 'Close camp')) { g.closeRoom(); pause.lastKey = ''; } }; }
   else leave.classList.add('hidden');
+  $('#pause-logout').classList.toggle('hidden', !(g.isHost && !g.waitSim));
 };
+$('#pause-logout').onclick = async () => { const g = pause.game; if (await confirmDialog('Log out of Wildwick?', 'Log out')) { pause.close(); g.hooks.logout(); } };
 // buttons that never change
 document.addEventListener('DOMContentLoaded', () => {});
 $('#pause-resume').onclick = () => pause.close();
@@ -539,6 +542,7 @@ campPanel.fill = function (game) {
   $('#camp-error').textContent = '';
   if (host && game.room) $('#camp-code').textContent = game.room.code;
   if (!host) $('#camp-guest-text').textContent = game.waitSim ? 'The party is out in the forest. You\'re waiting at their camp until they return.' : 'You\'re at a friend\'s camp.';
+  $('#camp-logout').classList.toggle('hidden', !host);
   const r = getRoomPref();
   $('#camp-host-code').value = r.custom || r.last || '';
   $('#camp-use-code').checked = r.use !== false && !!(r.custom || r.last);
@@ -564,6 +568,15 @@ $('#camp-close').onclick = async () => { if (await confirmDialog('Close your cam
 $('#camp-copy').onclick = async () => { const c = $('#camp-code').textContent; try { await navigator.clipboard.writeText(c); toast('Room code copied. Paste it in Discord!'); } catch { toast('The room code is ' + c); } };
 $('#camp-leave').onclick = () => { const g = campPanel.game; campPanel.close(); g.leave(''); };
 $('#camp [data-close]').onclick = () => campPanel.close();
+$('#camp-logout').onclick = async () => { const g = campPanel.game; if (await confirmDialog('Log out of Wildwick?', 'Log out')) { campPanel.close(); g.hooks.logout(); } };
+// paste a room code someone sent you
+$('#camp-paste').onclick = async () => {
+  try {
+    const t = (await navigator.clipboard.readText()).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!t) throw new Error('empty');
+    $('#camp-join-code').value = t.slice(-5);
+  } catch { $('#camp-error').textContent = 'Could not read your clipboard. Click the box and press Ctrl+V instead.'; $('#camp-join-code').focus(); }
+};
 
 // ---------------------------------------------------------- signpost: change character / log out
 export const signPanel = makePanel('#sign');
@@ -573,18 +586,98 @@ $('#sign [data-close]').onclick = () => signPanel.close();
 
 // ---------------------------------------------------------- stats board
 export const boardPanel = makePanel('#board');
+// everyone currently in the camp, best players first
 boardPanel.fill = function (game) {
-  const st = game.char.stats || { runs: 0, kills: 0, bosses: 0, best: 0 };
-  const best = st.best >= 4 ? 'Defeated the Elder Treant' : st.best > 0 ? `Reached Thornwood ${['I', 'II', 'III'][st.best - 1]}` : 'No runs yet';
-  $('#board-name').textContent = `${game.char.name} the ${byId(CLASSES, game.char.cls).name}`;
-  $('#board-rows').innerHTML = '';
-  for (const [k, v] of [['Runs', st.runs], ['Monsters defeated', st.kills], ['Elder Treants felled', st.bosses], ['Best run', best]]) {
+  const snap = game.lastSnap;
+  const people = (snap ? snap.ps : []).map((p) => ({ name: p.u, cls: p.k, c: p.cloak || p.c, st: p.cs || (p.id === game.myId ? game.char.stats : null) || { runs: 0, kills: 0, bosses: 0, best: 0 } }));
+  people.sort((a, b) => b.st.bosses - a.st.bosses || b.st.best - a.st.best || b.st.kills - a.st.kills);
+  const bestText = (b) => (b >= 4 ? 'Beat the Treant' : b > 0 ? `Thornwood ${['I', 'II', 'III'][b - 1]}` : '—');
+  $('#board-name').textContent = 'Everyone in this camp';
+  const box = $('#board-rows');
+  box.innerHTML = '<div class="lrow head"><span>Player</span><span>Runs</span><span>Kills</span><span>Treants</span><span>Best run</span></div>';
+  for (const p of people) {
     const row = document.createElement('div');
-    row.className = 'brow';
-    row.innerHTML = '<span></span><b></b>';
-    row.querySelector('span').textContent = k;
-    row.querySelector('b').textContent = v;
-    $('#board-rows').appendChild(row);
+    row.className = 'lrow';
+    for (const v of [`${p.name} (${byId(CLASSES, p.cls).name})`, p.st.runs, p.st.kills, p.st.bosses, bestText(p.st.best)]) { const s = document.createElement('span'); s.textContent = v; row.appendChild(s); }
+    box.appendChild(row);
   }
 };
 $('#board [data-close]').onclick = () => boardPanel.close();
+
+// ---------------------------------------------------------- reaction wheel (mouse 3) and emote wheel (C)
+export const EMOTES = [
+  { id: 'wave', name: 'Wave' }, { id: 'bow', name: 'Bow' }, { id: 'cheer', name: 'Cheer' }, { id: 'dance', name: 'Dance' },
+  { id: 'sit', name: 'Sit' }, { id: 'nap', name: 'Nap' }, { id: 'flourish', name: 'Show off' },
+];
+const EMOJI_NAMES = { laugh: 'Haha', wow: 'Wow', heart: 'Love', thumbs: 'Nice', angry: 'Grr', fire: 'Lit', sad: 'Aww', cool: 'Cool' };
+
+export const wheel = {
+  open: false,
+  kind: null,      // 'react' or 'emote'
+  page: 0,         // reaction wheel: 0 = map pings, 1 = emoji
+  cx: 0, cy: 0,
+  hover: -1,
+  items: [],
+  show(kind, x, y) {
+    this.kind = kind;
+    this.open = true;
+    this.cx = x; this.cy = y;
+    if (kind === 'react') { try { this.page = +localStorage.getItem('wildwick.reactPage') || 0; } catch { this.page = 0; } }
+    this.build();
+    const el = $('#wheel');
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    el.classList.remove('hidden');
+    audio.play('hover');
+  },
+  flip(dir) {
+    if (this.kind !== 'react') return;
+    this.page = (this.page + (dir > 0 ? 1 : 1)) % 2;
+    try { localStorage.setItem('wildwick.reactPage', this.page); } catch { /* ignore */ }
+    this.build();
+    audio.play('click');
+  },
+  build() {
+    const el = $('#wheel');
+    el.innerHTML = '';
+    if (this.kind === 'emote') this.items = EMOTES.map((e) => ({ v: e.id, label: e.name }));
+    else if (this.page === 0) this.items = PINGS.map((p) => ({ v: p.id, label: p.label, sprite: pingSprite(p.id) }));
+    else this.items = EMOJIS.map((e) => ({ v: e, label: EMOJI_NAMES[e], sprite: emojiSprite(e) }));
+    const n = this.items.length, R = 86;
+    this.items.forEach((it, i) => {
+      const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+      const b = document.createElement('div');
+      b.className = 'wslot glass';
+      b.style.left = Math.cos(a) * R + 'px';
+      b.style.top = Math.sin(a) * R + 'px';
+      if (it.sprite) { const c = document.createElement('canvas'); c.width = it.sprite.width; c.height = it.sprite.height; c.getContext('2d').drawImage(it.sprite, 0, 0); c.className = 'picon'; c.style.width = it.sprite.width * 2.4 + 'px'; c.style.height = it.sprite.height * 2.4 + 'px'; b.appendChild(c); }
+      const s = document.createElement('span'); s.textContent = it.label; b.appendChild(s);
+      el.appendChild(b);
+    });
+    const mid = document.createElement('div');
+    mid.className = 'wmid';
+    mid.textContent = this.kind === 'emote' ? 'Emotes' : this.page === 0 ? 'Pings · scroll for emoji' : 'Emoji · scroll for pings';
+    el.appendChild(mid);
+    this.hover = -1;
+  },
+  update(mx, my) {
+    if (!this.open) return;
+    const dx = mx - this.cx, dy = my - this.cy;
+    const n = this.items.length;
+    let h = -1;
+    if (Math.hypot(dx, dy) > 28) {
+      const a = (Math.atan2(dy, dx) + Math.PI / 2 + Math.PI * 2 + Math.PI / n) % (Math.PI * 2);
+      h = Math.floor(a / ((Math.PI * 2) / n)) % n;
+    }
+    if (h !== this.hover) {
+      this.hover = h;
+      [...$('#wheel').querySelectorAll('.wslot')].forEach((el, i) => el.classList.toggle('on', i === h));
+      if (h >= 0) audio.play('hover');
+    }
+  },
+  close() {
+    this.open = false;
+    $('#wheel').classList.add('hidden');
+    const pick = this.hover >= 0 ? this.items[this.hover] : null;
+    return pick ? { kind: this.kind, page: this.page, v: pick.v } : null;
+  },
+};

@@ -3,6 +3,18 @@
 //  only touches the page when a value actually changes.
 // =============================================================
 import { CLOAKS, FLAMES, SORCERER, ELEMENTS, RULES, byId } from './data.js';
+import { iconSprite, skillIconName } from './sprites.js';
+
+// a crisp, scaled-up copy of a pixel-art icon
+export function iconCanvas(name, size = 28) {
+  const src = iconSprite(name);
+  const c = document.createElement('canvas');
+  c.width = 16; c.height = 16;
+  c.getContext('2d').drawImage(src, 0, 0);
+  c.className = 'picon';
+  c.style.width = c.style.height = size + 'px';
+  return c;
+}
 
 const $ = (s) => document.querySelector(s);
 const last = new Map();
@@ -60,7 +72,7 @@ export function buildHud(cls = 'warrior') {
     el.id = 'sk-' + s.id;
     el.title = s.name;
     el.innerHTML = `<svg class="ring" viewBox="0 0 52 52"><circle class="track" cx="26" cy="26" r="23"/><circle class="prog" cx="26" cy="26" r="23" stroke-dasharray="${RING}" stroke-dashoffset="0"/></svg><span class="ico"></span><span class="cdnum"></span><span class="key"></span>`;
-    el.querySelector('.ico').textContent = s.icon;
+    el.querySelector('.ico').appendChild(iconCanvas(skillIconName(cls, s.id), s.id === 'ult' ? 32 : 28));
     if (s.el) el.style.setProperty('--el', ELEMENTS[s.el].color);
     box.appendChild(el);
   }
@@ -91,7 +103,7 @@ export function updateHud(game, snap, me) {
     if (!c) continue;
     c.querySelector('.dot').style.background = byId(CLOAKS, p.c).hex;
     c.querySelector('b').textContent = p.u + (p.id === game.myId ? ' (you)' : '');
-    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Flame out!') : `${p.n} · ${{ sorcerer: 'Sorcerer', bowman: 'Bowman', rogue: 'Rogue' }[p.k] || 'Warrior'}`;
+    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Flame out!') : `${{ sorcerer: 'Sorcerer', bowman: 'Bowman', rogue: 'Rogue' }[p.k] || 'Warrior'}`;
     c.classList.toggle('down', !!p.dn);
     const fill = c.querySelector('.mini i');
     fill.style.width = (p.hp / p.mx) * 100 + '%';
@@ -142,7 +154,8 @@ export function updateHud(game, snap, me) {
   set($('#pts'), 'hide', !me.pts);
   set($('#pts'), 'text', `+${me.pts} skill point${me.pts > 1 ? 's' : ''} [${game.keyLabel('tree')}]`);
   const fury = Math.round((stats.furyMax || 0) * (1 - ratio) * 100);
-  set($('#fury'), 'text', me.k === 'warrior' && snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage` : '');
+  const tough = Math.round(30 * (1 - ratio));
+  set($('#fury'), 'text', me.k === 'warrior' && snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage · ${tough}% less damage taken` : '');
 
   // weaving: show which element is "primed" and how long you have to fuse it
   const weave = $('#weave');

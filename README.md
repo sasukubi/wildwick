@@ -8,9 +8,8 @@ An online co-op roguelite for 1–4 players, set in a dark magical forest.
 **https://sasukubi.github.io/wildwick/**. Send this link to your friends; nothing to install.
 
 1. Open the link (Chrome, Edge or Firefox).
-2. Create an account (username + password), then make a character.
-3. **Host:** click *Host a game* and share the 5-letter room code in Discord.
-   **Friends:** click *Join* and type the code.
+2. Create an account (username + password). Your account is your character, and you land at your own campfire.
+3. Walk to the campfire and press **F**. **Host:** open your camp and share the 5-letter room code in Discord. **Friends:** paste or type the code to join.
 4. In the campfire lobby, visit the **wardrobe** (cloak, hat, flame colour) and the **class shrines**. When everyone stands on the glowing path to the north, the run starts.
 5. A run is **3 forests, then the Elder Treant**. In each forest, defeat the **Alpha Thornwolf** to open the Heartwood Gate, then get everyone inside. Between forests, everyone picks a **boon**.
 6. Enemies give the whole party EXP. Each level gives everyone a **skill point** (press **T**).
@@ -36,7 +35,9 @@ All keys can be changed in **Settings (Esc) > Controls**.
 | Interact | F | Y |
 | Skill tree | T / Tab | View |
 | Show controls for your class | H | — |
-| Settings | Esc | Start |
+| Pause menu (settings, party, log out) | Esc | Start |
+| Reaction wheel (pings, scroll for emoji) | Hold mouse 3 | — |
+| Emote wheel | Hold C | — |
 
 **Sorcerer weaving:** cast two *different* spells quickly and they fuse: Fire + Frost = Steam Burst (stuns), Fire + Gale = Firestorm (moving fire tornado), Frost + Gale = Blizzard (slowing storm). Spells use mana, which refills on its own.
 

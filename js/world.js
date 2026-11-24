@@ -271,7 +271,7 @@ export function makeLobby() {
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2;
     if (a > 5.6 || a < 0.7) continue; // opening towards the fire
-    world.props.push({ type: 'fence', x: Math.round(9.5 * T + Math.cos(a) * 5.4 * T), y: Math.round(17 * T + Math.sin(a) * 4.6 * T) });
+    world.props.push({ type: 'fence', x: Math.round(9.5 * T + Math.cos(a) * 5.4 * T), y: Math.round(17 * T + Math.sin(a) * 4.6 * T), solidR: 6 });
   }
   world.dummies = [
     { x: 6.5 * T, y: 15 * T, kind: 'plain' },
@@ -279,19 +279,18 @@ export function makeLobby() {
     { x: 8 * T, y: 19.5 * T, kind: 'hitter' },
   ];
   world.props.push({ type: 'resetpost', x: 13 * T, y: 20.5 * T, solidR: 6 });
-  world.props.push({ type: 'sign', x: 13.5 * T, y: 12.5 * T, text: 'Training Grounds' });
+  world.props.push({ type: 'sign', x: 16.5 * T, y: 16.9 * T, text: 'Training Grounds', solidR: 7 });
   // class hall: shrines in a ring with banners
   CLASSES.forEach((c, i) => {
     const a = -Math.PI / 2 + (i / CLASSES.length) * Math.PI * 2;
     world.props.push({ type: 'shrine', cls: c.id, x: Math.round(36.5 * T + Math.cos(a) * 4.2 * T), y: Math.round(18 * T + Math.sin(a) * 3.6 * T + 16), solidR: 10 });
   });
-  world.props.push({ type: 'sign', x: 31 * T, y: 13 * T, text: 'Class Hall' });
+  world.props.push({ type: 'sign', x: 29.5 * T, y: 16.6 * T, text: 'Class Hall', solidR: 7 });
   // wardrobe tent
   world.props.push({ type: 'tent', x: 12 * T, y: 28.4 * T, solidR: 0 });
   world.props.push({ type: 'wardrobe', x: 12 * T, y: 29.3 * T, solidR: 15 });
-  // signpost (change character / log out) and the stats board
-  world.props.push({ type: 'signpost', x: (cx - 2.5) * T, y: 28.5 * T, solidR: 8 });
-  world.props.push({ type: 'board', x: (cx + 2.5) * T, y: 28.5 * T, solidR: 12 });
+  // the stats board
+  world.props.push({ type: 'board', x: cx * T, y: 28.6 * T, solidR: 12 });
   // an owl watching from the trees by the archway
   world.props.push({ type: 'owl', x: (cx + 2.6) * T, y: 9 * T });
   world.readyZone = { x: (cx - 2) * T, y: 1 * T, w: 4 * T, h: 3 * T };

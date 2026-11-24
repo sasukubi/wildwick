@@ -62,6 +62,7 @@ export const WARRIOR = {
   // Pyre Cleave (Wildfire ultimate)
   pyreDmg: 80, pyreRange: 125, pyreArc: 3.8, pyreTrail: 4, pyreTrailDps: 30,
   furyMax: 0.8,      // Dark Fury: up to +80% damage at almost no flame
+  lowGuard: 0.3,     // ...and up to 30% less damage taken at almost no flame
 };
 
 // ---- Sorcerer -----------------------------------------------
@@ -72,7 +73,7 @@ export const SORCERER = {
   mana: 100, manaRegen: 10,
   fire:  { cost: 22, cd: 0.9, speed: 250, dmg: 24, r: 34, range: 260 },
   frost: { cost: 18, cd: 0.6, dmg: 10, shards: 3, spread: 0.32, speed: 300, range: 160, slow: 0.5, slowT: 2 },
-  gale:  { cost: 16, cd: 0.7, range: 92, arc: 1.7, kb: 440, dmg: 6 },
+  gale:  { cost: 0, cd: 0.7, range: 92, arc: 1.7, kb: 440, dmg: 6 },  // free: your always-available push
   weaveWindow: 1.6, weaveExtra: 20, // fusing costs 20 extra mana on top of the second spell
   steam:     { r: 70, dmg: 34, stun: 1.3, range: 150 },
   firestorm: { r: 30, dps: 42, t: 3, speed: 90 },
@@ -113,6 +114,9 @@ export const ROGUE = {
   stabCd: 0.33, stabRange: 40, stabArc: 1.3, stabDmg: 9,   // fast, light stabs (about 3 a second)
   spinEvery: 4, spinR: 50, spinDmg: 10,                     // every 4th stab spins
   backstab: 1.0,                                            // +100% from the back half
+  dashCd: 0.9,                                              // Rogue dashes recharge faster
+  execute: 0.1,                                             // +10% damage to enemies under half health
+  hopRange: 95,                                             // stabs hop toward enemies this far away
   decoyTime: 2.5,
   stepCd: 7, stepRange: 220,                                // Shadowstep
   smokeCd: 14, smokeR: 72, smokeTime: 5, smokeSpeed: 1.4,   // Smoke Bomb
@@ -347,7 +351,7 @@ export function classStats(cls, tree = {}, boons = []) {
       maxFlame: G.maxFlame + 15 * b('wick'),
       speed: G.speed * (1 + 0.1 * b('swift')),
       atkCd: G.stabCd,
-      dashCd: base.dashCd * Math.pow(0.88, r('lightfeet')),
+      dashCd: G.dashCd * Math.pow(0.75, b('dash')) * Math.pow(0.88, r('lightfeet')),
       stabMult: 1 + 0.12 * r('edge'),
       backstab: G.backstab + 0.25 * r('assassin'),
       spinMult: 1 + 0.3 * r('whirl'),

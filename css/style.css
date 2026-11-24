@@ -346,3 +346,17 @@ input:not([type=range]) { font-family: 'Pixelify Sans', system-ui, sans-serif; }
 #settings .binds { max-height: none; }
 #settings h3 { margin-top: 12px; }
 .bind kbd { min-width: 90px; text-align: center; padding: 3px 8px; }
+
+/* pixel-art icons */
+.picon { image-rendering: pixelated; display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.7)); }
+.skill .ico { display: grid; place-items: center; }
+.move .mico { display: grid; place-items: center; }
+#board { width: min(560px, calc(100vw - 28px)); }
+.lrow { display: grid; grid-template-columns: 2.2fr 0.7fr 0.7fr 0.9fr 1.3fr; gap: 6px; padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); font-size: 14px; }
+.lrow.head { color: var(--gold); font-size: 12px; }
+
+/* reaction / emote wheels */
+#wheel { position: fixed; z-index: 9; width: 0; height: 0; pointer-events: none; }
+.wslot { position: absolute; transform: translate(-50%, -50%); min-width: 66px; padding: 6px 8px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; transition: transform 0.08s, box-shadow 0.08s; }
+.wslot.on { transform: translate(-50%, -50%) scale(1.15); box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgba(255, 154, 74, 0.6); }
+.wmid { position: absolute; transform: translate(-50%, -50%); font-size: 11px; color: var(--muted); white-space: nowrap; text-shadow: 0 1px 3px #000; }

@@ -187,6 +187,7 @@
         <button id="pause-settings" class="gbtn">Settings</button>
         <button id="pause-controls" class="gbtn">Controls</button>
         <button id="pause-leave" class="gbtn danger hidden">Leave</button>
+        <button id="pause-logout" class="gbtn hidden">Log out</button>
       </div>
     </div>
   </div>
@@ -205,6 +206,7 @@
       <h3>Join a friend's camp</h3>
       <div class="row">
         <input id="camp-join-code" maxlength="5" placeholder="FRIEND'S CODE" autocomplete="off">
+        <button id="camp-paste" class="gbtn small" title="Paste a code you copied">Paste</button>
         <button id="camp-join" class="gbtn primary">Join</button>
       </div>
     </div>
@@ -218,6 +220,7 @@
       <button id="camp-leave" class="gbtn danger block">Leave to my camp</button>
     </div>
     <p id="camp-error" class="error"></p>
+    <button id="camp-logout" class="gbtn small hidden">Log out</button>
   </div>
 
   <div id="sign" class="panel glass modal hidden">
@@ -231,6 +234,8 @@
     <p id="board-name" class="muted"></p>
     <div id="board-rows"></div>
   </div>
+
+  <div id="wheel" class="hidden"></div>
 
   <div id="toasts"></div>
 

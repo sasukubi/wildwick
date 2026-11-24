@@ -11,7 +11,9 @@ export class Input {
   constructor(canvas) {
     this.canvas = canvas;
     this.keys = new Set();
-    this.mouse = { x: innerWidth / 2, y: innerHeight / 2, left: false, right: false };
+    this.mouse = { x: innerWidth / 2, y: innerHeight / 2, left: false, right: false, middle: false };
+    this.scroll = 0;        // mouse-wheel steps (used to flip reaction-wheel pages)
+    this.wheelOpen = false; // while a wheel is open, scrolling doesn't scroll the page
     this.counts = { atk: 0, s1: 0, s2: 0, s3: 0, dash: 0, interact: 0, esc: 0, ult: 0, tree: 0, back: 0, controls: 0 };
     this.device = 'kbm';
     this.padMove = { x: 0, y: 0 };
@@ -46,17 +48,20 @@ export class Input {
       this.device = 'kbm';
       if (e.button === 0) { this.mouse.left = true; this.counts.atk++; }
       if (e.button === 2) { this.mouse.right = true; this.counts.s2++; this.toggleGuard = !this.toggleGuard; }
+      if (e.button === 1) { this.mouse.middle = true; e.preventDefault(); }
     };
     this.onMouseUp = (e) => {
       if (e.button === 0) this.mouse.left = false;
       if (e.button === 2) this.mouse.right = false;
+      if (e.button === 1) this.mouse.middle = false;
     };
+    this.onWheel = (e) => { if (!this.wheelOpen) return; e.preventDefault(); this.scroll += Math.sign(e.deltaY); };
     this.onMouseMove = (e) => {
       if (Math.abs(e.clientX - this.mouse.x) + Math.abs(e.clientY - this.mouse.y) > 2) this.device = 'kbm';
       this.mouse.x = e.clientX;
       this.mouse.y = e.clientY;
     };
-    this.onBlur = () => { this.keys.clear(); this.mouse.left = false; this.mouse.right = false; };
+    this.onBlur = () => { this.keys.clear(); this.mouse.left = false; this.mouse.right = false; this.mouse.middle = false; };
     this.onContext = (e) => e.preventDefault();
 
     addEventListener('keydown', this.onKeyDown);
@@ -66,6 +71,7 @@ export class Input {
     addEventListener('mousemove', this.onMouseMove);
     addEventListener('blur', this.onBlur);
     canvas.addEventListener('contextmenu', this.onContext);
+    addEventListener('wheel', this.onWheel, { passive: false });
   }
 
   poll() {
@@ -125,5 +131,6 @@ export class Input {
     removeEventListener('mousemove', this.onMouseMove);
     removeEventListener('blur', this.onBlur);
     this.canvas.removeEventListener('contextmenu', this.onContext);
+    removeEventListener('wheel', this.onWheel);
   }
 }

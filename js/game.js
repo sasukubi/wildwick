@@ -9,7 +9,7 @@ import { World } from './world.js';
 import { Sim } from './sim.js';
 import { Input } from './input.js';
 import { Renderer } from './render.js';
-import { toast, Wardrobe, TreePanel, BoonPanel, ControlsPanel, settings, pause, showClassTips, campPanel, signPanel, boardPanel } from './ui.js';
+import { toast, Wardrobe, TreePanel, BoonPanel, ControlsPanel, settings, pause, showClassTips, campPanel, signPanel, boardPanel, wheel } from './ui.js';
 import { buildHud, updateHud } from './hud.js';
 import { audio } from './audio.js';
 import { prefs, keyName } from './prefs.js';
@@ -30,7 +30,7 @@ function makeTicker(ms, fn) {
 }
 
 function publicChar(c) {
-  return { name: c.name, cloak: c.cloak, hat: c.hat, flame: c.flame, cls: c.cls };
+  return { name: c.name, cloak: c.cloak, hat: c.hat, flame: c.flame, cls: c.cls, stats: c.stats || null };
 }
 
 export class Game {
@@ -202,6 +202,8 @@ export class Game {
         break;
       }
       case 'campVote': this.sim.voteCamp(from, !!msg.yes); break;
+      case 'react': this.sim.react(from, msg.r, msg.v, msg.x, msg.y); break;
+      case 'emote': this.sim.emote(from, msg.v); break;
       case 'in': this.sim.applyInput(from, msg); break;
       case 'cosm': {
         const ok = this.sim.setCosmetic(from, msg.field, msg.value);
@@ -251,6 +253,8 @@ export class Game {
 
   // ======================================================= shared
   setWorld(world, sv) {
+    // every new area fades in out of the darkness (with its name for forests and the boss)
+    if (this.world && world !== this.world) this.fadeIn = { t0: this.t, kind: world.kind };
     this.world = world;
     this.sv = sv;
     this.renderer.setWorld(world);
@@ -383,6 +387,13 @@ export class Game {
     }
     audio.setScene(snap.st === 'rest' ? 'rest' : snap.sc === 'lobby' ? 'lobby' : snap.sc === 'arena' ? 'boss' : 'forest');
     audio.listener = { x: this.lp.x, y: this.lp.y };
+    // camp music speeds up (up to +25%) the closer you get to the "Into the Wilds" archway
+    const rz = this.world.readyZone;
+    if (rz) {
+      const d = Math.hypot(this.lp.x - (rz.x + rz.w / 2), this.lp.y - (rz.y + rz.h / 2));
+      const want = 1 + 0.25 * Math.max(0, Math.min(1, 1 - (d - 40) / 520));
+      audio.tempo = (audio.tempo || 1) + (want - (audio.tempo || 1)) * Math.min(1, realDt * 1.5);
+    } else audio.tempo = 1;
     audio.update(realDt);
 
     this.updateLocal(realDt, me, snap);
@@ -392,6 +403,7 @@ export class Game {
     this.updateParticles(dt, snap);
     this.updateCamera(realDt);
     this.updateInteract(me);
+    this.updateWheels(me);
     this.wardrobe.refresh(snap);
     this.tree.refresh(me);
     this.boons.refresh(snap, me);
@@ -482,7 +494,7 @@ export class Game {
       if (cls === 'bowman' && lp.drawing) sp *= S.drawSlow;
       if (cls === 'rogue' && (snap.zn || []).some((z) => z.k === 'smoke' && Math.hypot(lp.x - z.x, lp.y - z.y) < z.r)) sp *= ROGUE.smokeSpeed;
       // a bit of momentum: you speed up, slow down and turn smoothly instead of instantly
-      const accel = mv.x || mv.y ? 9 : 11;
+      const accel = mv.x || mv.y ? 15 : 18; // snappy, with just a touch of momentum
       const k = 1 - Math.exp(-dt * accel);
       lp.vx = (lp.vx || 0) + (mv.x * sp - (lp.vx || 0)) * k;
       lp.vy = (lp.vy || 0) + (mv.y * sp - (lp.vy || 0)) * k;
@@ -497,6 +509,7 @@ export class Game {
     }
     lp.x = pos.x;
     lp.y = pos.y;
+    if (lp.moving || (inp.attackHeld() && !blocked)) lp.emote = null;
     if (lp.moving) { lp.stepT -= dt; if (lp.stepT <= 0) { lp.stepT = 0.36; audio.play('step'); } }
 
     if (atkPressed) this.cnt.ac++;
@@ -579,6 +592,8 @@ export class Game {
       hurt: !!p.hu,
       dash: mine ? this.lp.dashT > 0 : !!p.d,
       guard: !!p.g,
+      emote: mine ? this.lp.emote : p.em,
+      emoteT: mine ? this.t - this.lp.emoteAt : p.ea,
     };
   }
 
@@ -798,6 +813,13 @@ export class Game {
         if (!mine) { this.startSpin(f.id, f.r); audio.play('spin', this.viewPos(f.id)); }
         break;
       case 'tp':
+        if (f.hop) {
+          // the Rogue's quick hop in towards a target
+          this.burst(f.fx, f.fy - 4, 6, { color: '#8a6a5a', speed: 60, life: 0.3 });
+          this.effects.push({ k: 'blink', x: f.fx, y: f.fy - 12, x2: f.x, y2: f.y - 12, t0: this.t, life: 0.15 });
+          if (mine) { this.lp.x = f.x; this.lp.y = f.y; this.lp.vx = 0; this.lp.vy = 0; }
+          break;
+        }
         this.effects.push({ k: 'blink', x: f.fx, y: f.fy - 12, x2: f.x, y2: f.y - 12, t0: this.t, life: 0.35 });
         this.burst(f.fx, f.fy - 12, 12, { color: '#8a6cc8', speed: 70, life: 0.5 });
         this.burst(f.x, f.y - 12, 12, { color: '#b08cff', speed: 90, life: 0.5, glow: true });
@@ -824,6 +846,10 @@ export class Game {
         if (mine) { this.banner('THOUSAND CUTS', 1.2); this.addShake(6); }
         break;
       }
+      case 'react':
+        if (f.r === 'ping') { this.effects.push({ k: 'ping', v: f.v, x: f.x, y: f.y, t0: this.t, life: 4 }); audio.play('ping', at); }
+        else { this.effects.push({ k: 'emoji', id: f.id, v: f.v, t0: this.t, life: 2.4 }); audio.play('pop', this.viewPos(f.id)); }
+        break;
       case 'practiceHit':
         this.burst(f.x, f.y - 14, 8, { color: '#ffb0a0', speed: 90, life: 0.3, glow: true });
         if (mine) { this.addShake(3); this.hurtFlash = 0.2; audio.play('hurt'); this.banner('Hit!', 0.5, 'Block (or dodge) the dummy\'s swing'); }
@@ -879,7 +905,12 @@ export class Game {
       case 'rootsCall': audio.play('rootsCall'); break;
       case 'root': audio.play('root', at); this.burst(f.x, f.y - 6, 10, { color: '#6b4f33', speed: 120, life: 0.5 }); if (near(f.x, f.y)) this.addShake(3); break;
       case 'sweep': audio.play('sweep', at); this.addShake(4); break;
-      case 'rest': audio.play('boon'); break;
+      case 'rest':
+        // walking into the light at the Heartwood Gate
+        audio.play('gate');
+        this.lightFlash = { t0: this.t };
+        for (const p of (this.lastSnap ? this.lastSnap.ps : [])) { const v = this.playerView(p); this.burst(v.x, v.y - 14, 26, { color: '#fff0c0', speed: 70, life: 1.2, glow: true, up: 50 }); }
+        break;
       case 'boon': if (f.n !== this.user) toast(`${f.n} chose ${byId(BOONS, f.b).name}`); break;
       case 'victory': audio.play('victory'); break;
       case 'defeat': audio.play('defeat'); break;
@@ -942,6 +973,49 @@ export class Game {
   }
 
   // ---------------------------------------------------- lobby stations
+  // ---------------------------------------------------- reaction wheel (mouse 3) + emote wheel (C)
+  updateWheels(me) {
+    const inp = this.input;
+    const blocked = settings.open || pause.open;
+    const reactHeld = inp.mouse.middle && !blocked;
+    const emoteHeld = inp.keys.has('KeyC') && !blocked;
+    if (!wheel.open) {
+      if (reactHeld) wheel.show('react', inp.mouse.x, inp.mouse.y);
+      else if (emoteHeld) wheel.show('emote', inp.mouse.x, inp.mouse.y);
+      inp.wheelOpen = wheel.open;
+      inp.scroll = 0;
+      return;
+    }
+    if (inp.scroll) { wheel.flip(inp.scroll); inp.scroll = 0; }
+    wheel.update(inp.mouse.x, inp.mouse.y);
+    const stillHeld = wheel.kind === 'react' ? inp.mouse.middle : inp.keys.has('KeyC');
+    if (stillHeld) return;
+    const pick = wheel.close();
+    inp.wheelOpen = false;
+    if (!pick) return;
+    if (pick.kind === 'emote') {
+      this.lp.emote = pick.v; this.lp.emoteAt = this.t;
+      this.sendEmote(pick.v);
+    } else {
+      // pings go where the wheel was opened (where you were pointing)
+      const Z = this.renderer.zoom;
+      const x = this.cam.x + wheel.cx / Z, y = this.cam.y + wheel.cy / Z;
+      this.sendReact(pick.page === 0 ? 'ping' : 'emoji', pick.v, pick.page === 0 ? x : this.lp.x, pick.page === 0 ? y : this.lp.y);
+    }
+  }
+
+  sendReact(r, v, x, y) {
+    if (this.waitSim) { this.waitSim.react(this.myId, r, v, x, y); return; }
+    if (this.isHost) this.sim.react('host', r, v, x, y);
+    else this.room.send({ t: 'react', r, v, x: Math.round(x), y: Math.round(y) });
+  }
+
+  sendEmote(v) {
+    if (this.waitSim) { this.waitSim.emote(this.myId, v); return; }
+    if (this.isHost) this.sim.emote('host', v);
+    else this.room.send({ t: 'emote', v });
+  }
+
   updateInteract(me) {
     this.prompt = null;
     if (this.world.kind !== 'lobby') return;
