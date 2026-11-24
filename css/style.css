@@ -10,7 +10,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Pixelify Sans', system-ui, sans-serif; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Alegreya Sans SC', system-ui, sans-serif; }
 .hidden { display: none !important; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
@@ -75,11 +75,11 @@ button.link { background: none; border: none; padding: 0; color: var(--gold); te
 .panel.wide { width: min(720px, 100%); }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 h1.logo {
-  font-family: 'Pixelify Sans', system-ui, sans-serif; font-weight: 800; font-size: 56px; letter-spacing: 4px; margin: 0; text-align: center;
+  font-family: 'Alegreya Sans SC', system-ui, sans-serif; font-weight: 800; font-size: 56px; letter-spacing: 4px; margin: 0; text-align: center;
   background: linear-gradient(#ffe6b0, #ff8a3d); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 0 18px rgba(255, 140, 60, 0.45));
 }
-h2, h3 { font-family: 'Pixelify Sans', system-ui, sans-serif; margin: 0; color: var(--gold); }
+h2, h3 { font-family: 'Alegreya Sans SC', system-ui, sans-serif; margin: 0; color: var(--gold); }
 h2 { font-size: 21px; }
 h3 { font-size: 14px; margin: 14px 0 6px; letter-spacing: 1px; }
 .tagline { text-align: center; color: var(--muted); margin: 4px 0 22px; font-style: italic; }
@@ -120,14 +120,14 @@ input:focus { outline: 2px solid rgba(255, 154, 74, 0.6); outline-offset: 1px; }
 
 .pill { padding: 7px 18px; border-radius: 999px; }
 #stage-pill { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); text-align: center; display: flex; flex-direction: column; opacity: 0.92; }
-#stage-pill b { font-family: 'Pixelify Sans', system-ui, sans-serif; font-size: 14px; color: var(--gold); }
+#stage-pill b { font-family: 'Alegreya Sans SC', system-ui, sans-serif; font-size: 14px; color: var(--gold); }
 #stage-pill small { font-size: 11px; color: var(--muted); }
 #top-right { position: absolute; right: 14px; top: 14px; display: flex; gap: 8px; align-items: center; }
 .room { display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 14px; font-size: 13px; }
 #room-code { letter-spacing: 3px; color: var(--gold); }
 
 #bossbar { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); width: min(520px, 70vw); padding: 7px 14px 9px; text-align: center; border-radius: 16px; }
-#bossbar b { font-family: 'Pixelify Sans', system-ui, sans-serif; font-size: 13px; color: #ffcfb8; }
+#bossbar b { font-family: 'Alegreya Sans SC', system-ui, sans-serif; font-size: 13px; color: #ffcfb8; }
 #bossbar .bar { height: 8px; margin-top: 5px; }
 #boss-fill { background: linear-gradient(90deg, #8a1e14, #e0503a); }
 
@@ -274,8 +274,8 @@ body { font-size: 15px; letter-spacing: 0.2px; }
 h2 { font-size: 23px; letter-spacing: 0.5px; }
 h3 { font-size: 15px; }
 .note, .muted { font-size: 14px; }
-button, .gbtn { font-family: 'Pixelify Sans', system-ui, sans-serif; font-weight: 600; letter-spacing: 0.3px; }
-input:not([type=range]) { font-family: 'Pixelify Sans', system-ui, sans-serif; }
+button, .gbtn { font-family: 'Alegreya Sans SC', system-ui, sans-serif; font-weight: 600; letter-spacing: 0.3px; }
+input:not([type=range]) { font-family: 'Alegreya Sans SC', system-ui, sans-serif; }
 /* bar text: big, white, with a solid dark outline so it reads on any fill colour */
 .bar span {
   font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.4px;
@@ -312,7 +312,7 @@ input:not([type=range]) { font-family: 'Pixelify Sans', system-ui, sans-serif; }
 .guide-trick { margin: 0 0 12px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 200, 120, 0.12); border: 1px solid rgba(255, 200, 120, 0.3); color: #ffe6b0; line-height: 1.35; }
 .guide-moves { display: grid; gap: 7px; }
 .move { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 10px; }
-.move kbd { justify-self: start; padding: 3px 9px; font-size: 13px; border-radius: 8px; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.3); font-family: 'Pixelify Sans', system-ui, sans-serif; }
+.move kbd { justify-self: start; padding: 3px 9px; font-size: 13px; border-radius: 8px; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.3); font-family: 'Alegreya Sans SC', system-ui, sans-serif; }
 .move span { font-size: 14px; }
 .code-row { align-items: center; }
 .code-row .toggle { margin: 0; white-space: nowrap; }
@@ -364,3 +364,53 @@ input:not([type=range]) { font-family: 'Pixelify Sans', system-ui, sans-serif; }
 .wslot { position: absolute; transform: translate(-50%, -50%); min-width: 66px; padding: 6px 8px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; transition: transform 0.08s, box-shadow 0.08s; }
 .wslot.on { transform: translate(-50%, -50%) scale(1.15); box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgba(255, 154, 74, 0.6); }
 .wmid { position: absolute; transform: translate(-50%, -50%); font-size: 11px; color: var(--muted); white-space: nowrap; text-shadow: 0 1px 3px #000; }
+
+/* ---------- v1.2: Alegreya Sans SC, all lowercase ---------- */
+html, body, input, button, select, textarea { text-transform: lowercase; }
+.coins { background: rgba(255, 214, 90, 0.22); border-color: rgba(255, 214, 90, 0.55); color: #fff1c2; }
+.gold { color: var(--gold); }
+
+/* skill tree: level, exp and prestige */
+.treexp { display: flex; align-items: center; gap: 10px; margin: 6px 0 0; }
+.treexp .bar { flex: 1; height: 8px; }
+#tree-prestige { margin-top: 10px; }
+#tree-prestige h3 { margin-top: 6px; }
+.prow-btns { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.node.view { cursor: default; }
+.node:not(.can):not(.view) { opacity: 0.75; }
+
+/* hud: potions + coins */
+.itemrow { display: flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 800; }
+.itemrow .it { padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.18); white-space: nowrap; }
+.itemrow .it.none { opacity: 0.4; }
+.itemrow .it kbd { font: inherit; color: var(--gold); margin-right: 3px; }
+.itemrow .co { margin-left: auto; color: #ffe38a; }
+
+/* merchant, leaderboard, path stone */
+#shop, #lboard, #modes { width: min(560px, calc(100vw - 28px)); max-height: calc(100vh - 40px); overflow: auto; }
+.shoprow, .moderow { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 9px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.moderow { grid-template-columns: 1fr auto auto; }
+.moderow.on b { color: var(--gold); }
+.shoprow b, .moderow b { display: block; font-size: 15px; }
+.shoprow small, .moderow small { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
+.lrow.lb { grid-template-columns: 0.4fr 2.6fr 0.9fr 0.9fr; }
+
+/* chat: a small see-through box at the bottom left */
+#chat { position: fixed; left: 14px; bottom: 110px; width: min(340px, 40vw); z-index: 14; pointer-events: none; display: none; }
+body.in-game #chat { display: block; }
+#chat-lines { display: flex; flex-direction: column; gap: 2px; font-size: 13px; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+#chat-lines .cline { opacity: 0.85; transition: opacity 1s; }
+#chat-lines .cline.old { opacity: 0.25; }
+#chat.typing #chat-lines .cline { opacity: 1; }
+#chat-lines b { color: var(--gold); }
+#chat-input { display: none; pointer-events: auto; width: 100%; margin-top: 4px; padding: 5px 10px; font-size: 13px; border-radius: 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.25); color: var(--text); box-shadow: none; }
+#chat.typing #chat-input { display: block; }
+
+/* developer console */
+#dev { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); width: min(640px, calc(100vw - 24px)); z-index: 30; background: rgba(5, 8, 6, 0.88); border: 1px solid rgba(255, 210, 120, 0.4); border-radius: 12px; padding: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; text-transform: none; }
+#dev-log { max-height: 220px; overflow: auto; color: #d8e8d0; white-space: pre-wrap; margin-bottom: 6px; }
+#dev-input { width: 100%; font: inherit; text-transform: none; padding: 5px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+
+/* photo mode: nothing on screen but the world */
+body.photo #hud, body.photo #help, body.photo #chat, body.photo #toasts { display: none !important; }
+#tree { max-height: calc(100vh - 24px); overflow: auto; }

@@ -13,6 +13,8 @@ import { toast, Wardrobe, TreePanel, BoonPanel, ControlsPanel, settings, pause, 
 import { buildHud, updateHud } from './hud.js';
 import { audio } from './audio.js';
 import { prefs, keyName } from './prefs.js';
+import { installGameExtras } from './gamex.js';
+import { shopPanel, lboardPanel, modePanel, chat, devConsole } from './ui.js';
 
 const SWING_TIME = 0.2;
 const PAD_LABEL = { strike: 'RT', skill2: 'LT', skill1: 'X', skill3: 'LB', ult: 'RB', dash: 'A', interact: 'Y', tree: 'View' };
@@ -30,7 +32,7 @@ function makeTicker(ms, fn) {
 }
 
 function publicChar(c) {
-  return { name: c.name, cloak: c.cloak, hat: c.hat, flame: c.flame, cls: c.cls, stats: c.stats || null };
+  return { name: c.name, cloak: c.cloak, hat: c.hat, flame: c.flame, cls: c.cls, stats: c.stats || null, prog: c.prog || {}, coins: c.coins || 0, items: c.items || {} };
 }
 
 export class Game {
@@ -95,6 +97,7 @@ export class Game {
         if (performance.now() - this.lastSnapAt > 10000) this.leave('Lost connection to the host.');
       }, 1000);
     }
+    this.initExtras();
     this.lastFrame = performance.now();
     this.raf = requestAnimationFrame(() => this.frame());
   }
@@ -220,6 +223,7 @@ export class Game {
       case 'tree': this.sim.buyNode(from, msg.node); break;
       case 'pick': this.sim.pickBoon(from, msg.i); break;
       case 'vote': this.sim.vote(from, msg.v); break;
+      case 'act': this.hostAct(from, msg); break;
     }
   }
 
@@ -277,6 +281,7 @@ export class Game {
     this.lp.dashT = 0;
     this.camSnap = true;
     this.wardrobe.close();
+    if (this.fishing) this.stopFishing();
     document.getElementById('help').classList.toggle('hidden', world.kind !== 'lobby' || !prefs.hint);
     document.getElementById('help-key').textContent = keyName(prefs.keys.controls);
     this.controls.close();
@@ -349,6 +354,9 @@ export class Game {
     if (this.inputTimer) this.inputTimer.stop();
     clearInterval(this.watchdog);
     this.input.destroy();
+    this.saveProgress(this.lastSnap && this.lastSnap.ps.find((p) => p.id === this.myId), 0, true);
+    this.closeExtraPanels(); chat.close(); devConsole.close();
+    document.body.classList.remove('photo');
     this.wardrobe.close();
     this.tree.close();
     this.controls.close();
@@ -392,13 +400,13 @@ export class Game {
     const me = snap && this.world && this.myId ? snap.ps.find((p) => p.id === this.myId) : null;
     if (!me) { this.renderer.drawLoading('Joining the campfire…', this.t); return; }
 
-    const sk = JSON.stringify([me.k, me.tr, me.bn]);
+    const sk = JSON.stringify([me.k, me.tr, me.bn, me.pr, me.rb]);
     if (sk !== this.statsKey) {
       this.statsKey = sk;
-      this.stats = classStats(me.k, me.tr, me.bn);
+      this.stats = classStats(me.k, me.tr, me.bn, { pres: me.pr, reb: me.rb });
       if (me.k !== this.cls) { this.cls = me.k; buildHud(this.cls); }
     }
-    audio.setScene(snap.st === 'rest' ? 'rest' : snap.sc === 'lobby' ? 'lobby' : snap.sc === 'arena' ? 'boss' : 'forest');
+    audio.setScene(snap.st === 'rest' ? 'rest' : snap.sc === 'lobby' ? (this.firesideMusic(snap) ? 'fireside' : 'lobby') : snap.sc === 'arena' ? 'boss' : 'forest');
     audio.listener = { x: this.lp.x, y: this.lp.y };
     // camp music speeds up (up to +25%) the closer you get to the "Into the Wilds" archway
     const rz = this.world.readyZone;
@@ -410,6 +418,8 @@ export class Game {
     audio.update(realDt);
 
     this.updateLocal(realDt, me, snap);
+    this.extraKeys(me, snap);
+    this.updateExtras(realDt, me, snap);
     if (this.isHost || this.waitSim) this.sendInput();
     pause.refresh(snap, me);
     this.updateViews(snap, realDt);
@@ -427,8 +437,8 @@ export class Game {
   }
 
   // Only the pause menu (Esc) stops you moving; skill tree, wardrobe and controls don't.
-  uiOpen() { return this.wardrobe.open || this.tree.open || settings.open || pause.open || campPanel.open || signPanel.open || boardPanel.open; }
-  moveBlocked() { return settings.open || pause.open; }
+  uiOpen() { return this.wardrobe.open || this.tree.open || settings.open || pause.open || campPanel.open || signPanel.open || boardPanel.open || this.extraPanelsOpen() || chat.typing || devConsole.open; }
+  moveBlocked() { return settings.open || pause.open || chat.typing || devConsole.open; }
 
   // ---------------------------------------------------- your character
   updateLocal(dt, me, snap) {
@@ -441,23 +451,31 @@ export class Game {
     this.lastCounts = { ...c };
 
     // Esc: close whatever is open, otherwise open the pause screen
-    const anyPanel = this.wardrobe.open || this.tree.open || this.controls.open || campPanel.open || signPanel.open || boardPanel.open;
+    const anyPanel = this.wardrobe.open || this.tree.open || this.controls.open || campPanel.open || signPanel.open || boardPanel.open || this.extraPanelsOpen();
+    const closeAll = () => { this.wardrobe.close(); this.tree.close(); this.controls.close(); campPanel.close(); signPanel.close(); boardPanel.close(); this.closeExtraPanels(); };
     if (this.edges.esc) {
       if (settings.open) settings.close();
-      else if (anyPanel) { this.wardrobe.close(); this.tree.close(); this.controls.close(); campPanel.close(); signPanel.close(); boardPanel.close(); }
+      else if (devConsole.open) devConsole.close();
+      else if (anyPanel) closeAll();
       else pause.toggle();
     }
     if (this.edges.back) {
       if (settings.open) settings.close();
       else if (pause.open) pause.close();
-      else { this.wardrobe.close(); this.tree.close(); this.controls.close(); campPanel.close(); signPanel.close(); boardPanel.close(); }
+      else closeAll();
     }
-    if (this.edges.tree && !settings.open && !pause.open) this.tree.toggle();
+    // Tab: closes any open menu, otherwise shows your skill tree (to look at; spend points at the Skilltree)
+    if (this.edges.tree && !settings.open && !pause.open) {
+      if (anyPanel) closeAll();
+      else { this.tree.edit = false; this.tree.show(); }
+    }
     if (this.edges.controls && !settings.open && !pause.open) this.controls.toggle(me.k);
 
     lp.dashCd -= dt; lp.atkCd -= dt; lp.comboT -= dt;
     const down = !!me.dn;
-    const mv = this.moveBlocked() ? { x: 0, y: 0 } : inp.moveVector();
+    // webbed (Bramble Widow) or mid Thousand Cuts: you can't walk
+    const stuck = this.moveBlocked() || me.rt || me.ct || lp.lockT > 0;
+    const mv = stuck ? { x: 0, y: 0 } : inp.moveVector();
     lp.moving = !down && (mv.x !== 0 || mv.y !== 0);
     const Z = this.renderer.zoom;
     if (inp.device === 'pad') {
@@ -485,7 +503,7 @@ export class Game {
       }
     }
 
-    if (dashPressed && lp.dashCd <= 0 && !guarding) {
+    if (dashPressed && lp.dashCd <= 0 && !guarding && !me.rt && !me.ct) {
       const dx = lp.moving ? mv.x : Math.cos(lp.aim), dy = lp.moving ? mv.y : Math.sin(lp.aim);
       const l = Math.hypot(dx, dy) || 1;
       lp.ddx = dx / l; lp.ddy = dy / l;
@@ -506,7 +524,7 @@ export class Game {
       const pcol = cls === 'rogue' ? '#b08cff' : cls === 'warlock' ? (Math.random() < 0.5 ? '#3a2458' : '#9b6bff') : cls === 'cleric' ? '#fff1b8' : byId(FLAMES, me.f).mid;
       this.particles.push({ x: lp.x + (Math.random() - 0.5) * 8, y: lp.y - 12 + (Math.random() - 0.5) * 12, vx: 0, vy: 0, life: cls === 'cleric' ? 0.8 : 0.3, max: cls === 'cleric' ? 0.8 : 0.3, size: 2, color: pcol, glow: cls !== 'warlock', shrink: true });
     } else {
-      let sp = S.speed * (this.world.kind === 'lobby' ? 1.15 : 1);
+      let sp = S.speed * (this.world.kind === 'lobby' ? 1.15 : 1) * (me.bt ? 1.2 : 1) * (me.bo ? 1.25 : 1);
       if (guarding) sp *= WARRIOR.guardSlow;
       if (cls === 'bowman' && lp.drawing) sp *= S.drawSlow;
       if (cls === 'rogue' && (snap.zn || []).some((z) => z.k === 'smoke' && Math.hypot(lp.x - z.x, lp.y - z.y) < z.r)) sp *= ROGUE.smokeSpeed;
@@ -751,6 +769,7 @@ export class Game {
     const near = (x, y) => Math.hypot(x - this.lp.x, y - this.lp.y) < 500;
     const mine = f.id === this.myId;
     const at = { x: f.x, y: f.y };
+    if (this.extraFx(f, mine, at)) return;
     switch (f.k) {
       case 'sw':
         if (!mine) { this.startSwing(f.id, f.a, !!f.h); const v = this.viewFor(f.id); audio.play(f.h ? 'heavy' : 'swing', { x: v.x, y: v.y, vol: 0.7 }); }
@@ -880,6 +899,14 @@ export class Game {
         if (!mine) { this.startSpin(f.id, f.r); audio.play('spin', this.viewPos(f.id)); }
         break;
       case 'tp':
+        if (f.cut) {
+          // Thousand Cuts: blink to the next enemy and slash
+          this.effects.push({ k: 'blink', x: f.fx, y: f.fy - 12, x2: f.x, y2: f.y - 12, t0: this.t, life: 0.3 });
+          if (f.cut === 1) { this.effects.push({ k: 'slash', x: f.x + Math.cos(f.a) * 14, y: f.y - 12 + Math.sin(f.a) * 14, t0: this.t, life: 0.3 }); audio.play('stab', at); }
+          this.burst(f.x, f.y - 12, 10, { color: '#b08cff', speed: 90, life: 0.4, glow: true });
+          if (mine) { this.lp.x = f.x; this.lp.y = f.y; this.lp.vx = 0; this.lp.vy = 0; this.lp.lockT = 0.3; this.addShake(2); }
+          break;
+        }
         if (f.hop) {
           // the Rogue's quick hop in towards a target
           this.burst(f.fx, f.fy - 4, 6, { color: '#8a6a5a', speed: 60, life: 0.3 });
@@ -901,18 +928,10 @@ export class Game {
         this.burst(f.x, f.y - 12, f.boom ? 24 : 10, { color: f.boom ? '#ff9a6a' : '#b08cff', speed: f.boom ? 160 : 80, life: 0.5, glow: true });
         audio.play(f.boom ? 'boom' : 'pop', at);
         break;
-      case 'cuts': {
+      case 'cuts':
         audio.play('cuts', at);
-        let px = f.x, py = f.y - 12;
-        f.pts.forEach(([x, y], i) => {
-          this.effects.push({ k: 'blink', x: px, y: py, x2: x, y2: y, t0: this.t + i * 0.06, life: 0.3 });
-          this.effects.push({ k: 'slash', x, y, t0: this.t + i * 0.06, life: 0.3 });
-          px = x; py = y;
-        });
-        if (f.pts.length) this.effects.push({ k: 'blink', x: px, y: py, x2: f.x, y2: f.y - 12, t0: this.t + f.pts.length * 0.06, life: 0.3 });
-        if (mine) { this.banner('THOUSAND CUTS', 1.2); this.addShake(6); }
+        if (mine) { this.banner('THOUSAND CUTS', 1.2); this.addShake(4); }
         break;
-      }
       case 'react':
         if (f.r === 'ping') { this.effects.push({ k: 'ping', v: f.v, x: f.x, y: f.y, t0: this.t, life: 4 }); audio.play('ping', at); }
         else { this.effects.push({ k: 'emoji', id: f.id, v: f.v, t0: this.t, life: 2.4 }); audio.play('pop', this.viewPos(f.id)); }
@@ -939,8 +958,8 @@ export class Game {
         if (mine) { audio.play('wfReady'); this.banner('Wildfire ready!', 1.6, `Press ${this.keyLabel('ult')} to unleash it`); }
         break;
       case 'pick':
-        this.burst(f.x, f.y, f.kind === 'f' ? 16 : 5, { color: f.kind === 'f' ? '#fff3b0' : '#ffd080', speed: 70, life: 0.5, glow: true });
-        if (mine) audio.play(f.kind === 'f' ? 'fuel' : 'ember');
+        this.burst(f.x, f.y, f.kind === 'f' ? 16 : f.kind === 'c' ? 3 : 5, { color: f.kind === 'f' ? '#fff3b0' : f.kind === 'c' ? '#ffe680' : '#ffd080', speed: 70, life: 0.5, glow: true });
+        if (mine) audio.play(f.kind === 'f' ? 'fuel' : f.kind === 'c' ? 'coin' : 'ember');
         break;
       case 'down':
         this.burst(f.x, f.y - 16, 16, { color: '#888', speed: 70, life: 1, up: 30 });
@@ -1180,16 +1199,18 @@ export class Game {
   updateInteract(me) {
     this.prompt = null;
     if (this.world.kind !== 'lobby') return;
-    const STATIONS = ['wardrobe', 'shrine', 'campfire', 'signpost', 'board', 'resetpost', 'fountain'];
+    const STATIONS = ['wardrobe', 'shrine', 'campfire', 'signpost', 'board', 'resetpost', 'fountain', 'skilltree', 'shop', 'lboard', 'pathstone', 'pond', 'duelring'];
     let best = null, bd = 58;
     for (const p of this.world.props) {
       if (!STATIONS.includes(p.type)) continue;
-      const d = Math.hypot(p.x - this.lp.x, p.y - this.lp.y);
+      const reach = p.type === 'skilltree' ? 30 : p.type === 'pond' ? 40 : p.type === 'duelring' ? p.r - 58 : p.type === 'shop' ? 14 : 0; // bigger things can be used from further away
+      const d = Math.hypot(p.x - this.lp.x, p.y - this.lp.y) - reach;
       if (d < bd) { bd = d; best = p; }
     }
     if (!best) return;
     const key = this.keyLabel('interact');
     const go = this.edges.interact;
+    if (this.stationPrompt(best, me, key, go)) return;
     switch (best.type) {
       case 'wardrobe':
         this.prompt = { x: best.x, y: best.y - 56, text: `[${key}] Wardrobe`, sub: 'Change your cloak, hat and flame' };
@@ -1227,3 +1248,5 @@ export class Game {
     }
   }
 }
+
+installGameExtras(Game);

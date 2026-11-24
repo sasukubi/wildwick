@@ -8,6 +8,7 @@ import { audio } from './audio.js';
 import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName, getRoomPref } from './prefs.js';
 import { KITS, iconCanvas } from './hud.js';
 import { skillIconName, PINGS, EMOJIS, pingSprite, emojiSprite } from './sprites.js';
+import { MAX_LEVEL, SLOTS, REBIRTHS, REBIRTH_EVERY, PRESTIGE, SHOP, MODES, todayKey } from './progress.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -276,28 +277,40 @@ export class Wardrobe {
 }
 
 // ---------------------------------------------------------- skill tree
+// Tab shows it (just to look). At the Skilltree in camp you can spend points,
+// use Reclaim Seeds, and prestige once the class is level 30.
 export class TreePanel {
   constructor(game) {
     this.game = game;
     this.el = $('#tree');
     this.open = false;
+    this.edit = false;
     this.lastKey = '';
+    this.pick = null;   // prestige: which ability
+    this.reb = null;    // rebirth: which ultimate upgrade
     this.el.querySelector('[data-close]').onclick = () => this.close();
   }
   toggle() { if (this.open) this.close(); else this.show(); }
   show() { this.open = true; this.lastKey = ''; this.el.classList.remove('hidden'); audio.play('open'); }
-  close() { if (!this.open) return; this.open = false; this.el.classList.add('hidden'); audio.play('close'); }
+  close() { if (!this.open) return; this.open = false; this.pick = null; this.reb = null; this.el.classList.add('hidden'); audio.play('close'); }
 
   refresh(me) {
-    if (!this.open) return;
+    if (!this.open || !me.lv) return;
     const tree = me.tr || {};
-    // points can only be spent between rounds; the rest of the time this just shows your progress
-    const canSpend = !!this.game.lastSnap && this.game.lastSnap.st === 'rest';
-    const key = JSON.stringify([me.k, tree, me.pts, canSpend]);
+    const edit = this.edit;
+    const seeds = (me.it && me.it.seed) || 0;
+    const key = JSON.stringify([me.k, tree, me.pts, me.lv, Math.floor((me.xp || 0) / 5), me.np, me.pr, me.rb, seeds, edit, this.pick, this.reb]);
     if (key === this.lastKey) return;
     this.lastKey = key;
-    $('#tree-title').textContent = canSpend ? `${byId(CLASSES, me.k).name} skills` : `${byId(CLASSES, me.k).name} skills · progress`;
-    $('#tree-pts').textContent = canSpend ? (me.pts === 1 ? '1 point to spend' : `${me.pts} points to spend`) : `${me.pts} point${me.pts === 1 ? '' : 's'} saved · spend them at the end of the round`;
+    const cname = byId(CLASSES, me.k).name;
+    const mastered = me.lv >= MAX_LEVEL;
+    $('#tree-title').textContent = `${cname} · level ${me.lv}${mastered ? ' · mastered' : ''}${me.np ? ` · prestige ${me.np}` : ''}`;
+    $('#tree-pts').textContent = me.pts === 1 ? '1 point' : `${me.pts} points`;
+    $('#tree-xp-fill').style.width = (mastered ? 100 : (me.xp / me.nx) * 100) + '%';
+    $('#tree-xp-text').textContent = mastered ? 'Mastered!' : `${me.xp} / ${me.nx} exp to level ${me.lv + 1}`;
+    $('#tree-note').textContent = edit
+      ? `You're at the Skilltree: click an upgrade to spend a point.${seeds ? ` Right-click an upgrade to take a point back with a Reclaim Seed (you have ${seeds}).` : ''}`
+      : 'Just looking. Every level gives 1 point (up to level 30). Spend them at the Skilltree in camp. Your tree is saved for this class.';
     const cols = $('#tree-cols');
     cols.innerHTML = '';
     for (const br of TREES[me.k] || TREES.warrior) {
@@ -311,18 +324,78 @@ export class TreePanel {
       for (const n of br.nodes) {
         const rank = tree[n.id] || 0;
         const b = document.createElement('button');
-        const ok = canSpend && canBuy(me.k, tree, me.pts, n.id);
-        b.className = 'node gbtn' + (rank ? ' owned' : '') + (ok ? ' can' : '') + (n.cap ? ' cap' : '');
-        b.disabled = !ok;
+        const ok = edit && canBuy(me.k, tree, me.pts, n.id);
+        b.className = 'node gbtn' + (rank ? ' owned' : '') + (ok ? ' can' : '') + (n.cap ? ' cap' : '') + (edit ? '' : ' view');
         const dots = Array.from({ length: n.max }, (_, i) => `<i class="${i < rank ? 'on' : ''}"></i>`).join('');
         b.innerHTML = `<strong></strong><span class="dots">${dots}</span><small></small>`;
         b.querySelector('strong').textContent = n.name;
         b.querySelector('small').textContent = n.cap && spent < CAP_REQUIREMENT ? `Unlocks after ${CAP_REQUIREMENT} points in ${br.name}. ${n.desc}` : n.desc;
-        b.onclick = () => { this.game.buyNode(n.id); audio.play('boon'); };
+        b.onclick = () => { if (ok) { this.game.buyNode(n.id); } else audio.play('nope'); };
+        b.oncontextmenu = (e) => { e.preventDefault(); if (edit && seeds > 0 && rank > 0) this.game.act('reclaimNode', n.id); else audio.play('nope'); };
         col.appendChild(b);
       }
       cols.appendChild(col);
     }
+    this.fillPrestige(me, edit, mastered);
+  }
+
+  fillPrestige(me, edit, mastered) {
+    const box = $('#tree-prestige');
+    box.innerHTML = '';
+    const slots = SLOTS[me.k] || SLOTS.warrior;
+    const have = slots.filter(([id]) => me.pr && me.pr[id]).map(([id, name]) => `${name} +${Math.round(me.pr[id] * PRESTIGE.power * 100)}%`);
+    const rebs = REBIRTHS.filter((r) => me.rb && me.rb[r.id]).map((r) => `${r.name} ×${me.rb[r.id]}`);
+    if (have.length || rebs.length) {
+      const p = document.createElement('p');
+      p.className = 'note';
+      p.textContent = `Prestige upgrades: ${have.join(' · ') || 'none'}${rebs.length ? ` · Ultimate: ${rebs.join(' · ')}` : ''}`;
+      box.appendChild(p);
+    }
+    if (!mastered) return;
+    if (!edit) { const p = document.createElement('p'); p.className = 'note gold'; p.textContent = 'This class is mastered! Visit the Skilltree in camp to prestige.'; box.appendChild(p); return; }
+    const rebirth = (me.np + 1) % REBIRTH_EVERY === 0;
+    const h = document.createElement('h3');
+    h.textContent = rebirth ? `Prestige ${me.np + 1}: a Rebirth!` : `Prestige ${me.np + 1}`;
+    box.appendChild(h);
+    const info = document.createElement('p');
+    info.className = 'note';
+    info.textContent = `Go back to level 1 with an empty tree, and make one ability permanently stronger (+${Math.round(PRESTIGE.power * 100)}% damage or healing, ${Math.round((1 - PRESTIGE.cd) * 100)}% faster recharge).${rebirth ? ' As a Rebirth, you also improve your Wildfire ultimate.' : ''}`;
+    box.appendChild(info);
+    const row = document.createElement('div');
+    row.className = 'prow-btns';
+    for (const [id, name] of slots) {
+      const btn = document.createElement('button');
+      btn.className = 'gbtn small' + (this.pick === id ? ' primary' : '');
+      btn.textContent = `${name}${me.pr && me.pr[id] ? ` (${me.pr[id]})` : ''}`;
+      btn.onclick = () => { this.pick = id; this.lastKey = ''; audio.play('click'); };
+      row.appendChild(btn);
+    }
+    box.appendChild(row);
+    if (rebirth) {
+      const r2 = document.createElement('div');
+      r2.className = 'prow-btns';
+      for (const r of REBIRTHS) {
+        const btn = document.createElement('button');
+        btn.className = 'gbtn small' + (this.reb === r.id ? ' primary' : '');
+        btn.textContent = r.name;
+        btn.title = r.desc;
+        btn.onclick = () => { this.reb = r.id; this.lastKey = ''; audio.play('click'); };
+        r2.appendChild(btn);
+      }
+      box.appendChild(r2);
+      if (this.reb) { const d = document.createElement('p'); d.className = 'note'; d.textContent = byId(REBIRTHS, this.reb).desc; box.appendChild(d); }
+    }
+    const go = document.createElement('button');
+    go.className = 'gbtn primary';
+    go.textContent = 'Prestige now';
+    go.disabled = !this.pick || (rebirth && !this.reb);
+    go.onclick = async () => {
+      const name = slots.find(([id]) => id === this.pick)[1];
+      if (!(await confirmDialog(`Prestige your ${byId(CLASSES, me.k).name}? You go back to level 1 with an empty skill tree, and ${name} becomes permanently stronger.`, 'Prestige'))) return;
+      this.game.act('prestige', this.pick, this.reb);
+      this.pick = null; this.reb = null; this.lastKey = '';
+    };
+    box.appendChild(go);
   }
 }
 
@@ -335,17 +408,20 @@ export class BoonPanel {
     this.el.querySelector('[data-tree]').onclick = () => game.tree.toggle();
     $('#vote-go').onclick = () => game.vote('go');
     $('#vote-camp').onclick = async () => {
-      if (await confirmDialog('Return to camp? This ends the run for the whole party.', 'Return to camp')) game.vote('camp');
+      const endless = game.lastSnap && game.lastSnap.md === 'endless';
+      if (await confirmDialog(endless ? 'Save the endless run and return to camp? The host can continue from the next forest at the Path Stone.' : 'Return to camp? This ends the run for the whole party.', endless ? 'Save and return' : 'Return to camp')) game.vote('camp');
     };
   }
   refresh(snap, me) {
     const resting = snap.st === 'rest';
     this.el.classList.toggle('hidden', !resting);
     if (!resting) { this.lastKey = ''; return; }
-    const nextIsBoss = snap.stg >= 3;
+    const endless = snap.md === 'endless';
+    const nextIsBoss = endless ? (snap.stg + 1) % 3 === 0 : snap.stg >= 3;
+    $('#vote-camp').textContent = endless ? 'Save and return to camp' : 'Return to camp';
     const ready = snap.ps.filter((p) => p.vt === 'go').length;
     $('#boons-wait').textContent = `${ready}/${snap.ps.length} ready to continue · carrying on automatically in ${snap.stt}s`;
-    $('#boons-pts').textContent = me.pts ? `You have ${me.pts} skill point${me.pts > 1 ? 's' : ''} to spend.` : '';
+    $('#boons-pts').textContent = me.pts ? `You have ${me.pts} skill point${me.pts > 1 ? 's' : ''} saved for the Skilltree in camp.` : '';
     // after picking a boon: continue into the next forest (or the boss), or head back to camp
     const showVote = !me.bc;
     $('#vote-row').classList.toggle('hidden', !showVote);
@@ -687,3 +763,172 @@ export const wheel = {
     return pick ? { kind: this.kind, page: this.page, v: pick.v } : null;
   },
 };
+
+// ---------------------------------------------------------- the merchant (camp shop)
+export const shopPanel = makePanel('#shop');
+shopPanel.fill = function () { this.lastKey = ''; };
+shopPanel.update = function (game, me) {
+  const key = JSON.stringify([me.co, me.it]);
+  if (key === this.lastKey) return;
+  this.lastKey = key;
+  $('#shop-coins').textContent = `${me.co || 0} coins`;
+  const box = $('#shop-rows');
+  box.innerHTML = '';
+  for (const it of SHOP) {
+    const row = document.createElement('div');
+    row.className = 'shoprow';
+    const have = (me.it && me.it[it.id]) || 0;
+    row.innerHTML = '<div><b></b><small></small></div><span class="muted"></span><button class="gbtn small primary"></button>';
+    row.querySelector('b').textContent = it.name + (it.key ? ` [${keyName(it.key)}]` : '');
+    row.querySelector('small').textContent = it.desc;
+    row.querySelector('span').textContent = `${have}/${it.max}`;
+    const btn = row.querySelector('button');
+    btn.textContent = `${it.price} coins`;
+    btn.disabled = (me.co || 0) < it.price || have >= it.max;
+    btn.onclick = () => game.act('buyItem', it.id);
+    box.appendChild(row);
+  }
+};
+$('#shop [data-close]').onclick = () => shopPanel.close();
+
+// ---------------------------------------------------------- leaderboard
+export const lboardPanel = makePanel('#lboard');
+lboardPanel.tab = 'daily';
+lboardPanel.fill = function (game) { this.load(game); };
+lboardPanel.load = async function (game) {
+  const box = $('#lboard-rows');
+  document.querySelectorAll('#lboard .tab').forEach((t) => t.classList.toggle('primary', t.dataset.lb === this.tab));
+  $('#lboard-sub').textContent = this.tab === 'daily' ? `Today's daily run (${todayKey()}) · most forests, then fastest` : 'Endless · the deepest runs ever';
+  box.innerHTML = '<p class="muted">Loading…</p>';
+  if (!game.backend.topRuns) { box.innerHTML = '<p class="muted">The leaderboard needs online accounts.</p>'; return; }
+  try {
+    const rows = await game.backend.topRuns(this.tab, this.tab === 'daily' ? todayKey() : null);
+    if (!this.open) return;
+    box.innerHTML = '<div class="lrow lb head"><span>#</span><span>Party</span><span>Forests</span><span>Time</span></div>';
+    if (!rows.length) box.innerHTML += `<p class="muted">No runs yet. Be the first!</p>`;
+    rows.forEach((r, i) => {
+      const row = document.createElement('div');
+      row.className = 'lrow lb';
+      const t = `${Math.floor(r.time_s / 60)}:${String(r.time_s % 60).padStart(2, '0')}`;
+      for (const v of [i + 1, (r.party || [r.username]).join(' + '), r.won ? `${r.forests} ✓` : r.forests, t]) { const s = document.createElement('span'); s.textContent = v; row.appendChild(s); }
+      box.appendChild(row);
+    });
+  } catch (err) { box.innerHTML = ''; const p = document.createElement('p'); p.className = 'error'; p.textContent = 'Could not load the leaderboard: ' + err.message; box.appendChild(p); }
+};
+document.querySelectorAll('#lboard .tab').forEach((t) => { t.onclick = () => { lboardPanel.tab = t.dataset.lb; lboardPanel.load(lboardPanel.game); }; });
+$('#lboard [data-close]').onclick = () => lboardPanel.close();
+
+// ---------------------------------------------------------- the path stone: what kind of run is next (host)
+export const modePanel = makePanel('#modes');
+modePanel.fill = function (game) {
+  const box = $('#mode-rows');
+  box.innerHTML = '';
+  const snap = game.lastSnap;
+  const pick = (mode, resume) => { game.sim.setMode('host', mode, resume); this.close(); };
+  for (const m of MODES) {
+    const row = document.createElement('div');
+    row.className = 'moderow' + (snap && snap.md === m.id ? ' on' : '');
+    row.innerHTML = '<div><b></b><small></small></div>';
+    row.querySelector('b').textContent = m.name;
+    row.querySelector('small').textContent = m.desc;
+    const btn = document.createElement('button');
+    btn.className = 'gbtn small primary';
+    btn.textContent = m.id === 'endless' ? 'New run' : 'Choose';
+    btn.onclick = () => pick(m.id, null);
+    row.appendChild(btn);
+    if (m.id === 'endless' && game.char.endless && game.char.endless.forest > 1) {
+      const c = document.createElement('button');
+      c.className = 'gbtn small';
+      c.textContent = `Continue (forest ${game.char.endless.forest})`;
+      c.onclick = () => pick('endless', game.char.endless);
+      row.appendChild(c);
+    }
+    box.appendChild(row);
+  }
+};
+$('#modes [data-close]').onclick = () => modePanel.close();
+
+// ---------------------------------------------------------- chat (T)
+export const chat = {
+  game: null, typing: false, lines: [],
+  attach(game) { this.game = game; this.lines = []; this.render(); },
+  open() {
+    if (this.typing) return;
+    this.typing = true;
+    const inp = $('#chat-input');
+    $('#chat').classList.add('typing');
+    inp.value = '';
+    setTimeout(() => inp.focus(), 0);
+    if (this.game) this.game.input.keys.clear();
+    this.render();
+  },
+  close() { this.typing = false; $('#chat').classList.remove('typing'); $('#chat-input').blur(); this.render(); },
+  send() {
+    const t = $('#chat-input').value.trim();
+    $('#chat-input').value = '';
+    if (t && this.game) this.game.act('chat', t.slice(0, 80));
+    this.close();
+  },
+  add(name, text, mine) { this.lines.push({ name, text, mine, at: Date.now() }); this.lines = this.lines.slice(-7); this.render(); },
+  render() {
+    const box = $('#chat-lines');
+    box.innerHTML = '';
+    for (const l of this.lines) {
+      const d = document.createElement('div');
+      d.className = 'cline' + (Date.now() - l.at > 12000 ? ' old' : '');
+      d.innerHTML = '<b></b> <span></span>';
+      d.querySelector('b').textContent = l.name + ':';
+      d.querySelector('span').textContent = l.text;
+      box.appendChild(d);
+    }
+  },
+};
+$('#chat-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); chat.send(); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); chat.close(); }
+});
+setInterval(() => { if (!chat.typing && chat.lines.length) chat.render(); }, 2000);
+
+// ---------------------------------------------------------- developer console (` key, Jack and kubi only)
+export const devConsole = {
+  game: null, open: false,
+  attach(game) { this.game = game; },
+  toggle() { if (this.open) this.close(); else this.show(); },
+  show() {
+    this.open = true;
+    $('#dev').classList.remove('hidden');
+    setTimeout(() => $('#dev-input').focus(), 0);
+    if (this.game) this.game.input.keys.clear();
+    if (!$('#dev-log').childElementCount) this.log('developer console · type help');
+  },
+  close() { if (!this.open) return; this.open = false; $('#dev').classList.add('hidden'); $('#dev-input').blur(); },
+  log(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    const box = $('#dev-log');
+    box.appendChild(d);
+    while (box.childElementCount > 60) box.firstChild.remove();
+    box.scrollTop = box.scrollHeight;
+  },
+};
+$('#dev-input').addEventListener('keydown', (e) => {
+  if (e.code === 'Backquote' || e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); devConsole.close(); return; }
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const line = $('#dev-input').value.trim();
+  $('#dev-input').value = '';
+  if (!line || !devConsole.game) return;
+  devConsole.log('> ' + line);
+  devConsole.game.act('devCmd', line);
+});
+
+// ---------------------------------------------------------- click outside a menu to close it
+document.addEventListener('pointerdown', (e) => {
+  const g = pause.game;
+  if (!g || !g.alive) return;
+  if (e.target.closest('.panel, #chat, #dev, #confirm, #toasts, #wheel, #menu-gear, #btn-gear, .skill, #boons, #tips')) return;
+  g.wardrobe.close(); g.tree.close(); g.controls.close();
+  campPanel.close(); signPanel.close(); boardPanel.close();
+  shopPanel.close(); lboardPanel.close(); modePanel.close();
+  settings.close(); pause.close();
+});

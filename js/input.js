@@ -14,7 +14,7 @@ export class Input {
     this.mouse = { x: innerWidth / 2, y: innerHeight / 2, left: false, right: false, middle: false };
     this.scroll = 0;        // mouse-wheel steps (used to flip reaction-wheel pages)
     this.wheelOpen = false; // while a wheel is open, scrolling doesn't scroll the page
-    this.counts = { atk: 0, s1: 0, s2: 0, s3: 0, dash: 0, interact: 0, esc: 0, ult: 0, tree: 0, back: 0, controls: 0 };
+    this.counts = { atk: 0, s1: 0, s2: 0, s3: 0, dash: 0, interact: 0, esc: 0, ult: 0, tree: 0, back: 0, controls: 0, chat: 0, photo: 0, dev: 0, item1: 0, item2: 0, item3: 0 };
     this.device = 'kbm';
     this.padMove = { x: 0, y: 0 };
     this.padAim = null;
@@ -38,6 +38,12 @@ export class Input {
         if (c === k.strike) this.counts.atk++;
         if (c === k.skill2) { this.counts.s2++; this.toggleGuard = !this.toggleGuard; }
         if (c === 'Escape') this.counts.esc++;
+        if (c === k.chat) { this.counts.chat++; e.preventDefault(); }
+        if (c === k.photo) this.counts.photo++;
+        if (c === 'Backquote') { this.counts.dev++; e.preventDefault(); }
+        if (c === 'Digit1') this.counts.item1++;
+        if (c === 'Digit2') this.counts.item2++;
+        if (c === 'Digit3') this.counts.item3++;
       }
       this.keys.add(c);
       this.device = 'kbm';

@@ -6,7 +6,8 @@
 export const DEFAULT_KEYS = {
   up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
   dash: 'Space', skill1: 'KeyE', skill3: 'KeyQ', ult: 'KeyR',
-  interact: 'KeyF', tree: 'KeyT', controls: 'KeyH', strike: '', skill2: '',
+  interact: 'KeyF', tree: 'Tab', controls: 'KeyH', strike: '', skill2: '',
+  chat: 'KeyT', photo: 'KeyP',
 };
 
 export const KEY_ACTIONS = [
@@ -19,7 +20,9 @@ export const KEY_ACTIONS = [
   { id: 'skill3', name: 'Skill 3: Frost / Sanctified Ground / Soul Siphon' },
   { id: 'ult', name: 'Wildfire ultimate' },
   { id: 'interact', name: 'Interact' },
-  { id: 'tree', name: 'Skill tree' },
+  { id: 'tree', name: 'Skill tree (view)' },
+  { id: 'chat', name: 'Chat' },
+  { id: 'photo', name: 'Photo mode' },
   { id: 'controls', name: 'Show controls' },
 ];
 
@@ -47,7 +50,9 @@ const DEFAULTS = {
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem('wildwick.prefs') || '{}');
-    return { ...DEFAULTS, ...saved, keys: { ...DEFAULT_KEYS, ...(saved.keys || {}) } };
+    const keys = { ...DEFAULT_KEYS, ...(saved.keys || {}) };
+    if (keys.tree === 'KeyT' && keys.chat === 'KeyT') keys.tree = 'Tab'; // T is chat now; the skill tree moved to Tab
+    return { ...DEFAULTS, ...saved, keys };
   } catch { return { ...DEFAULTS, keys: { ...DEFAULT_KEYS } }; }
 }
 

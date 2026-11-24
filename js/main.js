@@ -233,9 +233,9 @@ $('#logo').innerHTML = `
     <circle cx="88" cy="110" r="95" fill="url(#lgWarm)" shape-rendering="auto"/>
     ${flameRects(9, 34, 28)}
     <rect x="150" y="30" width="6" height="6" fill="#ffc94d"/><rect x="24" y="60" width="6" height="6" fill="#ffc94d"/><rect x="160" y="90" width="6" height="6" fill="#ffc94d"/>
-    <text x="172" y="138" font-family="'Pixelify Sans'" font-weight="700" font-size="92" fill="#6b230c">WILDWICK</text>
-    <text x="166" y="132" font-family="'Pixelify Sans'" font-weight="700" font-size="92" fill="#ffcf5a" stroke="#2a1608" stroke-width="4" paint-order="stroke">WILDWICK</text>
-    <text x="170" y="180" font-family="'Pixelify Sans'" font-weight="700" font-size="20" letter-spacing="3" fill="#9fc25a">KEEP YOUR FLAME ALIVE</text>
+    <text x="172" y="138" font-family="'Alegreya Sans SC'" font-weight="700" font-size="92" fill="#6b230c">wildwick</text>
+    <text x="166" y="132" font-family="'Alegreya Sans SC'" font-weight="700" font-size="92" fill="#ffcf5a" stroke="#2a1608" stroke-width="4" paint-order="stroke">wildwick</text>
+    <text x="170" y="180" font-family="'Alegreya Sans SC'" font-weight="700" font-size="20" letter-spacing="3" fill="#9fc25a">keep your flame alive</text>
   </svg>`;
 $('#favicon').href = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 17" shape-rendering="crispEdges">${flameRects(1, 0, 0)}</svg>`);
 

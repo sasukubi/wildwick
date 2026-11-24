@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wildwick</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans+SC:wght@400;500;700;800&display=swap" rel="stylesheet">
   <link id="favicon" rel="icon" href="data:,">
   <link rel="stylesheet" href="css/style.css">
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -91,6 +91,7 @@
         <div id="mana-row" class="bar mana hidden"><i id="mana-fill"></i><span id="mana-text"></span></div>
         <div class="bar wild"><i id="wild-fill"></i><span id="wild-text"></span></div>
         <div class="xprow"><b id="lvl">Lv 1</b><div class="bar xp"><i id="xp-fill"></i></div><span id="pts" class="ptsbadge hidden"></span></div>
+        <div id="items" class="itemrow"></div>
       </div>
       <div class="skillcol"><div id="weave" class="glass pill hidden"></div><div id="skills"></div></div>
     </div>
@@ -113,9 +114,11 @@
   </div>
 
   <div id="tree" class="panel glass modal hidden">
-    <div class="panel-head"><h2 id="tree-title">Skills</h2><span id="tree-pts" class="ptsbadge"></span><button data-close class="gbtn small">Close (T)</button></div>
-    <p class="note">The whole party earns EXP together. Every level gives you 1 point, which you spend at the end of each round (at the Heartwood Gate). Your upgrades last until the run ends.</p>
+    <div class="panel-head"><h2 id="tree-title">Skills</h2><span id="tree-pts" class="ptsbadge"></span><button data-close class="gbtn small">Close (Tab)</button></div>
+    <div class="treexp"><div class="bar xp"><i id="tree-xp-fill"></i></div><span id="tree-xp-text" class="muted small"></span></div>
+    <p id="tree-note" class="note"></p>
     <div id="tree-cols"></div>
+    <div id="tree-prestige"></div>
   </div>
 
   <div id="boons" class="hidden">
@@ -127,7 +130,7 @@
         <button id="vote-go" class="gbtn primary">Continue into the forest</button>
         <button id="vote-camp" class="gbtn">Return to camp</button>
       </div>
-      <div class="row center-row"><span id="boons-pts" class="muted"></span><button data-tree class="gbtn small">Skill tree (T)</button></div>
+      <div class="row center-row"><span id="boons-pts" class="muted"></span><button data-tree class="gbtn small">Skill tree (Tab)</button></div>
     </div>
   </div>
 
@@ -234,6 +237,29 @@
     <p id="board-name" class="muted"></p>
     <div id="board-rows"></div>
   </div>
+
+  <div id="shop" class="panel glass modal hidden">
+    <div class="panel-head"><h2>The Merchant</h2><span id="shop-coins" class="ptsbadge coins"></span><button data-close class="gbtn small">Close</button></div>
+    <p class="note">Enemies drop little gold specks. Walk over them to collect coins (you keep them even if your flame goes out). Potions are used with 1, 2 and 3 during a run.</p>
+    <div id="shop-rows"></div>
+  </div>
+
+  <div id="lboard" class="panel glass modal hidden">
+    <div class="panel-head"><h2>Leaderboard</h2><button data-close class="gbtn small">Close</button></div>
+    <div class="tabs"><button class="tab gbtn small" data-lb="daily">Daily run</button><button class="tab gbtn small" data-lb="endless">Endless</button></div>
+    <p id="lboard-sub" class="muted"></p>
+    <div id="lboard-rows"></div>
+  </div>
+
+  <div id="modes" class="panel glass modal hidden">
+    <div class="panel-head"><h2>The Path Stone</h2><button data-close class="gbtn small">Close</button></div>
+    <p class="note">Choose what kind of run the party starts when everyone walks under the archway.</p>
+    <div id="mode-rows"></div>
+  </div>
+
+  <div id="chat"><div id="chat-lines"></div><input id="chat-input" maxlength="80" autocomplete="off" placeholder="say something… (enter to send, esc to close)"></div>
+
+  <div id="dev" class="hidden"><div id="dev-log"></div><input id="dev-input" autocomplete="off" spellcheck="false" placeholder="dev command (help)"></div>
 
   <div id="wheel" class="hidden"></div>
 

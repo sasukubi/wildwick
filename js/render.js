@@ -13,6 +13,8 @@ import {
   bowSprite, daggerSprite, archwaySprite, ARCH_LANTERNS, lanternSprite, emojiSprite, pingSprite, PINGS,
   maceSprite, charmSprite, impSprite,
 } from './sprites.js';
+import { drawNewProp, drawGroundProps, propLights, drawNewEnemy, enemyLights, drawWeb, drawCoin, drawWorldExtras, drawScreenExtras, setSnap, NEW_ENEMIES } from './renderx.js';
+import { stageName } from './hud.js';
 
 // a stable pseudo-random number for jagged shapes
 function jag(i, seed) { const h = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453; return h - Math.floor(h); }
@@ -29,8 +31,8 @@ function jaggedBlob(ctx, x, y, r, ry, seed, grow = 1, spikes = 18) {
 }
 
 const TAU = Math.PI * 2;
-const FONT = "'Pixelify Sans', system-ui, sans-serif";
-const TITLE = "'Pixelify Sans', system-ui, sans-serif";
+const FONT = "'Alegreya Sans SC', system-ui, sans-serif";
+const TITLE = "'Alegreya Sans SC', system-ui, sans-serif";
 
 export function hexRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -45,6 +47,7 @@ function idSeed(id) { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.c
 const warn = (a) => (prefs.cbSafe ? `rgba(90,170,255,${a})` : `rgba(255,70,50,${a})`);
 
 function text(ctx, s, x, y, { size = 13, font = FONT, weight = 800, color = '#fff', align = 'center', alpha = 1 } = {}) {
+  s = String(s).toLowerCase();
   ctx.font = `${weight} ${size}px ${font}`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
@@ -317,7 +320,7 @@ export class Renderer {
     const w = innerWidth, h = innerHeight;
     if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
     if (this.light.width !== w || this.light.height !== h) { this.light.width = w; this.light.height = h; }
-    this.zoom = prefs.zoom === 'auto' ? Math.max(1, Math.round(h / 480)) : Number(prefs.zoom);
+    this.zoom = (prefs.zoom === 'auto' ? Math.max(1, Math.round(h / 480)) : Number(prefs.zoom)) * (this.zoomMul || 1); // photo mode can zoom out
   }
 
   viewSize() { this.resize(); return { w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom }; }
@@ -357,7 +360,9 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     this.blit(this.gfx.ground, ox, oy, vw, vh);
 
+    setSnap(snap);
     if (world.readyZone) this.drawReadyZone(ctx, world.readyZone, t);
+    drawGroundProps(ctx, world, snap, t, vis);
     if (world.exit) this.drawGateGround(ctx, world.exit, snap.go, t);
     for (const h of snap.hz) if (vis(h.x, h.y, 200)) this.drawHazard(ctx, h, t);
     for (const z of snap.zn || []) if (vis(z.x, z.y, 120)) this.drawZoneGround(ctx, z, t);
@@ -368,7 +373,8 @@ export class Renderer {
       for (const e of snap.es) {
         const v = game.views.get('e' + e.id);
         if (!v || Math.hypot(v.x - game.lp.x, v.y - game.lp.y) > 170) continue;
-        const r = (e.t === 'treant' ? 40 : e.t === 'alpha' ? 18 : 11) + 12;
+        if (e.t === 'duelist' || e.t === 'wisp') continue;
+        const r = (e.t === 'treant' ? 40 : e.t === 'alpha' || e.t === 'widow' ? 18 : e.t === 'mossback' ? 14 : 11) + 12;
         const back = e.fa + Math.PI;
         let d = Math.atan2(game.lp.y - v.y, game.lp.x - v.x) - e.fa;
         while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
@@ -424,6 +430,7 @@ export class Renderer {
     }
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.d();
+    drawWorldExtras(ctx, game, snap, me, t);
     this.drawParticles(ctx, game.particles, false);
     this.blit(this.gfx.canopy, ox, oy, vw, vh);
     if (world.readyZone) this.drawArch(ctx, world.readyZone, snap, t);
@@ -435,12 +442,13 @@ export class Renderer {
     this.drawPostLight(ctx, game, snap, me, t, vis);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.drawScreenText(ctx, game, snap, me, toS, vis, t);
+    if (!game.photo) this.drawScreenText(ctx, game, snap, me, toS, vis, t);
     this.drawScreenFx(ctx, game, snap, me, W, H, t);
   }
 
   // ---------------------------------------------------------- objects
   drawProp(ctx, p) {
+    if (drawNewProp(ctx, p, performance.now() / 1000)) return;
     if (p.type === 'campfire') ctx.drawImage(propSprite('campfire'), p.x - 20, p.y - 16);
     else if (p.type === 'wardrobe') ctx.drawImage(propSprite('wardrobe'), p.x - 15, p.y - 44);
     else if (p.type === 'shrine') {
@@ -496,6 +504,7 @@ export class Renderer {
   }
 
   drawEnemy(ctx, e, v, t) {
+    if (drawNewEnemy(ctx, e, v, t)) return;
     const x = Math.round(v.x), y = Math.round(v.y);
     if (e.t === 'dummy') {
       const img = propSprite('dummy', e.kd === 'hitter' ? 1 : e.kd === 'facer' ? 2 : 0);
@@ -539,7 +548,7 @@ export class Renderer {
   }
 
   eyePos(e, v) {
-    if (e.t === 'dummy') return [];
+    if (e.t === 'dummy' || NEW_ENEMIES.has(e.t)) return [];
     if (e.t === 'treant') return TREANT_EYES.map(([ex, ey]) => [v.x - 56 + ex, v.y - 116 + ey]);
     const variant = e.t === 'alpha' ? 'alpha' : e.el ? 'elite' : 'wolf';
     const frame = e.s === 2 ? 3 : e.s === 3 ? 4 : 0;
@@ -552,6 +561,7 @@ export class Renderer {
   }
 
   drawHazard(ctx, h, t) {
+    if (h.k === 'web') { drawWeb(ctx, h, t); return; }
     const seed = h.id % 97;
     if (h.k === 'root') {
       if (h.done) { ctx.drawImage(propSprite('roots'), h.x - 20, h.y - 28); return; }
@@ -705,12 +715,13 @@ export class Renderer {
       const pal = byId(FLAMES, p.f);
       const ratio = p.hp / p.mx;
       const fl = 1 + Math.sin(t * 9 + v.x * 0.01) * 0.02 + Math.sin(t * 23) * 0.015;
-      const r = (p.gl ? 420 : 75 + 260 * Math.pow(ratio, 0.85)) * fl;
+      const mul = (snap.ev === 'fog' ? 0.65 : snap.ev === 'fireflies' ? 1.2 : 1) * (p.dm ? 0.55 : 1);
+      const r = (p.gl ? 420 : 75 + 260 * Math.pow(ratio, 0.85)) * fl * mul;
       L.push({ x: v.x, y: v.y - 24, r, col: pal.light, i: 1 });
     }
     if (world.campfire) L.push({ x: world.campfire.x, y: world.campfire.y - 8, r: 250 + Math.sin(t * 7) * 10 + Math.sin(t * 13) * 6, col: [255, 150, 70], i: 1 });
     for (const g of world.glows) L.push({ x: g.x, y: g.y, r: 52, col: g.c, i: 0.55 });
-    for (const k of snap.pk) L.push({ x: k.x, y: k.y, r: k.k === 'f' ? 80 : 48, col: k.k === 'f' ? [255, 230, 140] : [255, 160, 70], i: 0.85 });
+    for (const k of snap.pk) L.push({ x: k.x, y: k.y, r: k.k === 'f' ? 80 : k.k === 'c' ? 22 : 48, col: k.k === 'f' ? [255, 230, 140] : [255, 160, 70], i: 0.85 });
     for (const z of snap.zn || []) {
       if (z.k === 'hands') continue;
       if (z.k === 'sanct') { L.push({ x: z.x, y: z.y - 6, r: z.r * 1.4, col: [255, 230, 160], i: 0.75 }); continue; }
@@ -723,12 +734,14 @@ export class Renderer {
     for (const e of snap.es) {
       const v = game.views.get('e' + e.id);
       if (!v) continue;
+      enemyLights(e, v, L);
       if (e.el || e.b) L.push({ x: v.x, y: v.y - 10, r: 48, col: [255, 140, 60], i: 0.5 });
     }
     if (world.exit) L.push({ x: world.exit.x, y: world.exit.y - 20, r: snap.go ? 220 : 120, col: snap.go ? [160, 255, 170] : [255, 100, 80], i: 0.85 });
     world.shrines.forEach((s, i) => { if (!snap.sh[i]) L.push({ x: s.x, y: s.y - 16, r: 110, col: [255, 170, 90], i: 0.85 }); });
     if (world.readyZone && this.archLights) for (const a of this.archLights) L.push({ x: a.x, y: a.y, r: a.lit ? 90 : 26, col: [255, 200, 120], i: a.lit ? 0.9 : 0.4 });
     for (const p of snap.ps) if (p.hk > 0) { const v = game.playerView(p); L.push({ x: v.x, y: v.y - 16, r: 140, col: [255, 220, 140], i: 0.7 }); }
+    propLights(world, t, L);
     // camp lanterns: each area of the camp has its own warm light
     for (const p of world.props) {
       if (p.type === 'tent' || p.type === 'board' || p.type === 'sign' || p.type === 'resetpost') L.push({ x: p.x, y: p.y - 20, r: p.type === 'sign' ? 120 : 110, col: [255, 190, 110], i: 0.75 });
@@ -863,6 +876,7 @@ export class Renderer {
     for (const k of snap.pk) {
       if (!vis(k.x, k.y)) continue;
       const y = k.y - 5 + Math.round(Math.sin(t * 5 + k.id) * 2);
+      if (k.k === 'c') { drawCoin(ctx, k, y, t); continue; }
       const big = k.k === 'f';
       const g = ctx.createRadialGradient(k.x, y, 0, k.x, y, big ? 14 : 9);
       g.addColorStop(0, big ? 'rgba(255,250,200,0.95)' : 'rgba(255,220,140,0.9)');
@@ -1326,8 +1340,8 @@ export class Renderer {
     }
     for (const e of snap.es) {
       const v = game.views.get('e' + e.id);
-      if (!v || e.t === 'treant' || e.t === 'dummy' || e.hp >= e.mx || !vis(v.x, v.y)) continue;
-      const S = e.t === 'alpha' ? 1.5 : 1;
+      if (!v || e.t === 'treant' || e.t === 'dummy' || e.t === 'duelist' || e.hp >= e.mx || !vis(v.x, v.y)) continue;
+      const S = e.t === 'alpha' || e.t === 'widow' ? 1.5 : e.t === 'wisp' ? 0.6 : 1;
       const [x, y] = toS(v.x, v.y - 30 * S);
       const w = 30 * S * Z / 2;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, 5);
@@ -1338,7 +1352,7 @@ export class Renderer {
       if (!vis(v.x, v.y)) continue;
       if (p.id !== game.myId && !p.dn) {
         const [x, y] = toS(v.x, v.y - (p.h === 'witch' || p.h === 'antlers' ? 50 : 44));
-        if (prefs.names) text(ctx, p.u, x, y, { size: 12, color: '#f4f1ea' });
+        if (prefs.names) text(ctx, p.np ? `${p.u} ✦${p.np}` : p.u, x, y, { size: 12, color: p.np ? '#ffe6a0' : '#f4f1ea' });
         // their flame (health) bar, so you can see who needs help
         // overheal: the bar makes room for the shield, shown in pale blue after the flame
         const sh = p.sh || 0, total = Math.max(p.mx, p.hp + sh);
@@ -1376,6 +1390,7 @@ export class Renderer {
       const [x, y] = toS(e.x, e.y - 24);
       text(ctx, pin.label, x, y, { size: 13, color: pin.col, alpha: Math.min(1, (1 - p) * 3) });
     }
+    drawScreenExtras(ctx, game, snap, me, toS, vis, t, text);
     if (game.prompt) {
       const pr = game.prompt;
       const [x, y] = toS(pr.x, pr.y);
@@ -1403,7 +1418,7 @@ export class Renderer {
       else {
         const dark = p < 0.25 ? 1 : Math.max(0, 1 - (p - 0.25) / 0.6);
         ctx.fillStyle = `rgba(4,6,10,${dark})`; ctx.fillRect(0, 0, W, H);
-        const name = game.fadeIn.kind === 'lobby' ? 'The Campfire' : game.fadeIn.kind === 'arena' ? 'The Heart of the Wood' : `Thornwood ${['I', 'II', 'III'][(snap.stg || 1) - 1] || ''}`;
+        const name = game.fadeIn.kind === 'lobby' ? 'The Campfire' : stageName(snap);
         const sub = game.fadeIn.kind === 'lobby' ? 'Home again' : game.fadeIn.kind === 'arena' ? 'The Elder Treant stirs' : snap.stg === 1 ? 'Keep your flame alive' : 'Deeper into the wilds';
         const ta = p < 0.15 ? p / 0.15 : p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.3) : 1;
         text(ctx, name, W / 2, H * 0.42, { size: 40, font: TITLE, color: '#ffe6b0', alpha: ta });

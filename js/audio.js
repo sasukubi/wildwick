@@ -216,6 +216,13 @@ class AudioEngine {
       case 'famDie': N(1.0, { filter: 'lowpass', freq: 500, slide: 120, gain: 0.3, attack: 0.05 }); T(120, 0.8, { slide: 40, type: 'triangle', gain: 0.15 }); break;
       case 'shove': T(110, 0.15, { slide: 60, gain: 0.3 }); N(0.12, { filter: 'lowpass', freq: 900, gain: 0.3 }); break;
       case 'haste': N(0.25, { freq: 1200, slide: 3000, q: 1, gain: 0.08 }); break;
+      case 'coin': T(1568 + Math.random() * 120, 0.08, { type: 'triangle', gain: 0.07 }); T(2093, 0.1, { type: 'triangle', gain: 0.05, delay: 0.04 }); break;
+      case 'combo': [659, 988, 1318].forEach((f, i) => T(f, 0.25, { type: 'triangle', gain: 0.12, delay: i * 0.04 })); N(0.12, { filter: 'highpass', freq: 2500, gain: 0.12 }); break;
+      case 'chat': T(1320, 0.06, { type: 'triangle', gain: 0.05 }); T(1760, 0.08, { type: 'triangle', gain: 0.04, delay: 0.05 }); break;
+      case 'cast': N(0.25, { freq: 900, slide: 2600, q: 0.8, gain: 0.1 }); N(0.15, { filter: 'lowpass', freq: 600, gain: 0.08, delay: 0.3 }); break;
+      case 'bite': N(0.12, { filter: 'lowpass', freq: 900, gain: 0.3 }); T(500, 0.08, { slide: 250, type: 'triangle', gain: 0.1 }); break;
+      case 'catch': N(0.3, { filter: 'lowpass', freq: 1200, slide: 400, gain: 0.25 }); [784, 988, 1175, 1568].forEach((f, i) => T(f, 0.3, { type: 'triangle', gain: 0.1, delay: 0.1 + i * 0.06 })); break;
+      case 'drink': for (let i = 0; i < 4; i++) T(300 + i * 40, 0.07, { slide: 500, type: 'sine', gain: 0.1, delay: i * 0.09 }); break;
       // UI
       case 'click': this.tone(1250, 0.04, { gain: 0.12 * v, bus: 'ui' }); break;
       case 'hover': this.tone(1900, 0.025, { gain: 0.04 * v, bus: 'ui' }); break;
@@ -229,7 +236,7 @@ class AudioEngine {
     if (!this.ctx) { this.pendingTrack = name; return; }
     if (this.track === name) return;
     // the menus and the campfire share the main theme: keep it playing without restarting
-    const theme = (n) => n === 'menu' || n === 'lobby';
+    const theme = (n) => n === 'menu' || n === 'lobby'; // (the fireside song starts fresh)
     if (theme(this.track) && theme(name)) { this.track = name; this.startWind(name); return; }
     this.track = name;
     this.nextBeat = this.ctx.currentTime + 0.1;
@@ -265,7 +272,7 @@ class AudioEngine {
         const f = 4000 + Math.random() * 900;
         for (let i = 0; i < 3 + Math.floor(Math.random() * 4); i++) this.tone(f, 0.03, { gain: 0.02, bus: 'amb', delay: i * 0.07 });
       }
-      if (this.track === 'lobby' && A.crackle <= 0) {
+      if ((this.track === 'lobby' || this.track === 'fireside') && A.crackle <= 0) {
         A.crackle = 0.05 + Math.random() * 0.35;
         this.noise(0.02 + Math.random() * 0.03, { filter: 'highpass', freq: 1800 + Math.random() * 3000, gain: 0.05 + Math.random() * 0.08, bus: 'amb' });
       }
@@ -300,6 +307,11 @@ class AudioEngine {
   }
   // a low, warm cello drone
   cello(m, when, dur, gain = 0.07) { this.tone(midi(m), dur, { type: 'sawtooth', gain, attack: 0.25, bus: 'music', when, lp: 420, vib: 4, vibDepth: 2 }); }
+  // a warm plucked guitar string: two slightly detuned triangles that fade quickly
+  guitar(m, when, gain = 0.06) {
+    this.tone(midi(m), 1.1, { type: 'triangle', gain, attack: 0.004, bus: 'music', when, lp: 1800 });
+    this.tone(midi(m), 0.6, { type: 'sawtooth', gain: gain * 0.25, attack: 0.004, bus: 'music', when, detune: 6, lp: 1200 });
+  }
   // soft plucked harp: a darker, rounder pluck (not a bell)
   harp(m, when, gain = 0.05) { this.tone(midi(m), 1.4, { type: 'triangle', gain, attack: 0.006, bus: 'music', when, lp: 1300 }); }
   drum(kind, when, gain = 0.4) {
@@ -328,6 +340,14 @@ class AudioEngine {
       // the melody
       for (const [s0, m, len] of song.melody) if (s0 === loopStep) this.flute(m, when, step * len * 0.95, song.soft ? 0.055 : 0.075);
       if (song.frame && (pos === 0 || pos === 5)) this.drum('frame', when, 0.25);
+      return;
+    }
+    if (song.style === 'acoustic') {
+      // sitting by the fire: a soft fingerpicked guitar, a low hum and the theme on a quiet flute
+      if (pos === 0) this.cello(chord[0] - 12, when, step * 8.4, 0.035);
+      const pick = [0, 2, 1, 2, 0, 2, 1, 2][pos];
+      this.guitar(chord[pick] + (pos % 2 ? 12 : 0), when, pos % 4 === 0 ? 0.07 : 0.05);
+      for (const [s0, m, len] of song.melody) if (s0 === loopStep) this.flute(m - 12, when, step * len * 0.95, 0.035);
       return;
     }
     if (song.style === 'dark') {
@@ -367,6 +387,7 @@ const THEME_MELODY = [
 const SONGS = {
   menu: { style: 'theme', bpm: 70, chords: THEME_CHORDS, melody: THEME_MELODY },
   lobby: { style: 'theme', bpm: 70, chords: THEME_CHORDS, melody: THEME_MELODY, frame: true },
+  fireside: { style: 'acoustic', bpm: 58, chords: THEME_CHORDS, melody: THEME_MELODY.filter((_, i) => i % 3 !== 2) },
   rest: { style: 'theme', bpm: 62, chords: THEME_CHORDS, melody: THEME_MELODY.filter((_, i) => i % 2 === 0), soft: true },
   forest: {
     style: 'dark', bpm: 84,

@@ -12,6 +12,7 @@ import {
   PLAYER_RADIUS, TILE, TOUGH, PACE, xpToNext, classStats, canBuy, weaveOf,
 } from './data.js';
 import { makeLobby, makeForest, makeArena } from './world.js';
+import { installExtras, MOSSBACK, WIDOW } from './simx.js';
 
 const R = { float: (a, b) => a + Math.random() * (b - a) };
 const STATE_CODE = { idle: 0, chase: 1, windup: 2, lunge: 3, recover: 4, sweep: 5, ret: 6 };
@@ -59,6 +60,12 @@ export class Sim {
     this.gateOpen = false;
     this.shrineUsed = [];
     this.time = 0;
+    this.mode = 'casual';  // casual, daily or endless
+    this.event = null;     // this forest's random twist
+    this.ring = null;      // the Treant's closing ring of roots
+    this.duel = null;      // a friendly duel in camp
+    this.lastUlt = null;   // for shared Wildfire surges
+    this.resume = null;    // an endless run to continue
   }
 
   emit(f) { this.fxLocal.push(f); this.fxNet.push(f); }
@@ -75,6 +82,7 @@ export class Sim {
     this.world = makeLobby();
     this.clearStage();
     this.campVote = null;
+    this.duel = null; this.ring = null; this.event = null;
     this.sv++;
     // anyone who joined while we were out in the forest has been waiting at camp
     for (const [id, w] of this.waiting) { const p = this.addPlayer(id, w.ch, w.user); if (this.hooks.onJoinedFromWait) this.hooks.onJoinedFromWait(p); }
@@ -101,7 +109,7 @@ export class Sim {
   }
 
   resetRunStats(p) {
-    p.tree = {}; p.boons = []; p.pts = 0; p.wf = 0; p.choices = null; p.picked = false;
+    this.loadClass(p); p.boons = []; p.wf = 0; p.choices = null; p.picked = false;
     this.recalc(p);
     p.hp = p.max;
     p.sh = 0;
@@ -111,42 +119,7 @@ export class Sim {
   // Clerics start with half their Grace; everyone else starts with full mana
   startMana(p) { return p.cls === 'cleric' ? (p.stats.maxMana || 0) * CLERIC.graceStart / 100 : p.stats.maxMana || 0; }
 
-  startRun() {
-    this.xp = 0;
-    this.lvl = 1;
-    this.runTime = 0;
-    for (const p of this.players.values()) this.resetRunStats(p);
-    this.startStage(1);
-  }
 
-  startStage(n) {
-    const seed = (Math.random() * 2147483647) | 0;
-    this.stage = n;
-    this.world = n <= RULES.forestStages ? makeForest(seed) : makeArena(seed);
-    this.scene = this.world.kind;
-    this.state = 'playing';
-    this.clearStage();
-    this.waveT = 32;
-    this.shrineUsed = this.world.shrines.map(() => false);
-    this.sv++;
-    this.placeAll(n === 1);
-    const np = this.players.size;
-    if (this.scene === 'forest') {
-      const hpScale = (1 + 0.3 * (np - 1)) * (1 + 0.25 * (n - 1));
-      for (const s of this.world.wolfSpawns) this.spawnWolf(s.x, s.y, hpScale, Math.random() < ELITE.chance);
-      for (let i = 0; i < (np - 1) * 3 && this.world.wolfSpawns.length; i++) {
-        const s = this.world.wolfSpawns[Math.floor(Math.random() * this.world.wolfSpawns.length)];
-        this.spawnWolf(s.x + R.float(-16, 16), s.y + R.float(-16, 16), hpScale, false);
-      }
-      const a = this.spawnAlpha(this.world.bossSpawn.x, this.world.bossSpawn.y, (1 + 0.3 * (np - 1)) * (1 + 0.25 * (n - 1)));
-      a.guardian = true;
-    } else {
-      this.spawnTreant(this.world.bossSpawn.x, this.world.bossSpawn.y, 1 + 0.5 * (np - 1));
-    }
-    this.hooks.onScene();
-    if (this.scene === 'forest') this.emit({ k: 'msg', text: `Thornwood ${['I', 'II', 'III'][n - 1]}: defeat the Alpha to open the Heartwood Gate.` });
-    else this.emit({ k: 'msg', text: 'The Elder Treant awakens…' });
-  }
 
   placeAll(fullHeal) {
     const n = Math.max(1, this.players.size);
@@ -198,17 +171,17 @@ export class Sim {
     };
     const cls = CLASSES.find((c) => c.id === ch.cls);
     if (cls && cls.available) p.cls = cls.id;
+    this.initProgress(p, ch);
     this.recalc(p);
     p.hp = p.max;
     p.mana = this.startMana(p);
-    if (this.stage > 0) p.pts = this.lvl - 1;
     this.players.set(id, p);
     return p;
   }
 
   recalc(p) {
     const old = p.max || 100;
-    p.stats = classStats(p.cls, p.tree, p.boons);
+    p.stats = classStats(p.cls, p.tree, p.boons, p.cp);
     p.max = p.stats.maxFlame;
     if (p.max > old && !p.down) p.hp += p.max - old;
     p.hp = Math.min(p.hp, p.max);
@@ -244,14 +217,6 @@ export class Sim {
     return false;
   }
 
-  buyNode(id, node) {
-    const p = this.players.get(id);
-    if (!p || this.state !== 'rest' || !canBuy(p.cls, p.tree, p.pts, node)) return false; // only between rounds
-    p.tree[node] = (p.tree[node] || 0) + 1;
-    p.pts--;
-    this.recalc(p);
-    return true;
-  }
 
   boonPool(p) { return BOONS.filter((b) => !b.cls || b.cls === p.cls).map((b) => b.id); }
 
@@ -324,6 +289,7 @@ export class Sim {
     for (const p of this.players.values()) {
       for (const k in p.cd) p.cd[k] -= dt;
       for (const k in p.want) p.want[k] -= dt;
+      this.tickPlayer(p, dt);
       p.comboT -= dt; p.hurtT -= dt; p.glowT -= dt; p.hawkT -= dt; p.ambushT -= dt; p.tpLock -= dt; p.invT -= dt; p.stepT -= dt;
       // overheal shields slowly fade
       if (p.sh > 0) p.sh = Math.max(0, p.sh - (p.max * CLERIC.overheal / CLERIC.shieldTime) * dt);
@@ -342,16 +308,21 @@ export class Sim {
         this.zones.push({ id: this.nextId++, kind: 'haste', owner: p.id, x: p.x, y: p.y, vx: 0, vy: 0, r: 13, t: SORCERER.trailTime, max: SORCERER.trailTime, dps: 0 });
       }
       if (p.stats.shroud && this.inSmoke(p.x, p.y)) p.hp = Math.min(p.max, p.hp + 3 * dt);
-      if (p.cls === 'sorcerer') this.sorcererActions(p);
+      const cd0 = [p.cd.s1, p.cd.s2, p.cd.s3];
+      if (p.cuts) { /* mid Thousand Cuts: no other attacks */ }
+      else if (p.cls === 'sorcerer') this.sorcererActions(p);
       else if (p.cls === 'bowman') this.bowmanActions(p, dt);
       else if (p.cls === 'rogue') this.rogueActions(p);
       else if (p.cls === 'cleric') this.clericActions(p);
       else if (p.cls === 'warlock') this.warlockActions(p, dt);
       else this.warriorActions(p, dt);
+      // prestige: abilities you've upgraded recharge faster
+      ['s1', 's2', 's3'].forEach((k, i) => { if (cd0[i] <= 0 && p.cd[k] > 0.5) p.cd[k] *= p.stats.slotCd[k]; });
       if (p.want.ult > 0) { this.ultimate(p); p.want.ult = 0; }
       if (p.want.int > 0 && this.scene === 'forest') { this.useShrine(p); p.want.int = 0; }
       if (p.want.int > 0 && this.scene === 'lobby') {
         p.want.int = 0;
+        this.duelInteract(p);
         const post = this.world.props.find((o) => o.type === 'resetpost');
         if (post && Math.hypot(post.x - p.x, post.y - p.y) < 50) this.resetDummies();
         const fount = this.world.props.find((o) => o.type === 'fountain');
@@ -362,6 +333,7 @@ export class Sim {
       }
     }
     this.updateRevives(dt);
+    this.tickWorld(dt);
 
     if (this.scene === 'lobby') {
       this.updateLobby(dt);
@@ -394,6 +366,8 @@ export class Sim {
       if (ps.some((p) => p.vote === 'camp')) {
         const who = ps.find((p) => p.vote === 'camp');
         this.emit({ k: 'msg', text: `${who.user} chose to return to camp.` });
+        if (this.mode === 'endless') { this.endlessSave(); this.runOver(false, 'save', this.stage); }
+        else this.runOver(false, 'camp', this.stage);
         this.endRunStats(false);
         this.goLobby();
       } else if (ps.every((p) => p.picked && p.vote === 'go') || this.stateTimer <= 0) {
@@ -433,6 +407,7 @@ export class Sim {
           p.down = false;
           p.hp = RULES.reviveFlame;
           p.revive = 0;
+          p.boostT = 4; helper.boostT = 4; // a quick burst of speed for both of you
           this.emit({ k: 'revive', id: p.id, by: helper.id, n: p.user, x: Math.round(p.x), y: Math.round(p.y) });
         }
       } else p.revive = Math.max(0, p.revive - dt * 0.08); // progress drains slowly if the helper steps away
@@ -440,7 +415,10 @@ export class Sim {
   }
 
   // ======================================================= shared combat helpers
-  power(p) { return (1 + (p.stats.furyMax || 0) * (1 - p.hp / p.max)) * p.stats.dmgMult * TOUGH.dmg; }
+  power(p) {
+    const slot = p._slot && p.stats.slot ? (p.stats.slot[p._slot] || 1) * (p._slot === 'ult' ? p.stats.ultMult : 1) : 1;
+    return (1 + (p.stats.furyMax || 0) * (1 - p.hp / p.max)) * p.stats.dmgMult * TOUGH.dmg * slot;
+  }
 
   // Hit every enemy in a cone in front of the player that they can actually see.
   hitArc(p, range, arc, dmg, kb, aim = p.aim, opts = {}) {
@@ -474,6 +452,7 @@ export class Sim {
       if (!opts.fromSky && !this.world.lineOfSight(x, y - 4, e.x, e.y - 8)) continue;
       this.damageEnemy(e, dmg, dx / d, dy / d, e.type === 'treant' ? 0 : kb, p, false, opts.el);
       if (opts.stun && e.type !== 'treant') e.stun = Math.max(e.stun, opts.stun);
+      if (opts.el === 'shadow' && opts.stun && p) e.rootBy = p.id;
       if (opts.slow) e.slowT = Math.max(e.slowT, opts.slow);
       hits++;
     }
@@ -501,7 +480,7 @@ export class Sim {
   aimedEnemy(p, range, maxAngle = 0.6) {
     let best = null, bs = 1e9;
     for (const e of this.enemies) {
-      if (e.dead) continue;
+      if (e.dead || e.owner === p.id) continue;
       const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
       if (d > range) continue;
       const da = Math.abs(angDiff(Math.atan2(dy, dx), p.aim));
@@ -729,7 +708,7 @@ export class Sim {
   rogueTarget(p) {
     let back = null, near = null, nd = 1e9;
     for (const e of this.enemies) {
-      if (e.dead) continue;
+      if (e.dead || e.owner === p.id) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d > ROGUE.hopRange + e.r || !this.los(p.x, p.y, e.x, e.y)) continue;
       const canBack = this.isBehind(p, e); // only if you're already behind it
@@ -804,6 +783,7 @@ export class Sim {
   heal(p, amount, src = null, quiet = false) {
     if (!p || p.down) return 0;
     const before = p.hp;
+    if (src && src._slot && src.stats && src.stats.slot) amount *= (src.stats.slot[src._slot] || 1) * (src._slot === 'ult' ? src.stats.ultMult : 1);
     p.hp = Math.min(p.max, p.hp + amount);
     const extra = amount - (p.hp - before);
     const cap = src && src.stats && src.stats.overheal ? p.max * src.stats.overheal : 0;
@@ -942,9 +922,10 @@ export class Sim {
 
   dawn(p) {
     const C = CLERIC, st = p.stats;
-    this.emit({ k: 'dawn', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: C.dawnR });
+    const dawnR = C.dawnR * st.ultSize;
+    this.emit({ k: 'dawn', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(dawnR) });
     for (const o of this.players.values()) {
-      if (Math.hypot(o.x - p.x, o.y - p.y) > C.dawnR) continue;
+      if (Math.hypot(o.x - p.x, o.y - p.y) > dawnR) continue;
       if (o.down) {
         // rekindled by the dawn, and safe inside a circle of light for a moment
         o.down = false;
@@ -1022,7 +1003,7 @@ export class Sim {
       if (!owner || owner.down) { m.t = 0; continue; }
       let tgt = null, bd = I.aggro;
       for (const e of this.enemies) {
-        if (e.dead) continue;
+        if (e.dead || e.owner === m.owner) continue;
         const d = Math.hypot(e.x - m.x, e.y - m.y);
         if (d < bd && Math.hypot(e.x - owner.x, e.y - owner.y) < I.aggro + 80 && this.world.lineOfSight(m.x, m.y - 4, e.x, e.y - 8)) { bd = d; tgt = e; }
       }
@@ -1033,7 +1014,7 @@ export class Sim {
         if (bd < tgt.r + 10 && m.biteT <= 0) {
           m.biteT = I.biteCd;
           const d = bd || 1;
-          this.damageEnemy(tgt, I.dmg * owner.stats.impMult * this.power(owner), (tgt.x - m.x) / d, (tgt.y - m.y) / d, 40, owner, false, 'imp');
+          this.damageEnemy(tgt, I.dmg * owner.stats.impMult * this.power(owner) * owner.stats.slot.s2, (tgt.x - m.x) / d, (tgt.y - m.y) / d, 40, owner, false, 'imp');
           if (owner.stats.maxMana) owner.mana = Math.min(owner.stats.maxMana, owner.mana + owner.stats.impMana);
         }
       } else {
@@ -1090,7 +1071,7 @@ export class Sim {
     const E = WARLOCK.eclipse;
     const c = this.aimPoint({ ...p, aimD: 60 }, 60); // always a little in front of the Warlock
     const hp = E.hp * (1 + 0.3 * (this.players.size - 1)) * (1 + 0.25 * Math.max(0, this.stage - 1));
-    const f = { id: 'decoy' + this.nextId++, kind: 'familiar', owner: p.id, x: c.x, y: c.y, t: p.stats.eclipseTime, max: p.stats.eclipseTime, hp, mhp: hp, down: false, swipeT: 0.6, cloak: p.cloak };
+    const f = { id: 'decoy' + this.nextId++, kind: 'familiar', owner: p.id, x: c.x, y: c.y, t: p.stats.eclipseTime * p.stats.ultSize, max: p.stats.eclipseTime * p.stats.ultSize, hp, mhp: hp, down: false, swipeT: 0.6, cloak: p.cloak };
     this.decoys.push(f);
     for (const e of this.enemies) {
       if (e.dead || e.type === 'treant' || e.type === 'dummy') continue;
@@ -1207,6 +1188,7 @@ export class Sim {
     this.campVote.yes.add(id);
     if ([...this.players.keys()].every((k) => this.campVote.yes.has(k))) {
       this.emit({ k: 'msg', text: 'The party heads back to camp.' });
+      this.runOver(false, 'camp');
       this.endRunStats(false);
       this.goLobby();
     }
@@ -1232,8 +1214,9 @@ export class Sim {
     if (p.wf < RULES.wildfireMax) { this.emit({ k: 'nope', id: p.id, what: 'ult' }); return; }
     p.wf = 0; // (ultimates work at camp too, for practising on the dummies)
     p.glowT = 2;
+    if (this.scene !== 'lobby') this.checkSurge(p); // two ultimates together = a Wildfire Surge
     if (p.cls === 'sorcerer') {
-      const S = SORCERER.starfall;
+      const S = { ...SORCERER.starfall, r: SORCERER.starfall.r * p.stats.ultSize };
       const c = this.aimPoint(p, S.range);
       this.emit({ k: 'starfall', id: p.id, x: Math.round(c.x), y: Math.round(c.y), r: S.r });
       // meteors lock on to the monsters inside the area (spread between them)
@@ -1250,26 +1233,16 @@ export class Sim {
     if (p.cls === 'cleric') { this.dawn(p); return; }
     if (p.cls === 'warlock') { this.eclipse(p); return; }
     if (p.cls === 'bowman') {
-      p.hawkT = p.stats.hawkTime;
+      p.hawkT = p.stats.hawkTime * p.stats.ultSize;
       p.cd.atk = 0;
       this.emit({ k: 'hawk', id: p.id, x: Math.round(p.x), y: Math.round(p.y) });
       return;
     }
-    if (p.cls === 'rogue') {
-      const G = ROGUE;
-      const targets = this.enemies
-        .filter((e) => !e.dead && Math.hypot(e.x - p.x, e.y - p.y) < G.cutsRange && this.los(p.x, p.y, e.x, e.y))
-        .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))
-        .slice(0, p.stats.cutsTargets);
-      const pts = targets.map((e) => [Math.round(e.x), Math.round(e.y - 8)]);
-      this.emit({ k: 'cuts', id: p.id, x: Math.round(p.x), y: Math.round(p.y), pts });
-      for (const e of targets) this.damageEnemy(e, G.cutsDmg * this.power(p) * (1 + p.stats.backstab), 0, 0, 0, p, false, 'back');
-      return;
-    }
+    if (p.cls === 'rogue') { this.startCuts(p); return; } // blinks from enemy to enemy (see simx.js)
     const W = WARRIOR;
     this.emit({ k: 'pyre', id: p.id, a: r2(p.aim), x: Math.round(p.x), y: Math.round(p.y) });
-    this.hitArc(p, W.pyreRange, W.pyreArc, W.pyreDmg * this.power(p), 340);
-    const life = W.pyreTrail * p.stats.trailMult;
+    this.hitArc(p, W.pyreRange * p.stats.ultSize, W.pyreArc, W.pyreDmg * this.power(p), 340);
+    const life = W.pyreTrail * p.stats.trailMult * p.stats.ultSize;
     for (let i = 0; i <= 8; i++) {
       const a = p.aim - W.pyreArc / 2 + (W.pyreArc * i) / 8;
       for (const rr of [48, 92]) {
@@ -1289,14 +1262,14 @@ export class Sim {
     this.world.shrines.forEach((s, i) => {
       if (this.shrineUsed[i] || Math.hypot(s.x - p.x, s.y - p.y) > 48) return;
       this.shrineUsed[i] = true;
-      this.gainWildfire(p, RULES.shrineFuel);
+      this.gainWildfire(p, RULES.shrineFuel * (this.event === 'emberstorm' ? 2 : 1));
       this.emit({ k: 'shrine', id: p.id, n: p.user, x: s.x, y: s.y });
     });
   }
 
   // ======================================================= flame
   hurtPlayer(p, dmg, sx, sy, blockable = true, attacker = null) {
-    if (p.down || this.state !== 'playing') return false;
+    if (p.down || this.state !== 'playing' || p.god) return false;
     if (p.invT > 0) { this.emit({ k: 'dodge', id: p.id, x: Math.round(p.x), y: Math.round(p.y) }); return false; }
     if (p.dashing) { this.emit({ k: 'dodge', id: p.id, x: Math.round(p.x), y: Math.round(p.y) }); return false; }
     if (blockable && p.guard) {
@@ -1322,6 +1295,11 @@ export class Sim {
     p.hp -= dmg;
     p.hurtT = 0.3;
     this.emit({ k: 'hurt', id: p.id, x: Math.round(p.x), y: Math.round(p.y), d: Math.round(dmg) });
+    // a Phoenix Feather relights you once
+    if (p.hp <= 0 && p.items && p.items.charm > 0) {
+      p.items.charm--; p.hp = p.max * 0.4; p.invT = 1.5;
+      this.emit({ k: 'phoenix', id: p.id, n: p.user, x: Math.round(p.x), y: Math.round(p.y) });
+    }
     if (p.hp <= 0) {
       p.hp = 0;
       p.down = true;
@@ -1332,17 +1310,6 @@ export class Sim {
     return true;
   }
 
-  grantXp(v) {
-    let scholar = 0;
-    for (const p of this.players.values()) scholar += p.boons.filter((b) => b === 'scholar').length;
-    this.xp += v * TOUGH.xp * (1 + 0.25 * scholar);
-    while (this.xp >= xpToNext(this.lvl)) {
-      this.xp -= xpToNext(this.lvl);
-      this.lvl++;
-      for (const p of this.players.values()) p.pts++;
-      this.emit({ k: 'lvl', lvl: this.lvl });
-    }
-  }
 
   // ======================================================= enemies
   baseEnemy(type, x, y, r, hp) {
@@ -1362,7 +1329,7 @@ export class Sim {
     const e = this.baseEnemy('wolf', x, y, WOLF.r, WOLF.hp * hpScale * (elite ? ELITE.hpMult : 1) * (1 + this.stageTime / 300));
     e.def = WOLF;
     e.elite = !!elite;
-    e.spd = elite ? ELITE.speedMult : 1;
+    e.spd = (elite ? ELITE.speedMult : 1) * (this.event === 'bloodmoon' ? 1.15 : 1);
     e.dmg = WOLF.dmg * dmgScale * (elite ? ELITE.dmgMult : 1);
     return e;
   }
@@ -1388,6 +1355,7 @@ export class Sim {
 
   damageEnemy(e, dmg, kx, ky, kb, src = null, silent = false, el = null) {
     if (e.dead) return;
+    if (e.type === 'duelist') { this.duelHit(e, dmg, src); return; }
     if (e.type === 'dummy') {
       if (src && src.stats && src.stats.shatter && e.slowT > 0) dmg *= 1.3;
       if (e.markT > 0) dmg *= 1 + (e.markBonus || BOWMAN.markBonus);
@@ -1405,9 +1373,15 @@ export class Sim {
       if (!silent && marker && marker === src && marker.stats.predator) marker.hp = Math.min(marker.max, marker.hp + 2);
     }
     if (e.curseT > 0) dmg *= 1 + (e.curseBonus || WARLOCK.curseBonus);
+    // Mossbacks shrug off hits from the front
+    if (e.type === 'mossback' && src && Number.isFinite(src.x) && !this.isBehind(src, e)) {
+      dmg *= MOSSBACK.front;
+      if (!silent && !(e.clinkT > this.time)) { e.clinkT = this.time + 0.5; this.emit({ k: 'clink', x: Math.round(e.x), y: Math.round(e.y - 16) }); }
+    }
+    dmg *= this.comboMult(e, src);
     e.hp -= dmg;
     if (e.type !== 'treant') {
-      const heavyFoe = e.type === 'alpha' ? 0.35 : 1;
+      const heavyFoe = e.type === 'alpha' || e.type === 'widow' || e.type === 'mossback' ? 0.35 : 1;
       e.vx += kx * kb * heavyFoe;
       e.vy += ky * kb * heavyFoe;
     }
@@ -1425,31 +1399,51 @@ export class Sim {
     e.dead = true;
     if (src && src.id && this.players.has(src.id)) src.kills = (src.kills || 0) + 1;
     this.emit({ k: 'die', t: e.type, x: Math.round(e.x), y: Math.round(e.y), el: e.elite ? 1 : 0 });
-    const drop = (kind, v) => this.pickups.push({ id: this.nextId++, kind, v, x: e.x, y: e.y, vx: R.float(-100, 100), vy: R.float(-100, 100), life: 30 });
+    const drop = (kind, v) => this.pickups.push({ id: this.nextId++, kind, v: kind === 'f' && this.event === 'emberstorm' ? v * 2 : v, x: e.x, y: e.y, vx: R.float(-100, 100), vy: R.float(-100, 100), life: 30 });
     if (e.type === 'wolf') {
       this.grantXp(e.elite ? ELITE.xp : WOLF.xp);
       if (Math.random() < RULES.emberChance) drop('e', 1);
       if (e.elite) drop('f', ELITE.fuel);
-    } else if (e.type === 'alpha') {
+    } else if (e.type === 'wisp' || e.type === 'mossback' || e.type === 'shaman') {
+      this.grantXp(e.def.xp);
+      if (e.type !== 'wisp' && Math.random() < RULES.emberChance) drop('e', 1);
+    } else if (e.type === 'alpha' || e.type === 'widow') {
       this.grantXp(ALPHA.xp);
       for (let i = 0; i < 4; i++) drop('e', 1);
       drop('f', ALPHA.fuel);
       if (e.guardian) { this.gateOpen = true; this.emit({ k: 'gate', x: this.world.exit.x, y: this.world.exit.y }); }
     } else if (e.type === 'treant') {
+      this.grantXp(250);
+      for (const o of this.enemies) if (o !== e) o.dead = true;
+      this.ring = null;
+      if (this.mode === 'endless') {
+        // endless: the forest goes on
+        this.emit({ k: 'bossDown' });
+        this.dropCoins(e);
+        this.startRest();
+        return;
+      }
       this.state = 'victory';
       this.stateTimer = 9;
+      this.runOver(true, 'win');
       this.endRunStats(true);
       this.hazards = [];
       this.strikes = [];
-      for (const o of this.enemies) if (o !== e) o.dead = true;
       this.emit({ k: 'victory', boss: 1 });
     }
+    this.dropCoins(e);
     if (e.curseT > 0 && e.plague) {
       let near = null, nd = 130;
       for (const o of this.enemies) { if (o === e || o.dead) continue; const d = Math.hypot(o.x - e.x, o.y - e.y); if (d < nd) { nd = d; near = o; } }
       if (near) { this.curse(near, this.players.get(e.curseBy) || null); this.emit({ k: 'plague', x: Math.round(e.x), y: Math.round(e.y), x2: Math.round(near.x), y2: Math.round(near.y) }); }
     }
     if (src && src.stats && src.stats.embersInDark && src.hp / src.max < 0.4) src.hp = Math.min(src.max, src.hp + 4);
+    // Hellfire: finishing off something a friend cursed makes it burst
+    if (e.curseT > 0 && e.curseBy && src && src.id && src.id !== e.curseBy && this.players.has(src.id) && this.players.has(e.curseBy)) {
+      const ow = this.players.get(e.curseBy);
+      this.comboFx(e, 'Hellfire!');
+      this.hitCircle(ow, e.x, e.y, 64, 30 * this.power(ow), 200, { el: 'fire' });
+    }
   }
 
   // nearest living player (or Rogue decoy) this enemy can SEE. Smoke hides everyone.
@@ -1512,7 +1506,8 @@ export class Sim {
       if (e.bleedT > 0) { e.bleedT -= dt; this.damageEnemy(e, 8 * dt, 0, 0, 0, null, true); if (e.dead) continue; }
       e.smoked = this.inSmoke(e.x, e.y);
       if (e.type === 'treant') this.updateTreant(e, dt);
-      else this.updateWolfLike(e, dt);
+      else if (e.type === 'shaman') this.updateShaman(e, dt);
+      else { if (e.type === 'widow') this.updateWidow(e, dt); this.updateWolfLike(e, dt); }
     }
   }
 
@@ -1609,6 +1604,8 @@ export class Sim {
               if (Math.hypot(p.x - e.x, p.y - e.y) < e.r + PLAYER_RADIUS + 4) {
                 e.hit = true;
                 this.hurtPlayer(p, e.dmg, e.x, e.y, true, e);
+                // wisps burst on your flame and dim your light for a moment
+                if (e.type === 'wisp') { p.dimT = 4; e.dead = true; this.emit({ k: 'die', t: 'wisp', x: Math.round(e.x), y: Math.round(e.y), el: 0 }); }
                 break;
               }
             }
@@ -1675,6 +1672,7 @@ export class Sim {
     const frac = e.hp / e.max;
     if ((e.phase === 0 && frac < 0.66) || (e.phase === 1 && frac < 0.33)) {
       e.phase++;
+      if (e.phase === 2) this.treantUproot(e); // last stand: it pulls up its roots and the arena closes in
       const tgt0 = this.nearestAlive(e.x, e.y, 3000);
       const n = 3 + this.players.size;
       for (let i = 0; i < n; i++) {
@@ -1716,8 +1714,9 @@ export class Sim {
     let tgt = seen[0], bd = 1e9;
     for (const p of seen) { const d = Math.hypot(p.x - e.x, p.y - e.y); if (d < bd) { bd = d; tgt = p; } }
     const dx = tgt.x - e.x, dy = tgt.y - e.y, d = Math.hypot(dx, dy) || 1;
-    if (d > 100 && Math.hypot(e.x - e.homeX, e.y - e.homeY) < T.leash) {
-      const pos = this.world.collide(e.x + (dx / d) * T.speed * dt, e.y + (dy / d) * T.speed * dt, e.r);
+    if (d > 100 && (e.uproot || Math.hypot(e.x - e.homeX, e.y - e.homeY) < T.leash)) {
+      const sp = T.speed * (e.uproot ? 3.2 : 1);
+      const pos = this.world.collide(e.x + (dx / d) * sp * dt, e.y + (dy / d) * sp * dt, e.r);
       e.x = pos.x; e.y = pos.y;
     }
     e.fx = dx >= 0 ? 1 : -1;
@@ -1796,6 +1795,7 @@ export class Sim {
           const d = Math.hypot(s.vx, s.vy) || 1;
           this.damageEnemy(target, s.dmg, s.vx / d, s.vy / d, 80, owner, false, 'frost');
           target.slowT = Math.max(target.slowT, s.slow);
+          target.chillBy = s.owner;
         } else this.emit({ k: 'shatter', x: Math.round(s.x), y: Math.round(s.y) });
       }
     }
@@ -1833,6 +1833,13 @@ export class Sim {
           if (Math.hypot(p.x - h.x, p.y - h.y) < h.r + PLAYER_RADIUS) this.hurtPlayer(p, h.dmg, h.x, h.y, false);
         }
         this.emit({ k: 'root', x: Math.round(h.x), y: Math.round(h.y) });
+      }
+      if (h.kind === 'web' && h.t <= 0 && !h.done) {
+        h.done = true;
+        for (const p of this.alivePlayers()) {
+          if (Math.hypot(p.x - h.x, p.y - h.y) < h.r + PLAYER_RADIUS && !p.dashing && !(p.invT > 0)) { p.rootT = WIDOW.webRoot; this.hurtPlayer(p, h.dmg, h.x, h.y, false); }
+        }
+        this.emit({ k: 'web', x: Math.round(h.x), y: Math.round(h.y) });
       }
     }
     this.hazards = this.hazards.filter((h) => h.life > 0);
@@ -1884,7 +1891,7 @@ export class Sim {
         if (e.dead) continue;
         const d = Math.hypot(e.x - z.x, e.y - z.y);
         if (d > z.r + e.r * 0.5) continue;
-        if (z.kind === 'blizzard') e.slowT = Math.max(e.slowT, 0.3);
+        if (z.kind === 'blizzard') { e.slowT = Math.max(e.slowT, 0.3); e.chillBy = z.owner; }
         else e.burnT = 0.2;
         if (z.kind === 'storm' && e.type !== 'treant' && d > 4) { e.vx += ((z.x - e.x) / d) * 200 * dt; e.vy += ((z.y - e.y) / d) * 200 * dt; }
         this.damageEnemy(e, z.dps * dt, 0, 0, 0, owner, true);
@@ -1912,7 +1919,8 @@ export class Sim {
         k.vy += (dy / d) * pull * dt * 2;
         if (d < 18) {
           if (k.kind === 'f') this.gainWildfire(p, k.v);
-          else p.hp = Math.min(p.max, p.hp + p.stats.emberHeal);
+          else if (k.kind === 'c') p.coins += k.v;
+          else p.hp = Math.min(p.max, p.hp + p.stats.emberHeal * (this.event === 'fireflies' ? 1.5 : 1));
           k.life = 0;
           this.emit({ k: 'pick', id: p.id, kind: k.kind, x: Math.round(k.x), y: Math.round(k.y) });
         }
@@ -1941,6 +1949,7 @@ export class Sim {
       e.state = 'chase';
       e.target = p.id;
     }
+    if (Math.random() < 0.3 + (this.event === 'swarm' ? 0.4 : 0)) for (const w of this.spawnWisps(pt.x, pt.y, 4, hpScale)) { w.state = 'chase'; w.target = p.id; }
     this.emit({ k: 'howl', x: pt.x, y: pt.y, far: 1 });
   }
 
@@ -1950,6 +1959,7 @@ export class Sim {
     if (ps.every((p) => p.down)) {
       this.state = 'defeat';
       this.stateTimer = 6;
+      this.runOver(false, 'wipe');
       this.endRunStats(false);
       this.hazards = [];
       this.strikes = [];
@@ -1989,7 +1999,7 @@ export class Sim {
   snapshot() {
     let bb = null;
     for (const e of this.enemies) {
-      if (e.type === 'treant' || (e.type === 'alpha' && e.state !== 'idle')) bb = { n: e.type === 'treant' ? TREANT.name : ALPHA.name, hp: Math.ceil(e.hp), mx: Math.ceil(e.max) };
+      if (e.type === 'treant' || ((e.type === 'alpha' || e.type === 'widow') && e.state !== 'idle')) bb = { n: e.type === 'treant' ? TREANT.name : e.type === 'widow' ? WIDOW.name : ALPHA.name, hp: Math.ceil(e.hp), mx: Math.ceil(e.max) };
     }
     return {
       t: 's',
@@ -2006,6 +2016,7 @@ export class Sim {
       go: this.gateOpen ? 1 : 0,
       sh: this.shrineUsed.map((u) => (u ? 1 : 0)),
       bb,
+      ...this.worldSnap(),
       cv: this.campVote ? { n: this.campVote.yes.size, of: this.players.size, t: Math.ceil(this.campVote.t), ids: [...this.campVote.yes] } : null,
       ps: [...this.players.values()].map((p) => ({
         id: p.id, u: p.user, n: p.name, c: p.cloak, h: p.hat, f: p.flame, k: p.cls,
@@ -2016,7 +2027,7 @@ export class Sim {
         g: p.guard ? 1 : 0, c1: Math.max(0, r1(p.cd.s1)), c2: Math.max(0, r1(p.cd.s2)), c3: Math.max(0, r1(p.cd.s3)),
         le: p.lastEl && this.time - p.lastElT <= p.stats.weaveWindow ? p.lastEl : null,
         lt: p.lastEl ? r2(Math.max(0, p.stats.weaveWindow - (this.time - p.lastElT))) : 0,
-        pts: p.pts, tr: p.tree, bn: p.boons,
+        tr: p.tree, bn: p.boons, ...this.playerSnap(p),
         bc: this.state === 'rest' && !p.picked ? p.choices : null,
         em: p.emote, ea: p.emote ? r1(this.time - p.emoteAt) : 0,
         vt: p.vote, pk: p.picked ? 1 : 0, cs: this.scene === 'lobby' ? p.cstats : undefined,
@@ -2039,3 +2050,5 @@ export class Sim {
     };
   }
 }
+
+installExtras(Sim);

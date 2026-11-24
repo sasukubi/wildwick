@@ -7,7 +7,8 @@
 
 // The game's version. Friends can only play together on the same version.
 // (Raise this with every update.)
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
+import { PRESTIGE } from './progress.js';
 
 export const TILE = 32;
 export const MAX_PLAYERS = 4;
@@ -223,7 +224,7 @@ TREANT.hp = Math.round(TREANT.hp * TOUGH.enemyHp);
 TREANT.rootDmg *= TOUGH.dmg; TREANT.sweepDmg *= TOUGH.dmg;
 
 // ---- Skill trees --------------------------------------------
-// Each level gives everyone 1 point. Spend them with T / Tab.
+// Each class level gives 1 point (up to level 30). Spend them at the Skilltree in camp.
 // The last upgrade in each group unlocks after 5 points in that group.
 export const CAP_REQUIREMENT = 5;
 export const RANK_POWER = 0.6;   // each normal rank is worth 60% of what it used to be
@@ -395,8 +396,24 @@ export const BOONS = [
   { id: 'psalm',   name: 'Psalm Book',     icon: '📖', desc: 'Mace hits build 25% more Grace', cls: 'cleric' },
 ];
 
-// Works out a player's real numbers from their class, skill tree and boons.
-export function classStats(cls, tree = {}, boons = []) {
+// Works out a player's real numbers from their class, skill tree, boons,
+// and permanent prestiges / rebirths (cp = this class's saved progress).
+export function classStats(cls, tree = {}, boons = [], cp = null) {
+  const st = baseClassStats(cls, tree, boons);
+  const pres = (cp && cp.pres) || {}, reb = (cp && cp.reb) || {};
+  const n = (k) => pres[k] || 0;
+  st.slot = { atk: 1 + PRESTIGE.power * n('atk'), s1: 1 + PRESTIGE.power * n('s1'), s2: 1 + PRESTIGE.power * n('s2'), s3: 1 + PRESTIGE.power * n('s3'), dash: 1 + PRESTIGE.power * n('dash'), ult: 1 };
+  st.slotCd = { s1: Math.pow(PRESTIGE.cd, n('s1')), s2: Math.pow(PRESTIGE.cd, n('s2')), s3: Math.pow(PRESTIGE.cd, n('s3')) };
+  st.atkCd *= Math.pow(PRESTIGE.cd, n('atk'));
+  if (st.recoverMult) st.recoverMult *= Math.pow(PRESTIGE.cd, n('atk'));
+  st.dashCd *= Math.pow(PRESTIGE.cd, n('dash'));
+  st.ultMult = 1 + 0.15 * (reb.power || 0);
+  st.ultSize = 1 + 0.15 * (reb.reach || 0);
+  st.wfGain *= 1 + 0.15 * (reb.charge || 0);
+  return st;
+}
+
+function baseClassStats(cls, tree = {}, boons = []) {
   const rr = (id) => tree[id] || 0;                    // whole ranks
   const r = (id) => rr(id) * (WHOLE.has(id) ? 1 : RANK_POWER); // normal ranks are worth a bit less
   const b = (id) => boons.filter((x) => x === id).length;

@@ -83,6 +83,30 @@ class LocalBackend {
   async deleteChar(id) {
     this._write((await this.listChars()).filter((x) => x.id !== id));
   }
+  // leaderboard (only on this computer until online accounts are set up)
+  _runs() { try { return JSON.parse(localStorage.getItem('wildwick.runs') || '[]'); } catch { return []; } }
+  async submitRun(r) {
+    const runs = this._runs();
+    runs.push({ ...r, username: this.username, at: Date.now() });
+    localStorage.setItem('wildwick.runs', JSON.stringify(runs.slice(-300)));
+  }
+  async topRuns(mode, day) {
+    return bestRuns(this._runs().filter((r) => r.mode === mode && (!day || r.day === day)));
+  }
+}
+
+// best first: most forests, then fastest; each party only once
+function bestRuns(rows) {
+  rows.sort((a, b) => b.forests - a.forests || a.time_s - b.time_s);
+  const seen = new Set(), out = [];
+  for (const r of rows) {
+    const k = (r.party || [r.username]).map((s) => String(s).toLowerCase()).sort().join('+');
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+    if (out.length >= 20) break;
+  }
+  return out;
 }
 
 class SupabaseBackend {
@@ -151,8 +175,24 @@ class SupabaseBackend {
     const { error } = await sb.from('characters').delete().eq('id', id);
     if (error) throw new Error(error.message);
   }
+  // leaderboard: the host records each daily / endless run (the database adds the username itself)
+  async submitRun(r) {
+    const sb = await this._client();
+    const { error } = await sb.from('runs').insert({ mode: r.mode, day: r.day, forests: r.forests, time_s: r.time_s, won: r.won, party: r.party, classes: r.classes });
+    if (error) throw new Error(error.message);
+  }
+  async topRuns(mode, day) {
+    const sb = await this._client();
+    let q = sb.from('runs').select('username,party,forests,time_s,won,day').eq('mode', mode);
+    if (day) q = q.eq('day', day);
+    const { data, error } = await q.order('forests', { ascending: false }).order('time_s', { ascending: true }).limit(100);
+    if (error) throw new Error(error.message);
+    return bestRuns(data || []);
+  }
 }
 
 export function createBackend() {
+  // add ?local to the address to test with accounts saved in this browser only
+  if (new URLSearchParams(location.search).has('local')) return new LocalBackend();
   return SUPABASE_URL && SUPABASE_ANON_KEY ? new SupabaseBackend() : new LocalBackend();
 }

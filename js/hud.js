@@ -3,6 +3,7 @@
 //  only touches the page when a value actually changes.
 // =============================================================
 import { CLOAKS, FLAMES, SORCERER, CLERIC, WARLOCK, CLASSES, ELEMENTS, RULES, byId } from './data.js';
+import { MAX_LEVEL, SHOP, MODES, EVENTS } from './progress.js';
 import { iconSprite, skillIconName } from './sprites.js';
 
 // a crisp, scaled-up copy of a pixel-art icon
@@ -140,13 +141,15 @@ export function updateHud(game, snap, me) {
   if (snap.sc === 'lobby') {
     const z = game.world.readyZone;
     const ready = snap.ps.filter((p) => p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h).length;
+    const m = byId(MODES, snap.md || 'casual');
     name = 'The Campfire';
-    sub = `Everyone walk under the archway to begin · ${ready}/${snap.ps.length}`;
+    sub = `${m.name}${snap.rs ? ` from forest ${snap.rs}` : ''} · everyone walk under the archway · ${ready}/${snap.ps.length}`;
   } else if (snap.st === 'rest') { name = 'A quiet moment'; sub = 'Pick a boon, spend skill points'; }
   else if (snap.sc === 'forest') {
-    name = `Thornwood ${['I', 'II', 'III'][snap.stg - 1] || ''} · ${mm}:${ss}`;
-    sub = snap.go ? 'The gate is open: everyone into the Heartwood Gate' : 'Find and defeat the Alpha Thornwolf';
-  } else { name = `The Heart of the Wood · ${mm}:${ss}`; sub = 'Defeat the Elder Treant'; }
+    const ev = snap.ev ? byId(EVENTS, snap.ev).name + ' · ' : '';
+    name = `${stageName(snap)} · ${mm}:${ss}`;
+    sub = ev + (snap.go ? 'The gate is open: everyone into the Heartwood Gate' : 'Find and defeat the gate guardian');
+  } else { name = `The Heart of the Wood · ${mm}:${ss}`; sub = snap.md === 'endless' ? `Endless · stage ${snap.stg} · defeat the Elder Treant` : 'Defeat the Elder Treant'; }
   set($('#stage-name'), 'text', name);
   set($('#stage-sub'), 'text', sub);
 
@@ -171,10 +174,30 @@ export function updateHud(game, snap, me) {
   set($('#wild-fill'), 'width', wf * 100 + '%');
   $('#bars').classList.toggle('ready', wf >= 1);
   set($('#wild-text'), 'text', wf >= 1 ? `Wildfire ready! [${game.keyLabel('ult')}]` : `Wildfire ${me.wf}%`);
-  set($('#lvl'), 'text', `Lv ${snap.lvl}`);
-  set($('#xp-fill'), 'width', (snap.xp / snap.nx) * 100 + '%');
-  set($('#pts'), 'hide', !me.pts);
-  set($('#pts'), 'text', snap.st === 'rest' ? `+${me.pts} skill point${me.pts > 1 ? 's' : ''} to spend [${game.keyLabel('tree')}]` : `+${me.pts} skill point${me.pts > 1 ? 's' : ''} · spend at the end of the round`);
+  const mastered = me.lv >= MAX_LEVEL;
+  set($('#lvl'), 'text', mastered ? `Lv ${me.lv} ✦` : `Lv ${me.lv}`);
+  set($('#xp-fill'), 'width', (mastered ? 100 : (me.xp / me.nx) * 100) + '%');
+  set($('#pts'), 'hide', !me.pts && !mastered);
+  set($('#pts'), 'text', mastered && !me.pts ? 'mastered · prestige at the Skilltree' : `+${me.pts} skill point${me.pts > 1 ? 's' : ''} · spend at the Skilltree`);
+  // potions (1, 2, 3) and coins
+  const ik = JSON.stringify([me.it, me.co]);
+  const ib = $('#items');
+  if (ib.dataset.k !== ik) {
+    ib.dataset.k = ik;
+    ib.innerHTML = '';
+    for (const it of SHOP.filter((s) => s.key)) {
+      const n = (me.it && me.it[it.id]) || 0;
+      const s = document.createElement('span');
+      s.className = 'it' + (n ? '' : ' none');
+      s.title = it.desc;
+      s.innerHTML = '<kbd></kbd><span></span>';
+      s.querySelector('kbd').textContent = it.key.slice(5);
+      s.querySelector('span').textContent = `${it.name.split(' ')[1] || it.name} ×${n}`;
+      ib.appendChild(s);
+    }
+    if (me.it && me.it.charm) { const s = document.createElement('span'); s.className = 'it'; s.textContent = `feather ×${me.it.charm}`; s.title = 'Phoenix Feather: relights you once'; ib.appendChild(s); }
+    const c = document.createElement('span'); c.className = 'co'; c.textContent = `${me.co || 0} coins`; ib.appendChild(c);
+  }
   const fury = Math.round((stats.furyMax || 0) * (1 - ratio) * 100);
   const tough = Math.round(30 * (1 - ratio));
   set($('#fury'), 'text', me.k === 'warrior' && snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage · ${tough}% less damage taken` : '');
@@ -243,4 +266,10 @@ export function updateHud(game, snap, me) {
   set($('#banner-big'), 'text', big);
   set($('#banner-sub'), 'text', small);
   $('#banner').classList.toggle('bad', snap.st === 'defeat' || (!!me.dn && snap.st === 'playing'));
+}
+
+// e.g. Thornwood II, or Thornwood 7 in endless
+export function stageName(snap) {
+  if (snap.sc === 'arena') return 'The Heart of the Wood';
+  return `Thornwood ${snap.md === 'endless' ? snap.stg : ['I', 'II', 'III'][snap.stg - 1] || snap.stg}`;
 }

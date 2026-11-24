@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>wildwick font options</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Marcellus+SC&family=Cormorant+SC:wght@500;700&family=Alegreya+SC:wght@400;700&family=IM+Fell+English+SC&family=Spectral+SC:wght@400;600&family=Alegreya+Sans+SC:wght@400;700&family=Playfair+Display+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+ body { background:#141a12; color:#f3e7c9; font-family:system-ui; margin:0; padding:24px; }
+ .opt { background:#1f2a1a; border:1px solid #3b4a2c; border-radius:14px; padding:16px 20px; margin:0 0 14px; text-transform:lowercase; }
+ .n { font-family:system-ui; text-transform:none; color:#9fc25a; font-size:13px; margin-bottom:6px; }
+ .big { font-size:44px; color:#ffcf5a; line-height:1.1; }
+ .mid { font-size:20px; margin-top:6px; }
+ .sm { font-size:14px; color:#cdbf9f; margin-top:4px; }
+</style></head><body>
+<h1 style="font-size:20px">Pick a font (all text shown in lowercase, like it will be in the game)</h1>
+<script>
+const fonts = [['1','Cinzel','400','700'],['2','Marcellus SC','400','400'],['3','Cormorant SC','500','700'],['4','Alegreya SC','400','700'],['5','IM Fell English SC','400','400'],['6','Spectral SC','400','600'],['7','Alegreya Sans SC','400','700'],['8','Playfair Display SC','400','700']];
+for (const [n, f, w, b] of fonts) document.write(`<div class="opt" style="font-family:'${f}'"><div class="n">Option ${n}: ${f}</div>
+<div class="big" style="font-weight:${b}">Wildwick</div>
+<div class="mid" style="font-weight:${b}">Keep Your Flame Alive · Level 12 · Elder Treant</div>
+<div class="sm" style="font-weight:${w}">Mending Light: heal the ally you aim at for 30 flame. Press E to interact with the Skilltree. +3 coins</div></div>`);
+</script>
+</body></html>
