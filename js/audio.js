@@ -214,6 +214,8 @@ class AudioEngine {
       case 'eclipse': T(55, 2, { type: 'sawtooth', lp: 300, vib: 3, vibDepth: 6, attack: 0.3, gain: 0.35 }); T(82, 2, { type: 'sawtooth', lp: 300, attack: 0.3, gain: 0.2 }); N(1.8, { filter: 'lowpass', freq: 400, gain: 0.2, attack: 0.3 }); break;
       case 'famSwipe': N(0.25, { filter: 'lowpass', freq: 600, slide: 1600, gain: 0.25 }); break;
       case 'famDie': N(1.0, { filter: 'lowpass', freq: 500, slide: 120, gain: 0.3, attack: 0.05 }); T(120, 0.8, { slide: 40, type: 'triangle', gain: 0.15 }); break;
+      case 'shove': T(110, 0.15, { slide: 60, gain: 0.3 }); N(0.12, { filter: 'lowpass', freq: 900, gain: 0.3 }); break;
+      case 'haste': N(0.25, { freq: 1200, slide: 3000, q: 1, gain: 0.08 }); break;
       // UI
       case 'click': this.tone(1250, 0.04, { gain: 0.12 * v, bus: 'ui' }); break;
       case 'hover': this.tone(1900, 0.025, { gain: 0.04 * v, bus: 'ui' }); break;

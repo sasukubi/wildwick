@@ -124,6 +124,7 @@ export function drawCharacter(ctx, x, y, o, t) {
   if (em === 'sit') { ctx.translate(x, y); ctx.scale(1, 0.78); ctx.translate(-x, -y); }
   if (o.hurt && Math.floor(t * 30) % 2) ctx.globalAlpha = 0.5;
   if (o.dash) ctx.globalAlpha = o.cls === 'warlock' ? 0.18 : 0.75;
+  if (o.dash && o.cls === 'bowman') { ctx.translate(x, y - 16); ctx.rotate(((t * 24) % TAU) * (Math.cos(o.aim) >= 0 ? 1 : -1)); ctx.translate(-x, -(y - 16)); ctx.globalAlpha = 1; }
   const dir = facing(o.aim);
   const frame = o.moving ? [1, 0, 2, 0][Math.floor(t * 7) % 4] : 0;
   const { img, flip } = charSprite(o.look, dir, frame, o.cls);
@@ -455,6 +456,7 @@ export class Renderer {
     else if (p.type === 'signpost') ctx.drawImage(propSprite('signpost'), p.x - 15, p.y - 42);
     else if (p.type === 'board') ctx.drawImage(propSprite('board'), p.x - 20, p.y - 44);
     else if (p.type === 'resetpost') ctx.drawImage(propSprite('resetpost'), p.x - 8, p.y - 28);
+    else if (p.type === 'fountain') ctx.drawImage(propSprite('fountain'), p.x - 20, p.y - 32);
     else if (p.type === 'log') ctx.drawImage(propSprite('log'), p.x - 20, p.y - 12);
     else if (p.type === 'sign') ctx.drawImage(propSprite('signpost'), p.x - 15, p.y - 42);
     else if (p.type === 'fox') ctx.drawImage(propSprite('fox', Math.floor(performance.now() / 900) % 2), p.x - 14, p.y - 14);
@@ -730,6 +732,7 @@ export class Renderer {
     // camp lanterns: each area of the camp has its own warm light
     for (const p of world.props) {
       if (p.type === 'tent' || p.type === 'board' || p.type === 'sign' || p.type === 'resetpost') L.push({ x: p.x, y: p.y - 20, r: p.type === 'sign' ? 120 : 110, col: [255, 190, 110], i: 0.75 });
+      if (p.type === 'fountain') L.push({ x: p.x, y: p.y - 20, r: 140 + Math.sin(t * 5) * 6, col: [255, 170, 80], i: 0.95 });
     }
     for (const p of world.props) {
       if (p.type !== 'shrine') continue;
@@ -823,6 +826,14 @@ export class Renderer {
       }
     }
     for (const p of world.props) {
+      if (p.type !== 'fountain' || !vis(p.x, p.y)) continue;
+      drawFlame(ctx, p.x, p.y - 23, 0.22, FLAMES[0], t * 1.2, false, 7, 0.55);
+      drawFlame(ctx, p.x - 7, p.y - 7, 0.12, FLAMES[0], t, false, 3, 0.45);
+      drawFlame(ctx, p.x + 7, p.y - 7, 0.12, FLAMES[0], t * 1.1, false, 5, 0.45);
+      ctx.fillStyle = `rgba(255,190,90,${0.5 + Math.sin(t * 4) * 0.2})`;
+      for (let i = 0; i < 4; i++) { const k = (t * 0.8 + i / 4) % 1; ctx.fillRect(Math.round(p.x - 3 + i * 2), Math.round(p.y - 22 + k * 16), 1, 2); }
+    }
+    for (const p of world.props) {
       if (p.type !== 'shrine' || !vis(p.x, p.y)) continue;
       const c = byId(CLASSES, p.cls);
       const bob = Math.round(Math.sin(t * 2 + p.x) * 1.5);
@@ -885,6 +896,14 @@ export class Renderer {
           const top = ay - 70 * (1 - k);
           ctx.beginPath(); ctx.moveTo(ax - 6 * (1 - k), top - 10); ctx.lineTo(ax - 6 * (1 - k) + 2, top); ctx.stroke();
         }
+      } else if (z.k === 'haste') {
+        // the Sorcerer's dash trail: a faint shimmer of wind
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 3; i++) {
+          ctx.fillStyle = `rgba(190,245,255,${0.45 * Math.min(1, z.t / z.mx * 1.5)})`;
+          ctx.fillRect(Math.round(z.x - 6 + jag(i, z.id) * 12), Math.round(z.y - 4 - jag(i + 5, z.id) * 14 - (1 - z.t / z.mx) * 6), 2, 1);
+        }
+        ctx.globalCompositeOperation = 'source-over';
       } else if (z.k === 'spark') {
         ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < 5; i++) {
@@ -1321,13 +1340,20 @@ export class Renderer {
         const [x, y] = toS(v.x, v.y - (p.h === 'witch' || p.h === 'antlers' ? 50 : 44));
         if (prefs.names) text(ctx, p.u, x, y, { size: 12, color: '#f4f1ea' });
         // their flame (health) bar, so you can see who needs help
-        const w = 34, by = y + 9, ratio = Math.max(0, p.hp / p.mx);
+        // overheal: the bar makes room for the shield, shown in pale blue after the flame
+        const sh = p.sh || 0, total = Math.max(p.mx, p.hp + sh);
+        const w = 34, by = y + 9, ratio = Math.max(0, p.hp / total), sr = sh / total;
         ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(by - 1), w + 2, 6);
-        ctx.fillStyle = ratio < 0.35 ? '#ff5a3a' : byId(FLAMES, p.f).mid;
-        ctx.fillRect(Math.round(x - w / 2), Math.round(by), Math.round(w * ratio), 4);
-        if (p.sh > 0) {
-          const sw = Math.max(1, Math.round(w * Math.min(1, p.sh / p.mx)));
-          ctx.fillStyle = '#dff4ff'; ctx.fillRect(Math.round(x + w / 2 - sw), Math.round(by), sw, 4);
+        ctx.fillStyle = p.hp / p.mx < 0.35 ? '#ff5a3a' : byId(FLAMES, p.f).mid;
+        const hw = Math.round(w * ratio);
+        ctx.fillRect(Math.round(x - w / 2), Math.round(by), hw, 4);
+        if (sh > 0) {
+          const sw = Math.max(2, Math.round(w * sr));
+          ctx.fillStyle = '#9fdcff'; ctx.fillRect(Math.round(x - w / 2) + hw, Math.round(by), sw, 4);
+          ctx.fillStyle = '#f2fbff'; ctx.fillRect(Math.round(x - w / 2) + hw, Math.round(by), sw, 1);
+          ctx.strokeStyle = `rgba(190,235,255,${0.6 + Math.sin(t * 6) * 0.25})`; ctx.lineWidth = 1;
+          ctx.strokeRect(Math.round(x - w / 2 - 1) + 0.5, Math.round(by - 1) + 0.5, w + 1, 5);
+          text(ctx, `+${sh}`, x + w / 2 + 12, by + 3, { size: 10, color: '#bfe6ff' });
         }
       }
       if (p.dn) {

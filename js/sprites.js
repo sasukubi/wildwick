@@ -787,6 +787,18 @@ export function propSprite(kind, extra = 0) {
       px(g, 11, 8, 2, 2, '#c4533a'); px(g, 25, 9, 2, 2, '#c4533a'); px(g, 16, 18, 2, 2, '#c4533a');
       return c;
     }
+    if (kind === 'fountain') {
+      // a mossy stone fountain; the Wildfire in it is drawn live
+      const [c, g] = canvas(40, 38);
+      oval(g, 20, 32, 18, 5, 'rgba(0,0,0,0.3)');
+      oval(g, 20, 28, 18, 7, PAL.o); oval(g, 20, 27, 17, 6, PAL.r1); oval(g, 20, 26, 15, 4, PAL.r0); oval(g, 20, 26, 13, 3, '#5a2a10');
+      px(g, 4, 27, 32, 4, PAL.r1); px(g, 3, 27, 1, 4, PAL.o); px(g, 36, 27, 1, 4, PAL.o); px(g, 4, 31, 32, 1, PAL.o);
+      for (let x = 6; x < 35; x += 5) px(g, x, 28, 2, 2, PAL.r2);
+      px(g, 17, 10, 6, 16, PAL.o); px(g, 18, 10, 4, 16, PAL.r2); px(g, 18, 10, 1, 16, PAL.r3);
+      oval(g, 20, 10, 7, 3, PAL.o); oval(g, 20, 9, 6, 2, PAL.r2); oval(g, 20, 9, 4, 1, '#5a2a10');
+      px(g, 8, 29, 3, 2, PAL.moss); px(g, 28, 29, 4, 2, PAL.moss); px(g, 18, 20, 2, 3, PAL.moss);
+      return c;
+    }
     if (kind === 'resetpost') {
       const [c, g] = canvas(16, 30);
       px(g, 3, 27, 10, 2, 'rgba(0,0,0,0.3)');

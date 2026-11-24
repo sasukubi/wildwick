@@ -279,6 +279,8 @@ export function makeLobby() {
     { x: 8 * T, y: 19.5 * T, kind: 'hitter' },
   ];
   world.props.push({ type: 'resetpost', x: 13 * T, y: 20.5 * T, solidR: 6 });
+  // a fountain of Wildfire, so you can practise your ultimate on the dummies
+  world.props.push({ type: 'fountain', x: 12.7 * T, y: 14.4 * T, solidR: 14 });
   world.props.push({ type: 'sign', x: 16.5 * T, y: 16.9 * T, text: 'Training Grounds', solidR: 7 });
   // class hall: shrines in a ring with banners
   CLASSES.forEach((c, i) => {

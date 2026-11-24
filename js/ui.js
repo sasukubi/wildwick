@@ -291,11 +291,13 @@ export class TreePanel {
   refresh(me) {
     if (!this.open) return;
     const tree = me.tr || {};
-    const key = JSON.stringify([me.k, tree, me.pts]);
+    // points can only be spent between rounds; the rest of the time this just shows your progress
+    const canSpend = !!this.game.lastSnap && this.game.lastSnap.st === 'rest';
+    const key = JSON.stringify([me.k, tree, me.pts, canSpend]);
     if (key === this.lastKey) return;
     this.lastKey = key;
-    $('#tree-title').textContent = `${byId(CLASSES, me.k).name} skills`;
-    $('#tree-pts').textContent = me.pts === 1 ? '1 point to spend' : `${me.pts} points to spend`;
+    $('#tree-title').textContent = canSpend ? `${byId(CLASSES, me.k).name} skills` : `${byId(CLASSES, me.k).name} skills · progress`;
+    $('#tree-pts').textContent = canSpend ? (me.pts === 1 ? '1 point to spend' : `${me.pts} points to spend`) : `${me.pts} point${me.pts === 1 ? '' : 's'} saved · spend them at the end of the round`;
     const cols = $('#tree-cols');
     cols.innerHTML = '';
     for (const br of TREES[me.k] || TREES.warrior) {
@@ -309,7 +311,7 @@ export class TreePanel {
       for (const n of br.nodes) {
         const rank = tree[n.id] || 0;
         const b = document.createElement('button');
-        const ok = canBuy(me.k, tree, me.pts, n.id);
+        const ok = canSpend && canBuy(me.k, tree, me.pts, n.id);
         b.className = 'node gbtn' + (rank ? ' owned' : '') + (ok ? ' can' : '') + (n.cap ? ' cap' : '');
         b.disabled = !ok;
         const dots = Array.from({ length: n.max }, (_, i) => `<i class="${i < rank ? 'on' : ''}"></i>`).join('');
@@ -373,10 +375,10 @@ export class BoonPanel {
 // ---------------------------------------------------------- controls screen (H) and class tips
 // Only your class's skills are listed, with the same icons as your skill buttons.
 const SKILL_TEXT = {
-  warrior: { atk: 'Sword combo. Every 3rd swing is heavy (and slower to recover).', guard: 'Hold to block hits from the front, let go to counter-slash.', quake: 'Burn some flame to slam the ground around you.', dash: 'Dash. The start of a dash dodges attacks.', ult: 'Pyre Cleave: a giant flaming sweep that leaves fire behind (needs full Wildfire).' },
-  sorcerer: { atk: 'Staff swing: weak, but pushes enemies away.', gale: 'Gale: a blast of wind that knocks enemies back.', fire: 'Fire: an exploding fireball.', frost: 'Frost: slowing ice shards.', dash: 'Dash.', ult: 'Starfall: meteors hunt the monsters where you aim (needs full Wildfire).' },
-  bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Rain of Arrows where you aim.', dash: 'Dash.', ult: 'Hawk Eye: every shot is full strength and seeks enemies (needs full Wildfire).' },
-  rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Dash. Leaves a decoy that enemies chase.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
+  warrior: { atk: 'Sword combo. Every 3rd swing is heavy (and slower to recover).', guard: 'Hold to block hits from the front, let go to counter-slash.', quake: 'Burn some flame to slam the ground around you.', dash: 'Dash. The start of a dash dodges attacks, and shoves enemies you dash into, breaking their attack.', ult: 'Pyre Cleave: a giant flaming sweep that leaves fire behind (needs full Wildfire).' },
+  sorcerer: { atk: 'Staff swing: weak, but pushes enemies away.', gale: 'Gale: a blast of wind that knocks enemies back.', fire: 'Fire: an exploding fireball.', frost: 'Frost: slowing ice shards.', dash: 'Dash. Leaves a faint trail that speeds up allies who walk through it.', ult: 'Starfall: meteors hunt the monsters where you aim (needs full Wildfire).' },
+  bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Rain of Arrows where you aim.', dash: 'Roll. Flicks a small arrow at the nearest enemy.', ult: 'Hawk Eye: every shot is full strength and seeks enemies (needs full Wildfire).' },
+  rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Dash. Leaves a clone behind that nearby enemies turn on for a moment.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
   cleric: { atk: 'Mace swing. Every hit builds Grace.', mend: 'Mending Light: heal the ally you aim at (or whoever needs it most, or yourself). Costs Grace.', judge: 'Judgement: slam your mace to stun enemies in front of you.', ground: 'Sanctified Ground: a ring of light that heals allies and slows enemies. Costs Grace.', dash: 'Blessed Step: dash and leave a spark that heals allies you pass.', ult: 'Dawn: heal everyone near you and rekindle fallen allies, who are safe for 3 seconds (needs full Wildfire).' },
   warlock: { atk: 'Shadow bolt. Every 3rd bolt curses: cursed enemies take extra damage.', hands: 'Grasping Hands: shadow hands burst up where you aim, holding enemies in place.', imps: 'Summon Imps: 3 imps chase and bite for 8 seconds. Their bites give you mana.', siphon: 'Soul Siphon: drain the enemy you aim at, refilling your mana.', dash: 'Shadow Slip: a quick blink you cannot be hit during.', ult: 'Eclipse: a huge, tough familiar draws every enemy to it (needs full Wildfire).' },
 };

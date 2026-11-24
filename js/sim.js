@@ -9,7 +9,7 @@
 // =============================================================
 import {
   WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, WOLF, ELITE, ALPHA, TREANT, RULES, CLOAKS, HATS, FLAMES, CLASSES, BOONS,
-  PLAYER_RADIUS, TILE, xpToNext, classStats, canBuy, weaveOf,
+  PLAYER_RADIUS, TILE, TOUGH, PACE, xpToNext, classStats, canBuy, weaveOf,
 } from './data.js';
 import { makeLobby, makeForest, makeArena } from './world.js';
 
@@ -246,7 +246,7 @@ export class Sim {
 
   buyNode(id, node) {
     const p = this.players.get(id);
-    if (!p || !canBuy(p.cls, p.tree, p.pts, node)) return false;
+    if (!p || this.state !== 'rest' || !canBuy(p.cls, p.tree, p.pts, node)) return false; // only between rounds
     p.tree[node] = (p.tree[node] || 0) + 1;
     p.pts--;
     this.recalc(p);
@@ -297,8 +297,7 @@ export class Sim {
     const p = this.players.get(id);
     if (!p) return;
     p.lastSeen = performance.now();
-    if (p.cls === 'rogue' && m.d && !p.dashing && !p.down && this.scene !== 'lobby') this.spawnDecoy(p);
-    if (p.cls === 'cleric' && m.d && !p.dashing && !p.down) this.blessedStep(p);
+    if (m.d && !p.dashing && !p.down) this.dashStart(p);
     if (m.sv === this.sv && !p.down && p.tpLock <= 0 && Number.isFinite(m.x) && Number.isFinite(m.y)) {
       p.x = Math.max(0, Math.min(this.world.pw, m.x));
       p.y = Math.max(0, Math.min(this.world.ph, m.y));
@@ -335,6 +334,13 @@ export class Sim {
       }
       if (p.stats.maxMana) p.mana = Math.min(p.stats.maxMana, p.mana + p.stats.manaRegen * dt);
       if (p.down || !active) { p.guard = false; p.drawing = false; p.charge = 0; p.siphon = null; continue; }
+      p.pushT = (p.pushT || 0) - dt; p.trailT = (p.trailT || 0) - dt;
+      if (p.pushT > 0) this.dashShove(p);
+      if (p.trailT > 0 && (!p.trailPt || Math.hypot(p.x - p.trailPt.x, p.y - p.trailPt.y) > 10)) {
+        // Sorcerer: a faint trail that speeds up allies walking through it
+        p.trailPt = { x: p.x, y: p.y };
+        this.zones.push({ id: this.nextId++, kind: 'haste', owner: p.id, x: p.x, y: p.y, vx: 0, vy: 0, r: 13, t: SORCERER.trailTime, max: SORCERER.trailTime, dps: 0 });
+      }
       if (p.stats.shroud && this.inSmoke(p.x, p.y)) p.hp = Math.min(p.max, p.hp + 3 * dt);
       if (p.cls === 'sorcerer') this.sorcererActions(p);
       else if (p.cls === 'bowman') this.bowmanActions(p, dt);
@@ -348,6 +354,11 @@ export class Sim {
         p.want.int = 0;
         const post = this.world.props.find((o) => o.type === 'resetpost');
         if (post && Math.hypot(post.x - p.x, post.y - p.y) < 50) this.resetDummies();
+        const fount = this.world.props.find((o) => o.type === 'fountain');
+        if (fount && Math.hypot(fount.x - p.x, fount.y - p.y) < 58) {
+          p.wf = 0; this.gainWildfire(p, RULES.wildfireMax * 10);
+          this.emit({ k: 'fountain', id: p.id, x: Math.round(fount.x), y: Math.round(fount.y) });
+        }
       }
     }
     this.updateRevives(dt);
@@ -356,6 +367,8 @@ export class Sim {
       this.updateLobby(dt);
       this.updateDummies(dt);
       this.updateImps(dt);
+      for (const d of this.decoys) { d.t -= dt; if (d.kind === 'familiar') this.updateFamiliar(d, dt); }
+      this.decoys = this.decoys.filter((d) => d.t > 0);
       this.updateShots(dt);
       this.updateZones(dt);
       this.updateStrikes(dt);
@@ -427,7 +440,7 @@ export class Sim {
   }
 
   // ======================================================= shared combat helpers
-  power(p) { return (1 + (p.stats.furyMax || 0) * (1 - p.hp / p.max)) * p.stats.dmgMult; }
+  power(p) { return (1 + (p.stats.furyMax || 0) * (1 - p.hp / p.max)) * p.stats.dmgMult * TOUGH.dmg; }
 
   // Hit every enemy in a cone in front of the player that they can actually see.
   hitArc(p, range, arc, dmg, kb, aim = p.aim, opts = {}) {
@@ -657,7 +670,7 @@ export class Sim {
   fireArrow(p, c, homing) {
     const B = BOWMAN, st = p.stats;
     const full = c >= B.pierceAt;
-    const dmg = (B.minDmg + (B.maxDmg - B.minDmg) * Math.pow(c, 1.3)) * st.arrowMult * this.power(p) * (full && st.deadeye ? 1.5 : 1);
+    const dmg = (B.minDmg + (B.maxDmg - B.minDmg) * Math.pow(c, 1.3)) * st.arrowMult * this.power(p) * (full && st.deadeye ? 1.2 : 1);
     const speed = B.minSpeed + (B.maxSpeed - B.minSpeed) * c;
     const range = B.minRange + (B.maxRange - B.minRange) * c;
     this.emit({ k: 'shoot', id: p.id, c: r2(c), a: r2(p.aim) });
@@ -768,7 +781,16 @@ export class Sim {
   }
 
   spawnDecoy(p) {
-    this.decoys.push({ id: 'decoy' + this.nextId++, owner: p.id, x: p.x, y: p.y, t: p.stats.decoyTime, down: false, phantom: p.stats.phantom, cloak: p.cloak });
+    const d = { id: 'decoy' + this.nextId++, owner: p.id, x: p.x, y: p.y, t: p.stats.decoyTime, down: false, phantom: p.stats.phantom, cloak: p.cloak };
+    this.decoys.push(d);
+    // nearby enemies that can see it turn on the clone for a moment
+    for (const e of this.enemies) {
+      if (e.dead || e.type === 'treant' || e.type === 'dummy') continue;
+      if (Math.hypot(e.x - d.x, e.y - d.y) > ROGUE.tauntR || !this.los(e.x, e.y, d.x, d.y)) continue;
+      e.target = d.id; e.unseen = 0;
+      if (e.state === 'idle' || e.state === 'ret') e.state = 'chase';
+    }
+    this.emit({ k: 'decoy', x: Math.round(d.x), y: Math.round(d.y), r: ROGUE.tauntR });
   }
 
   popDecoy(d) {
@@ -866,6 +888,50 @@ export class Sim {
     const c = this.aimPoint(p, C.groundRange);
     this.emit({ k: 'sanct', id: p.id, x: Math.round(c.x), y: Math.round(c.y), r: Math.round(st.groundR) });
     this.zones.push({ id: this.nextId++, kind: 'sanct', owner: p.id, x: c.x, y: c.y, vx: 0, vy: 0, r: st.groundR, t: st.groundTime, max: st.groundTime, dps: 0, heal: st.groundHeal });
+  }
+
+  // every class's dash does a little something extra
+  dashStart(p) {
+    if (p.cls === 'rogue') this.spawnDecoy(p);
+    else if (p.cls === 'cleric') this.blessedStep(p);
+    else if (p.cls === 'warrior') { p.pushT = 0.28; p.pushSet = new Set(); }
+    else if (p.cls === 'bowman') this.rollShot(p);
+    else if (p.cls === 'sorcerer') { p.trailT = 0.3; p.trailPt = null; }
+  }
+
+  // Warrior: dashing into enemies shoves them back a little and breaks their attack
+  dashShove(p) {
+    const W = WARRIOR;
+    for (const e of this.enemies) {
+      if (e.dead || e.type === 'treant' || p.pushSet.has(e.id)) continue;
+      const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+      if (d > e.r + PLAYER_RADIUS + 10) continue;
+      p.pushSet.add(e.id);
+      if (e.type === 'dummy') { if (e.state === 'windup') { e.state = 'idle'; e.swingT = 2; } }
+      else {
+        const k = e.type === 'alpha' ? 0.35 : 1;
+        e.vx += (dx / d) * W.shoveKb * k; e.vy += (dy / d) * W.shoveKb * k;
+        if (e.state === 'windup' || e.state === 'lunge') { e.state = 'recover'; e.t = W.shoveStagger; e.hit = true; e.lungesLeft = 0; }
+        if (e.state === 'idle' || e.state === 'ret') { e.state = 'chase'; e.target = p.id; e.unseen = 0; }
+      }
+      this.emit({ k: 'shove', id: p.id, x: Math.round(e.x), y: Math.round(e.y) });
+    }
+  }
+
+  // Bowman: the roll flicks a small arrow at the nearest enemy in sight
+  rollShot(p) {
+    const B = BOWMAN;
+    let best = null, bd = B.rollRange;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d < bd && this.los(p.x, p.y, e.x, e.y)) { bd = d; best = e; }
+    }
+    if (!best) return;
+    const a = Math.atan2(best.y - 8 - (p.y - 12), best.x - p.x), sp = 460 * PACE;
+    this.shots.push({ id: this.nextId++, kind: 'arrow', owner: p.id, x: p.x, y: p.y - 12, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: (B.rollRange + 40) / sp,
+      dmg: B.rollDmg * p.stats.arrowMult * this.power(p), pierce: false, hit: new Set(), homing: false, power: 0.3 });
+    this.emit({ k: 'rollShot', id: p.id, a: r2(a) });
   }
 
   blessedStep(p) {
@@ -1164,8 +1230,7 @@ export class Sim {
   // ======================================================= ultimates (Wildfire)
   ultimate(p) {
     if (p.wf < RULES.wildfireMax) { this.emit({ k: 'nope', id: p.id, what: 'ult' }); return; }
-    if (this.scene === 'lobby') return;
-    p.wf = 0;
+    p.wf = 0; // (ultimates work at camp too, for practising on the dummies)
     p.glowT = 2;
     if (p.cls === 'sorcerer') {
       const S = SORCERER.starfall;
@@ -1270,7 +1335,7 @@ export class Sim {
   grantXp(v) {
     let scholar = 0;
     for (const p of this.players.values()) scholar += p.boons.filter((b) => b === 'scholar').length;
-    this.xp += v * (1 + 0.25 * scholar);
+    this.xp += v * TOUGH.xp * (1 + 0.25 * scholar);
     while (this.xp >= xpToNext(this.lvl)) {
       this.xp -= xpToNext(this.lvl);
       this.lvl++;
@@ -1782,7 +1847,7 @@ export class Sim {
         else { z.x = nx; z.y = ny; }
       }
       const owner = this.players.get(z.owner) || null;
-      if (z.kind === 'smoke') continue; // smoke works through inSmoke()
+      if (z.kind === 'smoke' || z.kind === 'haste') continue; // smoke works through inSmoke(); haste is felt by each player's own computer
       if (z.kind === 'sanct') {
         // holy ground: allies inside heal, enemies inside are slowed
         for (const o of this.players.values()) if (!o.down && Math.hypot(o.x - z.x, o.y - z.y) < z.r) this.heal(o, z.heal * dt, owner, true);
@@ -1833,7 +1898,13 @@ export class Sim {
       k.life -= dt;
       k.vx *= Math.exp(-dt * 4);
       k.vy *= Math.exp(-dt * 4);
-      const p = this.nearestAlive(k.x, k.y, 96);
+      // embers only go to someone who needs flame (Wildfire goes to anyone)
+      let p = null, bd = 96;
+      for (const o of this.players.values()) {
+        if (o.down || (k.kind === 'e' && o.hp >= o.max - 0.5)) continue;
+        const d = Math.hypot(o.x - k.x, o.y - k.y);
+        if (d < bd) { bd = d; p = o; }
+      }
       if (p) {
         const dx = p.x - k.x, dy = p.y - 8 - k.y, d = Math.hypot(dx, dy) || 1;
         const pull = 720 * (1 - d / 104);
@@ -1962,7 +2033,7 @@ export class Sim {
       })),
       pk: this.pickups.map((k) => ({ id: k.id, k: k.kind, x: Math.round(k.x), y: Math.round(k.y) })),
       hz: this.hazards.map((h) => ({ id: h.id, k: h.kind, x: Math.round(h.x), y: Math.round(h.y), r: h.r, a: h.a, arc: h.arc, p: r2(Math.max(0, 1 - h.t / h.max)), done: h.done ? 1 : 0 })),
-      zn: this.zones.map((z) => ({ id: z.id, k: z.kind, x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r), t: r1(z.t), mx: z.max })),
+      zn: this.zones.map((z) => ({ id: z.id, k: z.kind, x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r), t: r1(z.t), mx: z.max, o: z.kind === 'haste' ? z.owner : undefined })),
       sp: this.shots.map((s) => ({ id: s.id, k: s.kind, x: Math.round(s.x), y: Math.round(s.y), a: r2(Math.atan2(s.vy, s.vx)) })),
       sf: this.strikes.map((s) => ({ id: s.id, x: Math.round(s.x), y: Math.round(s.y), t: r2(s.t), r: s.r })),
     };

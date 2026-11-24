@@ -34,7 +34,7 @@ export const KITS = {
     { id: 'atk', name: 'Strike', key: 'strike', icon: '⚔' },
     { id: 'guard', name: 'Smoulder Guard (hold)', key: 'skill2', icon: '🛡' },
     { id: 'quake', name: 'Cinder Quake', key: 'skill1', icon: '💥' },
-    { id: 'dash', name: 'Dash', key: 'dash', icon: '»' },
+    { id: 'dash', name: 'Dash (shoves enemies)', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Pyre Cleave (Wildfire)', key: 'ult', icon: '🔥' },
   ],
   sorcerer: [
@@ -42,21 +42,21 @@ export const KITS = {
     { id: 'gale', name: 'Gale', key: 'skill2', icon: '🌀', el: 'gale' },
     { id: 'fire', name: 'Fire', key: 'skill1', icon: '🔥', el: 'fire' },
     { id: 'frost', name: 'Frost', key: 'skill3', icon: '❄', el: 'frost' },
-    { id: 'dash', name: 'Dash', key: 'dash', icon: '»' },
+    { id: 'dash', name: 'Dash (leaves a speed trail)', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Starfall (Wildfire)', key: 'ult', icon: '☄' },
   ],
   bowman: [
     { id: 'atk', name: 'Hold to draw, let go to shoot', key: 'strike', icon: '🏹' },
     { id: 'mark', name: 'Mark', key: 'skill1', icon: '🎯' },
     { id: 'rain', name: 'Rain of Arrows', key: 'skill2', icon: '🌧' },
-    { id: 'dash', name: 'Dash', key: 'dash', icon: '»' },
+    { id: 'dash', name: 'Roll (flicks an arrow)', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Hawk Eye (Wildfire)', key: 'ult', icon: '🦅' },
   ],
   rogue: [
     { id: 'atk', name: 'Stab (every 4th spins)', key: 'strike', icon: '🗡' },
     { id: 'smoke', name: 'Smoke Bomb', key: 'skill1', icon: '💨' },
     { id: 'step', name: 'Shadowstep', key: 'skill2', icon: '👣' },
-    { id: 'dash', name: 'Dash (leaves a decoy)', key: 'dash', icon: '»' },
+    { id: 'dash', name: 'Dash (leaves a clone)', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Thousand Cuts (Wildfire)', key: 'ult', icon: '✴' },
   ],
   cleric: [
@@ -174,7 +174,7 @@ export function updateHud(game, snap, me) {
   set($('#lvl'), 'text', `Lv ${snap.lvl}`);
   set($('#xp-fill'), 'width', (snap.xp / snap.nx) * 100 + '%');
   set($('#pts'), 'hide', !me.pts);
-  set($('#pts'), 'text', `+${me.pts} skill point${me.pts > 1 ? 's' : ''} [${game.keyLabel('tree')}]`);
+  set($('#pts'), 'text', snap.st === 'rest' ? `+${me.pts} skill point${me.pts > 1 ? 's' : ''} to spend [${game.keyLabel('tree')}]` : `+${me.pts} skill point${me.pts > 1 ? 's' : ''} · spend at the end of the round`);
   const fury = Math.round((stats.furyMax || 0) * (1 - ratio) * 100);
   const tough = Math.round(30 * (1 - ratio));
   set($('#fury'), 'text', me.k === 'warrior' && snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage · ${tough}% less damage taken` : '');

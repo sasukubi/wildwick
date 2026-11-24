@@ -5,6 +5,10 @@
 //  (Distances are in "art pixels": one map tile is 32 of them.)
 // =============================================================
 
+// The game's version. Friends can only play together on the same version.
+// (Raise this with every update.)
+export const VERSION = '1.1.0';
+
 export const TILE = 32;
 export const MAX_PLAYERS = 4;
 export const PLAYER_RADIUS = 9;
@@ -54,6 +58,7 @@ export const WARRIOR = {
   maxFlame: 100,
   atkCd: 0.5, atkRange: 58, atkArc: 2.0, atkDmg: 15, heavyMult: 1.7, heavyRecover: 0.35, // extra wait after the heavy 3rd hit
   dashSpeed: 420, dashTime: 0.2, dashCd: 1.3, dashSafe: 0.12, // only the first part of a dash dodges
+  shoveKb: 220, shoveStagger: 0.6,  // dashing into enemies shoves them back and breaks their attack
   // Cinder Quake: burn some of your own flame to slam the ground
   quakeCd: 9, quakeCost: 10, quakeRadius: 108, quakeDmg: 30,
   // Smoulder Guard: hold to block hits from the front, release to counter-slash
@@ -70,15 +75,16 @@ export const SORCERER = {
   speed: 118,
   maxFlame: 85,
   staffCd: 0.55, staffRange: 46, staffArc: 1.9, staffDmg: 7, staffKb: 320, // weak but pushes enemies away
-  mana: 100, manaRegen: 10,
-  fire:  { cost: 22, cd: 0.9, speed: 250, dmg: 24, r: 34, range: 260 },
-  frost: { cost: 18, cd: 0.6, dmg: 10, shards: 3, spread: 0.32, speed: 300, range: 160, slow: 0.5, slowT: 2 },
+  mana: 100, manaRegen: 16,
+  fire:  { cost: 18, cd: 0.9, speed: 250, dmg: 30, r: 34, range: 260 },
+  frost: { cost: 15, cd: 0.6, dmg: 12, shards: 3, spread: 0.32, speed: 300, range: 160, slow: 0.5, slowT: 2 },
   gale:  { cost: 0, cd: 0.7, range: 92, arc: 1.7, kb: 440, dmg: 6 },  // free: your always-available push
   weaveWindow: 1.6, weaveExtra: 20, // fusing costs 20 extra mana on top of the second spell
   steam:     { r: 70, dmg: 34, stun: 1.3, range: 150 },
   firestorm: { r: 30, dps: 42, t: 3, speed: 90 },
   blizzard:  { r: 92, dps: 12, t: 4, slow: 0.45, range: 160 },
   starfall:  { r: 120, meteors: 12, t: 3, dmg: 34, hitR: 36, range: 220 },
+  trailTime: 0.7, trailHaste: 0.12,     // the dash leaves a trail that speeds up allies who walk through it
 };
 export const ELEMENTS = {
   fire:  { name: 'Fire',  color: '#ff8a3c', icon: '🔥' },
@@ -98,7 +104,7 @@ export function weaveOf(a, b) { return WEAVES[[a, b].sort().join('+')] || null; 
 export const BOWMAN = {
   speed: 118, maxFlame: 90,
   drawTime: 1.0, drawSlow: 0.5,          // walk at half speed while drawing
-  minDmg: 7, maxDmg: 44,
+  minDmg: 8, maxDmg: 50,
   minSpeed: 300, maxSpeed: 560,
   minRange: 220, maxRange: 380,
   minRecover: 0.22, maxRecover: 0.9,     // wait after a weak / full shot
@@ -106,6 +112,7 @@ export const BOWMAN = {
   markCd: 6, markTime: 6, markBonus: 0.2, markRange: 320,
   rainCd: 12, rainR: 70, rainTime: 2, rainArrows: 10, rainDmg: 13, rainRange: 240,
   hawkTime: 6, hawkRecover: 0.32,         // Hawk Eye (Wildfire ultimate)
+  rollDmg: 9, rollRange: 230,            // the dash is a roll that flicks a small arrow at the nearest enemy
 };
 
 // ---- Rogue --------------------------------------------------
@@ -117,10 +124,10 @@ export const ROGUE = {
   dashCd: 0.9,                                              // Rogue dashes recharge faster
   execute: 0.1,                                             // +10% damage to enemies under half health
   hopRange: 48,                                             // stabs hop toward enemies this far away
-  decoyTime: 2.5,
+  decoyTime: 1.2, tauntR: 140,                              // the dash clone pulls nearby enemies for a moment
   stepCd: 4.5, stepRange: 220,                                // Shadowstep
   smokeCd: 14, smokeR: 72, smokeTime: 5, smokeSpeed: 1.4,   // Smoke Bomb
-  cutsTargets: 6, cutsRange: 230, cutsDmg: 42,              // Thousand Cuts (ultimate)
+  cutsTargets: 6, cutsRange: 230, cutsDmg: 60,              // Thousand Cuts (ultimate)
 };
 
 // ---- Cleric -------------------------------------------------
@@ -142,10 +149,10 @@ export const CLERIC = {
 export const WARLOCK = {
   speed: 118, maxFlame: 85,
   mana: 100, manaRegen: 9,
-  boltCd: 0.6, boltSpeed: 240, boltRange: 250, boltDmg: 12, curseEvery: 3, curseTime: 3, curseBonus: 0.15,
+  boltCd: 0.6, boltSpeed: 240, boltRange: 250, boltDmg: 10, curseEvery: 3, curseTime: 3, curseBonus: 0.15,
   hands: { cost: 30, cd: 9, r: 58, range: 230, delay: 0.45, dmg: 22, root: 1.6 },
-  imps: { cost: 35, cd: 12, n: 3, life: 8, speed: 150, dmg: 6, biteCd: 0.7, mana: 2, aggro: 260 },
-  siphon: { cost: 0, cd: 8, range: 210, time: 1.6, dps: 20, mana: 15, breakRange: 260 },
+  imps: { cost: 35, cd: 12, n: 3, life: 8, speed: 150, dmg: 2.5, biteCd: 0.7, mana: 2, aggro: 260 },
+  siphon: { cost: 0, cd: 8, range: 210, time: 1.6, dps: 15, mana: 15, breakRange: 260 },
   slipTime: 0.14, slipSpeed: 720,                                // Shadow Slip: a quick untouchable blink
   eclipse: { time: 8, hp: 900, r: 20, speed: 70, dmg: 6, swipeCd: 1, swipeR: 52, taunt: 320 },
 };
@@ -191,10 +198,37 @@ export const RULES = {
 
 export function xpToNext(level) { return 30 + level * 25; }
 
+// ---- Global pace & toughness --------------------------------
+// One place to make the whole game calmer or faster.
+export const PACE = 0.85;       // movement, dashes, enemies and projectiles (attack speed and cooldowns are unchanged)
+export const TOUGH = {
+  enemyHp: 1.2,                 // enemies have 20% more health
+  playerFlame: 1.2,             // players have 20% more flame
+  dmg: 0.9,                     // everyone deals 10% less damage
+  xp: 0.85,                     // 15% less EXP
+};
+for (const o of [WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK]) { o.speed *= PACE; o.maxFlame = Math.round(o.maxFlame * TOUGH.playerFlame); }
+WARRIOR.dashSpeed *= PACE;
+WARLOCK.slipSpeed *= PACE;
+SORCERER.fire.speed *= PACE; SORCERER.frost.speed *= PACE; SORCERER.firestorm.speed *= PACE;
+BOWMAN.minSpeed *= PACE; BOWMAN.maxSpeed *= PACE;
+WARLOCK.boltSpeed *= PACE; WARLOCK.imps.speed *= PACE; WARLOCK.eclipse.speed *= PACE;
+for (const e of [WOLF, ALPHA]) {
+  e.chaseSpeed *= PACE; e.wanderSpeed *= PACE;
+  e.lungeSpeed *= PACE; e.lungeTime /= PACE;   // same reach, just a slower pounce
+  e.hp = Math.round(e.hp * TOUGH.enemyHp); e.dmg *= TOUGH.dmg;
+}
+TREANT.speed *= PACE;
+TREANT.hp = Math.round(TREANT.hp * TOUGH.enemyHp);
+TREANT.rootDmg *= TOUGH.dmg; TREANT.sweepDmg *= TOUGH.dmg;
+
 // ---- Skill trees --------------------------------------------
 // Each level gives everyone 1 point. Spend them with T / Tab.
 // The last upgrade in each group unlocks after 5 points in that group.
 export const CAP_REQUIREMENT = 5;
+export const RANK_POWER = 0.6;   // each normal rank is worth 60% of what it used to be
+// upgrades that add whole things (an extra shard, an extra imp...) aren't weakened
+const WHOLE = new Set(['shard', 'brood', 'quickhex', 'flurry']);
 export const TREES = {
   warrior: [
     { id: 'fury', name: 'Fury', color: '#ff7a4c', blurb: 'Hit harder the lower your flame.', nodes: [
@@ -218,7 +252,7 @@ export const TREES = {
   ],
   sorcerer: [
     { id: 'pyro', name: 'Pyromancy', color: '#ff8a4c', blurb: 'Bigger, hotter fire.', nodes: [
-      { id: 'searing', name: 'Searing Flames', max: 3, desc: 'Fire spells deal +20% damage.' },
+      { id: 'searing', name: 'Searing Flames', max: 3, desc: 'Fire spells deal +15% damage.' },
       { id: 'blast', name: 'Wide Blast', max: 2, desc: 'Fireball explosions are 25% bigger.' },
       { id: 'raging', name: 'Raging Storm', max: 2, desc: 'Firestorm lasts 1 second longer.' },
       { id: 'cataclysm', name: 'Cataclysm', max: 1, cap: true, desc: 'Starfall drops 50% more meteors.' },
@@ -238,10 +272,10 @@ export const TREES = {
   ],
   bowman: [
     { id: 'marksman', name: 'Marksman', color: '#ffd36a', blurb: 'Bigger, faster shots.', nodes: [
-      { id: 'steady', name: 'Steady Draw', max: 3, desc: 'Draw your bow 12% faster.' },
-      { id: 'broadhead', name: 'Broadhead', max: 3, desc: 'Arrows deal +15% damage.' },
+      { id: 'steady', name: 'Steady Draw', max: 3, desc: 'Draw your bow 8% faster.' },
+      { id: 'broadhead', name: 'Broadhead', max: 3, desc: 'Arrows deal +10% damage.' },
       { id: 'nock', name: 'Quick Nock', max: 2, desc: 'Wait 15% less between shots.' },
-      { id: 'deadeye', name: 'Deadeye', max: 1, cap: true, desc: 'Fully drawn shots deal +50% damage.' },
+      { id: 'deadeye', name: 'Deadeye', max: 1, cap: true, desc: 'Fully drawn shots deal +20% damage.' },
     ] },
     { id: 'hunter', name: 'Hunter', color: '#ff8a7a', blurb: 'Mark prey for the whole party.', nodes: [
       { id: 'prey', name: 'Hunter\'s Mark', max: 3, desc: 'Marked enemies take +6% more damage.' },
@@ -285,7 +319,7 @@ TREES.cleric = [
     { id: 'beacon', name: 'Beacon', max: 1, cap: true, desc: 'Mending Light also heals everyone near the target for half as much.' },
   ] },
   { id: 'zeal', name: 'Zeal', color: '#ff9a5a', blurb: 'Hit harder, earn Grace faster.', nodes: [
-    { id: 'zealous', name: 'Zealous', max: 3, desc: 'Mace hits deal +12% damage.' },
+    { id: 'zealous', name: 'Zealous', max: 3, desc: 'Mace hits deal +10% damage.' },
     { id: 'fervor', name: 'Fervor', max: 3, desc: 'Mace hits build 20% more Grace.' },
     { id: 'verdict', name: 'Verdict', max: 2, desc: 'Judgement stuns 0.4s longer and recharges 15% faster.' },
     { id: 'smite', name: 'Smite', max: 1, cap: true, desc: 'Every 3rd mace hit calls down light for +60% damage.' },
@@ -305,8 +339,8 @@ TREES.warlock = [
     { id: 'plague', name: 'Plague', max: 1, cap: true, desc: 'Cursed enemies spread their curse to one nearby enemy when they die.' },
   ] },
   { id: 'legion', name: 'Legion', color: '#ff7a9a', blurb: 'More imps, meaner bites.', nodes: [
-    { id: 'brood', name: 'Brood', max: 2, desc: 'Summon 1 more imp.' },
-    { id: 'fangs', name: 'Sharp Fangs', max: 3, desc: 'Imps deal +20% damage.' },
+    { id: 'brood', name: 'Brood', max: 1, desc: 'Summon 1 more imp.' },
+    { id: 'fangs', name: 'Sharp Fangs', max: 3, desc: 'Imps deal +12% damage.' },
     { id: 'feast', name: 'Feast', max: 2, desc: 'Imp bites give 50% more mana.' },
     { id: 'colossus', name: 'Colossus', max: 1, cap: true, desc: 'Eclipse lasts 3 seconds longer.' },
   ] },
@@ -318,6 +352,16 @@ TREES.warlock = [
   ] },
 ];
 export const WARRIOR_TREE = TREES.warrior;
+
+// rewrite the numbers in each normal upgrade's text to match RANK_POWER
+for (const cls in TREES) for (const b of TREES[cls]) for (const n of b.nodes) {
+  if (n.cap || WHOLE.has(n.id)) continue;
+  n.desc = n.desc.replace(/(\d+(?:\.\d+)?)(?!\d|\.\d|st|nd|rd|th)(s?)( seconds?)?/g, (m, num, s, sec) => {
+    const v = parseFloat(num) * RANK_POWER;
+    const t = v >= 2 ? String(Math.round(v)) : String(Math.round(v * 10) / 10);
+    return t + s + (sec ? (t === '1' ? ' second' : ' seconds') : '');
+  });
+}
 
 export function treeNode(cls, id) {
   for (const b of TREES[cls] || []) for (const n of b.nodes) if (n.id === id) return { branch: b, node: n };
@@ -353,7 +397,8 @@ export const BOONS = [
 
 // Works out a player's real numbers from their class, skill tree and boons.
 export function classStats(cls, tree = {}, boons = []) {
-  const r = (id) => tree[id] || 0;
+  const rr = (id) => tree[id] || 0;                    // whole ranks
+  const r = (id) => rr(id) * (WHOLE.has(id) ? 1 : RANK_POWER); // normal ranks are worth a bit less
   const b = (id) => boons.filter((x) => x === id).length;
   const focus = Math.pow(0.85, b('focus'));
   const base = {
@@ -375,11 +420,11 @@ export function classStats(cls, tree = {}, boons = []) {
       maxMana: S.mana + 20 * r('well'),
       manaRegen: S.manaRegen * (1 + 0.4 * b('spring')),
       spellCd: focus,
-      fireMult: 1 + 0.2 * r('searing'),
+      fireMult: 1 + 0.15 * r('searing'),
       blastR: S.fire.r * (1 + 0.25 * r('blast')),
       stormT: S.firestorm.t + r('raging'),
       meteors: Math.round(S.starfall.meteors * (r('cataclysm') ? 1.5 : 1)),
-      shards: S.frost.shards + r('shard'),
+      shards: S.frost.shards + rr('shard'),
       slowT: S.frost.slowT * (1 + 0.3 * r('chill')),
       frostMult: 1 + 0.15 * r('chill'),
       blizzR: S.blizzard.r * (1 + 0.25 * r('whiteout')),
@@ -397,9 +442,9 @@ export function classStats(cls, tree = {}, boons = []) {
       maxFlame: B.maxFlame + 15 * b('wick'),
       speed: B.speed * (1 + 0.1 * b('swift')),
       atkCd: B.minRecover,
-      drawTime: B.drawTime * Math.pow(0.88, r('steady')),
+      drawTime: B.drawTime * Math.pow(0.92, r('steady')),
       drawSlow: Math.min(1, B.drawSlow + 0.15 * r('fleet')),
-      arrowMult: 1 + 0.15 * r('broadhead'),
+      arrowMult: 1 + 0.1 * r('broadhead'),
       recoverMult: Math.pow(0.85, r('nock')),
       deadeye: r('deadeye') > 0,
       markBonus: B.markBonus + 0.06 * r('prey'),
@@ -421,7 +466,7 @@ export function classStats(cls, tree = {}, boons = []) {
       speed: C.speed * (1 + 0.1 * b('swift')),
       atkCd: C.maceCd,
       maxMana: C.grace, manaRegen: 0,
-      maceMult: 1 + 0.12 * r('zealous'),
+      maceMult: 1 + 0.1 * r('zealous'),
       graceMult: (1 + 0.2 * r('fervor')) * (1 + 0.25 * b('psalm')),
       smite: r('smite') > 0,
       mendHeal: C.mendHeal * (1 + 0.15 * r('mercy')),
@@ -451,10 +496,10 @@ export function classStats(cls, tree = {}, boons = []) {
       spellCd: focus,
       boltMult: 1 + 0.12 * r('malice'),
       curseBonus: L.curseBonus + 0.08 * r('hex'),
-      curseEvery: r('quickhex') >= 2 ? 2 : L.curseEvery,
+      curseEvery: rr('quickhex') >= 2 ? 2 : L.curseEvery,
       plague: r('plague') > 0,
-      imps: L.imps.n + r('brood'),
-      impMult: 1 + 0.2 * r('fangs'),
+      imps: L.imps.n + rr('brood'),
+      impMult: 1 + 0.12 * r('fangs'),
       impMana: L.imps.mana * (1 + 0.5 * r('feast')),
       eclipseTime: L.eclipse.time + (r('colossus') ? 3 : 0),
       handsRoot: L.hands.root + 0.3 * r('grip'),
@@ -486,7 +531,7 @@ export function classStats(cls, tree = {}, boons = []) {
       shroud: r('shroud') > 0,
       decoyTime: G.decoyTime + r('mirror'),
       phantom: r('phantom') > 0,
-      cutsTargets: G.cutsTargets + 2 * r('flurry'),
+      cutsTargets: G.cutsTargets + 2 * rr('flurry'),
       furyMax: 0,
     };
   }

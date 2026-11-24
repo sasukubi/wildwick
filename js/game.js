@@ -4,7 +4,7 @@
 //  - On the host: also runs the Sim and sends snapshots.
 //  - On friends' computers: shows the host's snapshots smoothly.
 // =============================================================
-import { WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, CLOAKS, FLAMES, CLASSES, BOONS, ELEMENTS, PLAYER_RADIUS, MAX_PLAYERS, classStats, byId } from './data.js';
+import { VERSION, WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, CLOAKS, FLAMES, CLASSES, BOONS, ELEMENTS, PLAYER_RADIUS, MAX_PLAYERS, classStats, byId } from './data.js';
 import { World } from './world.js';
 import { Sim } from './sim.js';
 import { Input } from './input.js';
@@ -89,7 +89,7 @@ export class Game {
     } else {
       room.handlers.data = (msg) => this.onClientData(msg);
       room.handlers.close = () => this.leave('The host closed the room.');
-      room.send({ t: 'hello', char: publicChar(character), user });
+      room.send({ t: 'hello', char: publicChar(character), user, v: VERSION });
       this.inputTimer = makeTicker(33, () => this.sendInput());
       this.watchdog = setInterval(() => {
         if (performance.now() - this.lastSnapAt > 10000) this.leave('Lost connection to the host.');
@@ -151,7 +151,7 @@ export class Game {
 
   welcome(p) {
     if (!this.room) return;
-    this.room.sendTo(p.id, { t: 'welcome', id: p.id });
+    this.room.sendTo(p.id, { t: 'welcome', id: p.id, v: VERSION });
     this.sendScene(p.id);
     toast(`${p.user} joined the party`);
   }
@@ -183,6 +183,13 @@ export class Game {
     switch (msg.t) {
       case 'hello': {
         if (this.sim.players.has(from)) return;
+        // friends must be on the same version as the host
+        if (msg.v !== VERSION) {
+          this.room.sendTo(from, { t: 'version', v: VERSION });
+          setTimeout(() => this.room.kick(from), 400);
+          toast(`${msg.user || 'Someone'} tried to join on ${msg.v ? 'version ' + msg.v : 'an older version'}. You're on ${VERSION}.`);
+          return;
+        }
         if (this.sim.players.size >= MAX_PLAYERS) {
           this.room.sendTo(from, { t: 'full' });
           setTimeout(() => this.room.kick(from), 300);
@@ -228,7 +235,13 @@ export class Game {
   onClientData(msg) {
     if (!msg || typeof msg !== 'object') return;
     switch (msg.t) {
-      case 'welcome': this.myId = msg.id; break;
+      case 'welcome':
+        if (msg.v !== VERSION) { this.leave(`Your friend is on ${msg.v ? 'version ' + msg.v : 'an older version'}, you're on ${VERSION}. Both of you need the same version: refresh the page (Ctrl+F5) or update the app.`); break; }
+        this.myId = msg.id;
+        break;
+      case 'version':
+        this.leave(`Your friend is on version ${msg.v}, you're on ${VERSION}. Both of you need the same version: refresh the page (Ctrl+F5) or update the app.`);
+        break;
       case 'wait': this.startWaiting(msg.id); break;
       case 'closed': this.leave('Your friend closed their camp.'); break;
       case 'kicked': this.leave('You were removed from the camp.'); break;
@@ -497,6 +510,16 @@ export class Game {
       if (guarding) sp *= WARRIOR.guardSlow;
       if (cls === 'bowman' && lp.drawing) sp *= S.drawSlow;
       if (cls === 'rogue' && (snap.zn || []).some((z) => z.k === 'smoke' && Math.hypot(lp.x - z.x, lp.y - z.y) < z.r)) sp *= ROGUE.smokeSpeed;
+      // walking through a friend's Sorcerer trail gives a small burst of speed
+      if ((snap.zn || []).some((z) => z.k === 'haste' && z.o !== this.myId && Math.hypot(lp.x - z.x, lp.y - z.y) < z.r + 6)) {
+        if (!(lp.hasteT > 0)) audio.play('haste');
+        lp.hasteT = 0.8;
+      }
+      lp.hasteT = (lp.hasteT || 0) - dt;
+      if (lp.hasteT > 0) {
+        sp *= 1 + SORCERER.trailHaste;
+        if (lp.moving && Math.random() < 0.35) this.particles.push({ x: lp.x + (Math.random() - 0.5) * 10, y: lp.y - 4, vx: 0, vy: -20, life: 0.4, max: 0.4, size: 1, color: '#bff5ff', glow: true, shrink: true });
+      }
       // a bit of momentum: you speed up, slow down and turn smoothly instead of instantly
       const accel = mv.x || mv.y ? 15 : 18; // snappy, with just a touch of momentum
       const k = 1 - Math.exp(-dt * accel);
@@ -932,7 +955,7 @@ export class Game {
         break;
       case 'lvl':
         audio.play('lvl');
-        this.banner(`Level ${f.lvl}!`, 1.8, `+1 skill point for everyone · press ${this.keyLabel('tree')}`);
+        this.banner(`Level ${f.lvl}!`, 1.8, '+1 skill point for everyone · spend it at the end of the round');
         break;
       case 'shrine':
         this.burst(f.x, f.y - 16, 30, { color: '#ffb060', speed: 140, life: 1, glow: true, up: 40 });
@@ -1037,6 +1060,21 @@ export class Game {
         audio.play('famDie', at);
         break;
       case 'plague': this.effects.push({ k: 'beam', x: f.x, y: f.y - 10, x2: f.x2, y2: f.y2 - 10, t0: this.t, life: 0.4, col: [176, 140, 255] }); break;
+      case 'shove':
+        this.burst(f.x, f.y - 6, 10, { color: '#c9b08a', speed: 120, life: 0.4 });
+        this.spark(f.x, f.y - 12, '255,230,190', 12);
+        audio.play('shove', at);
+        if (mine) this.addShake(2);
+        break;
+      case 'rollShot': audio.play('bow', this.viewPos(f.id)); break;
+      case 'decoy':
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 30, t0: this.t, life: 0.4, color: 'rgba(180,140,255,1)' });
+        audio.play('pop', at);
+        break;
+      case 'fountain':
+        this.burst(f.x, f.y - 22, 30, { color: '#ffcf6a', speed: 120, life: 0.9, glow: true, up: 50 });
+        audio.play('fuel', at);
+        break;
       case 'msg': toast(f.text); break;
     }
   }
@@ -1142,7 +1180,7 @@ export class Game {
   updateInteract(me) {
     this.prompt = null;
     if (this.world.kind !== 'lobby') return;
-    const STATIONS = ['wardrobe', 'shrine', 'campfire', 'signpost', 'board', 'resetpost'];
+    const STATIONS = ['wardrobe', 'shrine', 'campfire', 'signpost', 'board', 'resetpost', 'fountain'];
     let best = null, bd = 58;
     for (const p of this.world.props) {
       if (!STATIONS.includes(p.type)) continue;
@@ -1170,6 +1208,9 @@ export class Game {
       case 'board':
         this.prompt = { x: best.x, y: best.y - 50, text: `[${key}] Stats board`, sub: `${this.char.name}'s journey so far` };
         if (go) boardPanel.toggle(this);
+        break;
+      case 'fountain':
+        this.prompt = { x: best.x, y: best.y - 52, text: `[${key}] Wildfire Fountain`, sub: me.wf >= 100 ? `Wildfire full · press ${this.keyLabel('ult')} to try your ultimate` : 'Fill your Wildfire to practise your ultimate' };
         break;
       case 'resetpost':
         this.prompt = { x: best.x, y: best.y - 40, text: `[${key}] Reset the dummies`, sub: 'Clears their damage-per-second' };
