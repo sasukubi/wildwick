@@ -7,7 +7,7 @@
 
 // The game's version. Friends can only play together on the same version.
 // (Raise this with every update.)
-export const VERSION = '1.4.0';
+export const VERSION = '1.4.1';
 import { PRESTIGE } from './progress.js';
 
 export const TILE = 32;

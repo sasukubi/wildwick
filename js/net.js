@@ -6,7 +6,20 @@
 // =============================================================
 /* global Peer */
 
+import { RELAY_SERVERS } from './config.js';
+
 const PREFIX = 'wildwick-v1-';
+// how browsers find a way to each other: several public address-finders (STUN),
+// plus a relay (TURN) as a backup for networks that block direct connections
+const PEER_OPTS = {
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+      ...RELAY_SERVERS,
+    ],
+  },
+};
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 function makeCode() {
@@ -35,7 +48,7 @@ export function hostRoom(preferred = null) {
     const attempt = () => {
       const code = want || makeCode();
       const wasPreferred = !!want;
-      const peer = new Peer(PREFIX + code, { debug: 1 });
+      const peer = new Peer(PREFIX + code, PEER_OPTS);
       const conns = new Map();
       let opened = false;
       const room = {
@@ -79,10 +92,13 @@ export function hostRoom(preferred = null) {
 export function joinRoom(code) {
   ensurePeer();
   return new Promise((resolve, reject) => {
-    const peer = new Peer({ debug: 1 });
+    const peer = new Peer(PEER_OPTS);
     let done = false;
     const fail = (msg) => { if (done) return; done = true; clearTimeout(timer); peer.destroy(); reject(new Error(msg)); };
-    const timer = setTimeout(() => fail('Could not reach that room. Check the code and try again.'), 12000);
+    // the room exists but the connection can't get through: usually a router, firewall or VPN blocking it
+    const timer = setTimeout(() => fail(RELAY_SERVERS.length
+      ? 'Found the room, but could not connect to it. Make sure your friend still has the game open, then try again.'
+      : 'Found the room, but your networks would not let you connect directly. Try: your friend reopens their camp, swap who hosts, turn off any VPN, or try a phone hotspot.'), 25000);
     peer.on('open', () => {
       const conn = peer.connect(PREFIX + code, { reliable: true, serialization: 'json' });
       const room = {
