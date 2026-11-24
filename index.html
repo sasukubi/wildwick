@@ -174,6 +174,64 @@
     </div>
   </div>
 
+  <!-- Pause screen (Esc) -->
+  <div id="pause" class="hidden">
+    <div class="panel glass">
+      <div class="panel-head"><h2>Paused</h2><span id="pause-solo" class="ptsbadge hidden">Game paused</span></div>
+      <div id="pause-room" class="glass pill room hidden"><span class="muted">Room code</span> <strong id="pause-code"></strong><button id="pause-copy" class="gbtn small">Copy</button></div>
+      <h3>Party</h3>
+      <div id="pause-party"></div>
+      <div id="pause-vote" class="row center-row"></div>
+      <div class="pause-btns">
+        <button id="pause-resume" class="gbtn primary">Resume</button>
+        <button id="pause-settings" class="gbtn">Settings</button>
+        <button id="pause-controls" class="gbtn">Controls</button>
+        <button id="pause-leave" class="gbtn danger hidden">Leave</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- The campfire: host or join -->
+  <div id="camp" class="panel glass modal hidden">
+    <div class="panel-head"><h2>The Campfire</h2><button data-close class="gbtn small">Close</button></div>
+    <div id="camp-solo">
+      <h3>Open your camp to friends</h3>
+      <div class="row code-row">
+        <label class="toggle"><input id="camp-use-code" type="checkbox"><span>Use room code</span></label>
+        <input id="camp-host-code" maxlength="5" placeholder="CODE" autocomplete="off">
+      </div>
+      <button id="camp-host" class="gbtn primary block">Open my camp</button>
+      <p class="note">Friends type your code to join you here. Keep the same code so they can rejoin easily.</p>
+      <h3>Join a friend's camp</h3>
+      <div class="row">
+        <input id="camp-join-code" maxlength="5" placeholder="FRIEND'S CODE" autocomplete="off">
+        <button id="camp-join" class="gbtn primary">Join</button>
+      </div>
+    </div>
+    <div id="camp-open" class="hidden">
+      <p>Your camp is open. Friends can join with this code:</p>
+      <div class="glass pill room"><strong id="camp-code"></strong><button id="camp-copy" class="gbtn small">Copy</button></div>
+      <button id="camp-close" class="gbtn danger block">Close my camp to friends</button>
+    </div>
+    <div id="camp-guest" class="hidden">
+      <p id="camp-guest-text"></p>
+      <button id="camp-leave" class="gbtn danger block">Leave to my camp</button>
+    </div>
+    <p id="camp-error" class="error"></p>
+  </div>
+
+  <div id="sign" class="panel glass modal hidden">
+    <div class="panel-head"><h2>Signpost</h2><button data-close class="gbtn small">Close</button></div>
+    <button id="sign-chars" class="gbtn primary block">Change character</button>
+    <button id="sign-logout" class="gbtn block">Log out</button>
+  </div>
+
+  <div id="board" class="panel glass modal hidden">
+    <div class="panel-head"><h2>Stats board</h2><button data-close class="gbtn small">Close</button></div>
+    <p id="board-name" class="muted"></p>
+    <div id="board-rows"></div>
+  </div>
+
   <div id="toasts"></div>
 
   <script type="module" src="js/main.js"></script>

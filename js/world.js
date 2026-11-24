@@ -26,6 +26,7 @@ export class World {
     this.campfire = null;
     this.clearings = [];
     this.wolfSpawns = [];
+    this.dummies = [];
   }
 
   get pw() { return this.w * TILE; }
@@ -226,24 +227,73 @@ function markPathDisc(world, x, y, r) {
 
 // ---- The campfire lobby ------------------------------------
 export function makeLobby() {
-  const w = 32, h = 26;
+  // Layout (in tiles): campfire hub in the middle, archway path north,
+  // training grounds west, class hall east, wardrobe tent south-west,
+  // signpost + stats board south.
+  const w = 46, h = 36;
   const world = new World(w, h, 'lobby', 0);
-  const cx = 16, cy = 14, R = 9.3;
-  for (let ty = 0; ty < h; ty++)
-    for (let tx = 0; tx < w; tx++)
-      if (Math.hypot(tx + 0.5 - cx, ty + 0.5 - cy) < R + (hash2(tx, ty) - 0.5) * 1.4) world.setOpen(tx, ty);
-  for (let ty = 1; ty <= cy; ty++) for (let tx = cx - 2; tx < cx + 2; tx++) world.setOpen(tx, ty);
+  const cx = 23, cy = 19;
+  const T = TILE;
+  const openEllipse = (ex, ey, rx, ry, wob = 1.2) => {
+    for (let ty = 0; ty < h; ty++) for (let tx = 0; tx < w; tx++) {
+      const d = Math.hypot((tx + 0.5 - ex) / rx, (ty + 0.5 - ey) / ry);
+      if (d < 1 + (hash2(tx * 3, ty * 7) - 0.5) * (wob / Math.max(rx, ry))) world.setOpen(tx, ty);
+    }
+  };
+  openEllipse(cx, cy, 8, 6.5);            // hub
+  openEllipse(9.5, 17, 7, 6);              // training grounds (west)
+  openEllipse(36.5, 18, 6.5, 6.5);         // class hall (east)
+  openEllipse(12, 29, 5, 3.6);             // wardrobe tent (south-west)
+  openEllipse(cx, 29, 6, 3.5);             // signpost + board (south)
+  for (let ty = 1; ty <= cy; ty++) for (let tx = cx - 2; tx < cx + 2; tx++) world.setOpen(tx, ty); // archway path
+  // dirt paths linking every area to the fire
+  const walk = (x0, y0, x1, y1, r = 0.6) => {
+    const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 2);
+    for (let i = 0; i <= n; i++) {
+      const k = i / n, x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k;
+      markPathDisc(world, x, y, r);
+      // clear a proper walkway through the trees
+      for (let ty = Math.floor(y - 2); ty <= Math.ceil(y + 2); ty++) for (let tx = Math.floor(x - 2); tx <= Math.ceil(x + 2); tx++) if (Math.hypot(tx + 0.5 - x, ty + 0.5 - y) <= 1.7) world.setOpen(tx, ty);
+    }
+  };
   for (let ty = 1; ty <= cy - 2; ty++) markPathDisc(world, cx, ty + 0.5, 1.3);
-  markPathDisc(world, cx, cy, 3.7);
+  markPathDisc(world, cx, cy, 2.6);
+  walk(cx, cy, 13, 17); walk(cx, cy, 31, 18); walk(cx, cy, 13, 28); walk(cx, cy, cx, 28);
+  markPathDisc(world, 9.5, 17, 3.2);       // training yard floor
+  markPathDisc(world, 36.5, 18, 2.2);      // class hall centre stone
 
-  const T = TILE, fx = cx * T, fy = cy * T;
+  const fx = cx * T, fy = cy * T;
   world.campfire = { x: fx, y: fy };
   world.props.push({ type: 'campfire', x: fx, y: fy, solidR: 18 });
-  world.props.push({ type: 'wardrobe', x: fx - 6.6 * T, y: fy + 0.4 * T, solidR: 15 });
+  world.props.push({ type: 'fox', x: fx + 34, y: fy + 26 });
+  world.props.push({ type: 'log', x: fx - 40, y: fy + 30, solidR: 0 });
+  // training grounds: a fence around the yard, three dummies and a reset post
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    if (a > 5.6 || a < 0.7) continue; // opening towards the fire
+    world.props.push({ type: 'fence', x: Math.round(9.5 * T + Math.cos(a) * 5.4 * T), y: Math.round(17 * T + Math.sin(a) * 4.6 * T) });
+  }
+  world.dummies = [
+    { x: 6.5 * T, y: 15 * T, kind: 'plain' },
+    { x: 10 * T, y: 13.5 * T, kind: 'facer' },
+    { x: 8 * T, y: 19.5 * T, kind: 'hitter' },
+  ];
+  world.props.push({ type: 'resetpost', x: 13 * T, y: 20.5 * T, solidR: 6 });
+  world.props.push({ type: 'sign', x: 13.5 * T, y: 12.5 * T, text: 'Training Grounds' });
+  // class hall: shrines in a ring with banners
   CLASSES.forEach((c, i) => {
-    const a = -1.05 + i * (2.1 / (CLASSES.length - 1));
-    world.props.push({ type: 'shrine', cls: c.id, x: Math.round(fx + Math.cos(a) * 6.6 * T), y: Math.round(fy + Math.sin(a) * 6.6 * T), solidR: 10 });
+    const a = -Math.PI / 2 + (i / CLASSES.length) * Math.PI * 2;
+    world.props.push({ type: 'shrine', cls: c.id, x: Math.round(36.5 * T + Math.cos(a) * 4.2 * T), y: Math.round(18 * T + Math.sin(a) * 3.6 * T + 16), solidR: 10 });
   });
+  world.props.push({ type: 'sign', x: 31 * T, y: 13 * T, text: 'Class Hall' });
+  // wardrobe tent
+  world.props.push({ type: 'tent', x: 12 * T, y: 28.4 * T, solidR: 0 });
+  world.props.push({ type: 'wardrobe', x: 12 * T, y: 29.3 * T, solidR: 15 });
+  // signpost (change character / log out) and the stats board
+  world.props.push({ type: 'signpost', x: (cx - 2.5) * T, y: 28.5 * T, solidR: 8 });
+  world.props.push({ type: 'board', x: (cx + 2.5) * T, y: 28.5 * T, solidR: 12 });
+  // an owl watching from the trees by the archway
+  world.props.push({ type: 'owl', x: (cx + 2.6) * T, y: 9 * T });
   world.readyZone = { x: (cx - 2) * T, y: 1 * T, w: 4 * T, h: 3 * T };
   world.spawn = { x: fx, y: fy + 3 * T };
   decorate(world, new RNG(7));

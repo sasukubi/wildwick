@@ -52,7 +52,7 @@ export const CLASSES = [
 export const WARRIOR = {
   speed: 120,
   maxFlame: 100,
-  atkCd: 0.5, atkRange: 58, atkArc: 2.0, atkDmg: 15, heavyMult: 1.7,
+  atkCd: 0.5, atkRange: 58, atkArc: 2.0, atkDmg: 15, heavyMult: 1.7, heavyRecover: 0.35, // extra wait after the heavy 3rd hit
   dashSpeed: 420, dashTime: 0.2, dashCd: 1.3, dashSafe: 0.12, // only the first part of a dash dodges
   // Cinder Quake: burn some of your own flame to slam the ground
   quakeCd: 9, quakeCost: 10, quakeRadius: 108, quakeDmg: 30,
@@ -102,7 +102,7 @@ export const BOWMAN = {
   minRange: 220, maxRange: 380,
   minRecover: 0.22, maxRecover: 0.9,     // wait after a weak / full shot
   pierceAt: 0.95,                         // draw needed to pierce
-  markCd: 10, markTime: 8, markBonus: 0.25, markRange: 320,
+  markCd: 6, markTime: 6, markBonus: 0.2, markRange: 320,
   rainCd: 12, rainR: 70, rainTime: 2, rainArrows: 10, rainDmg: 13, rainRange: 240,
   hawkTime: 6, hawkRecover: 0.32,         // Hawk Eye (Wildfire ultimate)
 };
@@ -110,8 +110,8 @@ export const BOWMAN = {
 // ---- Rogue --------------------------------------------------
 export const ROGUE = {
   speed: 128, maxFlame: 90,
-  stabCd: 0.72, stabRange: 40, stabArc: 1.3, stabDmg: 21,  // slow, heavy stabs
-  spinEvery: 4, spinR: 50, spinDmg: 17,                     // every 4th stab spins
+  stabCd: 0.33, stabRange: 40, stabArc: 1.3, stabDmg: 9,   // fast, light stabs (about 3 a second)
+  spinEvery: 4, spinR: 50, spinDmg: 10,                     // every 4th stab spins
   backstab: 1.0,                                            // +100% from the back half
   decoyTime: 2.5,
   stepCd: 7, stepRange: 220,                                // Shadowstep
@@ -213,8 +213,8 @@ export const TREES = {
       { id: 'deadeye', name: 'Deadeye', max: 1, cap: true, desc: 'Fully drawn shots deal +50% damage.' },
     ] },
     { id: 'hunter', name: 'Hunter', color: '#ff8a7a', blurb: 'Mark prey for the whole party.', nodes: [
-      { id: 'prey', name: 'Hunter\'s Mark', max: 3, desc: 'Marked enemies take +8% more damage.' },
-      { id: 'linger', name: 'Lingering Mark', max: 2, desc: 'Mark lasts 3 seconds longer.' },
+      { id: 'prey', name: 'Hunter\'s Mark', max: 3, desc: 'Marked enemies take +6% more damage.' },
+      { id: 'linger', name: 'Lingering Mark', max: 2, desc: 'Mark lasts 2 seconds longer.' },
       { id: 'tracker', name: 'Tracker', max: 2, desc: 'Mark recharges 20% faster.' },
       { id: 'predator', name: 'Predator', max: 1, cap: true, desc: 'Hitting your marked enemy restores 2 flame.' },
     ] },
@@ -329,8 +329,8 @@ export function classStats(cls, tree = {}, boons = []) {
       arrowMult: 1 + 0.15 * r('broadhead'),
       recoverMult: Math.pow(0.85, r('nock')),
       deadeye: r('deadeye') > 0,
-      markBonus: B.markBonus + 0.08 * r('prey'),
-      markTime: B.markTime + 3 * r('linger'),
+      markBonus: B.markBonus + 0.06 * r('prey'),
+      markTime: B.markTime + 2 * r('linger'),
       markCd: B.markCd * Math.pow(0.8, r('tracker')) * focus,
       predator: r('predator') > 0,
       rainArrows: Math.round(B.rainArrows * (1 + 0.25 * r('downpour'))),

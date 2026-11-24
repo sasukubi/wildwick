@@ -5,7 +5,8 @@
 import { CLOAKS, HATS, FLAMES, BOONS, TREES, CLASSES, CAP_REQUIREMENT, byId, canBuy, branchSpent } from './data.js';
 import { drawPreview } from './render.js';
 import { audio } from './audio.js';
-import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName } from './prefs.js';
+import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName, getRoomPref } from './prefs.js';
+import { KITS } from './hud.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -112,12 +113,22 @@ export const settings = {
       row.append(label, b);
       list.appendChild(row);
     }
-    c.appendChild(list);
+    const kbHead = document.createElement('h3'); kbHead.textContent = 'Keyboard & mouse';
+    c.append(kbHead, list);
     c.append(button('Reset keys to default', () => { prefs.keys = { ...DEFAULT_KEYS }; savePrefs(); this.fill(); }));
-    const note = document.createElement('p');
-    note.className = 'note';
-    note.textContent = 'Controller: left stick move · right stick aim · RT strike · LT block/Gale · X Quake/Fire · LB Frost · RB ultimate · A dash · Y interact · View skill tree · Start settings.';
-    c.appendChild(note);
+    // controller buttons get their own section
+    const padHead = document.createElement('h3'); padHead.textContent = 'Controller';
+    const pad = document.createElement('div');
+    pad.className = 'binds';
+    for (const [btn, what] of [['Left stick', 'Move'], ['Right stick', 'Aim'], ['RT', 'Attack'], ['LT', 'Skill 2 (Guard / Gale / Rain / Shadowstep)'], ['X', 'Skill 1 (Quake / Fire / Mark / Smoke)'], ['LB', 'Skill 3 (Frost)'], ['RB', 'Wildfire ultimate'], ['A', 'Dash'], ['Y', 'Interact'], ['View', 'Skill tree'], ['Start', 'Pause'], ['B', 'Back / close']]) {
+      const r = document.createElement('div');
+      r.className = 'bind';
+      const l = document.createElement('span'); l.textContent = what;
+      const k = document.createElement('kbd'); k.textContent = btn;
+      r.append(l, k);
+      pad.appendChild(r);
+    }
+    c.append(padHead, pad);
   },
   close() {
     if (!this.open) return;
@@ -359,46 +370,42 @@ export class BoonPanel {
 }
 
 // ---------------------------------------------------------- controls screen (H) and class tips
-export const CLASS_GUIDE = {
-  warrior: {
-    trick: 'Dark Fury: the lower your flame, the harder you hit. Block hits with Smoulder Guard, then let go to swing back.',
-    moves: [['strike', 'Sword combo (every 3rd swing is heavy)'], ['skill2', 'Smoulder Guard: hold to block, let go to counter'], ['skill1', 'Cinder Quake: burn some flame to slam the ground'], ['dash', 'Dash'], ['ult', 'Pyre Cleave: giant flaming sweep (Wildfire)']],
-  },
-  sorcerer: {
-    trick: 'Weaving: cast two different spells quickly and they fuse. Fire + Frost = Steam Burst, Fire + Gale = Firestorm, Frost + Gale = Blizzard. Fusing costs extra mana.',
-    moves: [['strike', 'Staff: weak swing that pushes enemies back'], ['skill1', 'Fire: exploding fireball'], ['skill3', 'Frost: slowing shards'], ['skill2', 'Gale: blast of wind'], ['dash', 'Dash'], ['ult', 'Starfall: meteors hunt the monsters where you aim (Wildfire)']],
-  },
-  bowman: {
-    trick: 'Hold to draw your bow. A quick tap is a weak arrow; a full draw hits hard and pierces a whole line, but you wait longer before the next shot. You walk slower while drawing.',
-    moves: [['strike', 'Hold to draw, let go to shoot'], ['skill1', 'Mark: the party deals extra damage to the enemy you aim at'], ['skill2', 'Rain of Arrows: arrows fall where you aim'], ['dash', 'Dash'], ['ult', 'Hawk Eye: every shot is full strength and seeks enemies (Wildfire)']],
-  },
-  rogue: {
-    trick: 'Backstab: hits from behind deal double damage. A red dagger appears over enemies when you are in position. Dashing leaves a decoy that enemies chase.',
-    moves: [['strike', 'Heavy stabs (every 4th is a spin)'], ['skill1', 'Shadowstep: teleport behind the enemy you aim at'], ['skill2', 'Smoke Bomb: enemies inside crawl and can\'t see anyone'], ['dash', 'Dash (leaves a decoy)'], ['ult', 'Thousand Cuts: slash up to 6 nearby enemies (Wildfire)']],
-  },
+// Only your class's skills are listed, with the same icons as your skill buttons.
+const SKILL_TEXT = {
+  warrior: { atk: 'Sword combo. Every 3rd swing is heavy (and slower to recover).', guard: 'Hold to block hits from the front, let go to counter-slash.', quake: 'Burn some flame to slam the ground around you.', dash: 'Dash. The start of a dash dodges attacks.', ult: 'Pyre Cleave: a giant flaming sweep that leaves fire behind (needs full Wildfire).' },
+  sorcerer: { atk: 'Staff swing: weak, but pushes enemies away.', gale: 'Gale: a blast of wind that knocks enemies back.', fire: 'Fire: an exploding fireball.', frost: 'Frost: slowing ice shards.', dash: 'Dash.', ult: 'Starfall: meteors hunt the monsters where you aim (needs full Wildfire).' },
+  bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Rain of Arrows where you aim.', dash: 'Dash.', ult: 'Hawk Eye: every shot is full strength and seeks enemies (needs full Wildfire).' },
+  rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Dash. Leaves a decoy that enemies chase.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
 };
-const COMMON = [['interact', 'Interact'], ['tree', 'Skill tree'], ['controls', 'Show / hide this screen']];
+export const CLASS_TRICK = {
+  warrior: 'Dark Fury: the lower your flame, the harder you hit.',
+  sorcerer: 'Weaving: cast two different spells quickly and they fuse. Fire + Frost = Steam Burst, Fire + Gale = Firestorm, Frost + Gale = Blizzard. Fusing costs extra mana.',
+  bowman: 'Draw longer for stronger shots. You walk slower while drawing.',
+  rogue: 'Backstab: hits from behind deal double damage. A red dagger shows over enemies you are behind.',
+};
+const PAD = { strike: 'RT', skill2: 'LT', skill1: 'X', skill3: 'LB', ult: 'RB', dash: 'A', interact: 'Y', tree: 'View', controls: '—', pause: 'Start' };
 
 function fillGuide(box, game, cls) {
-  const g = CLASS_GUIDE[cls] || CLASS_GUIDE.warrior;
-  box.querySelector('.guide-title').textContent = byId(CLASSES_LIST(), cls).name;
-  box.querySelector('.guide-trick').textContent = g.trick;
+  const kit = KITS[cls] || KITS.warrior;
+  const text = SKILL_TEXT[cls] || SKILL_TEXT.warrior;
+  box.querySelector('.guide-title').textContent = byId(CLASSES, cls).name;
+  box.querySelector('.guide-trick').textContent = CLASS_TRICK[cls] || '';
   const list = box.querySelector('.guide-moves');
   list.innerHTML = '';
-  for (const [key, text] of [...g.moves, ...COMMON]) {
+  const kb = (key) => (key === 'strike' ? (prefs.keys.strike ? `LMB / ${keyName(prefs.keys.strike)}` : 'LMB') : key === 'skill2' ? (prefs.keys.skill2 ? `RMB / ${keyName(prefs.keys.skill2)}` : 'RMB') : keyName(prefs.keys[key]));
+  const rows = [...kit.map((k) => ({ icon: k.icon, key: k.key, text: text[k.id] || k.name })),
+    { icon: '✋', key: 'interact', text: 'Interact' }, { icon: '🌳', key: 'tree', text: 'Skill tree' }, { icon: '❔', key: 'controls', text: 'Show / hide this screen' }];
+  for (const r of rows) {
     const row = document.createElement('div');
     row.className = 'move';
-    const k = document.createElement('kbd');
-    k.textContent = game ? game.keyLabel(key) : keyName(prefs.keys[key]);
-    const s = document.createElement('span');
-    s.textContent = text;
-    row.append(k, s);
+    row.innerHTML = '<span class="mico"></span><span class="keys"><kbd class="k1"></kbd><kbd class="k2 pad"></kbd></span><span class="mtext"></span>';
+    row.querySelector('.mico').textContent = r.icon;
+    row.querySelector('.k1').textContent = kb(r.key);
+    row.querySelector('.k2').textContent = PAD[r.key] || '—';
+    row.querySelector('.mtext').textContent = r.text;
     list.appendChild(row);
   }
 }
-let classesRef = CLASSES;
-function CLASSES_LIST() { return classesRef; }
-export function setClassList(list) { classesRef = list; }
 
 export class ControlsPanel {
   constructor(game) {
@@ -422,3 +429,162 @@ export function showClassTips(cls, game = null) {
   audio.play('open');
   box.querySelector('[data-close]').onclick = () => { box.classList.add('hidden'); audio.play('close'); };
 }
+
+// ---------------------------------------------------------- simple panel helper
+function makePanel(sel) {
+  return {
+    open: false,
+    game: null,
+    el: null,
+    toggle(game) { if (this.open) this.close(); else this.show(game); },
+    show(game) {
+      this.el = this.el || $(sel);
+      this.game = game;
+      this.open = true;
+      this.fill(game);
+      this.el.classList.remove('hidden');
+      audio.play('open');
+    },
+    close() { if (!this.open) return; this.open = false; (this.el || $(sel)).classList.add('hidden'); audio.play('close'); },
+    fill() {},
+  };
+}
+
+// ---------------------------------------------------------- pause screen (Esc)
+export const pause = makePanel('#pause');
+pause.lastKey = '';
+pause.show = function (game) {
+  this.el = this.el || $('#pause');
+  this.game = game || this.game;
+  this.open = true;
+  this.lastKey = '';
+  this.el.classList.remove('hidden');
+  audio.play('open');
+};
+pause.toggle = function (game) { if (this.open) this.close(); else this.show(game); };
+pause.refresh = function (snap, me) {
+  if (!this.open || !snap) return;
+  const g = this.game;
+  const code = g.room ? g.room.code : null;
+  const key = JSON.stringify([code, snap.ps.map((p) => p.id + p.u + p.k), snap.sc, snap.st, snap.cv, g.isHost, !!g.waitSim]);
+  if (key === this.lastKey) return;
+  this.lastKey = key;
+  $('#pause-solo').classList.toggle('hidden', !g.isSolo());
+  $('#pause-room').classList.toggle('hidden', !code);
+  $('#pause-code').textContent = code || '';
+  // party
+  const list = $('#pause-party');
+  list.innerHTML = '';
+  for (const p of snap.ps) {
+    const row = document.createElement('div');
+    row.className = 'prow';
+    row.innerHTML = '<i class="dot"></i><b></b><span class="muted"></span>';
+    row.querySelector('.dot').style.background = byId(CLOAKS, p.c).hex;
+    row.querySelector('b').textContent = p.u + (p.id === g.myId ? ' (you)' : '') + (p.id === 'host' ? ' · host' : '');
+    row.querySelector('span').textContent = `${p.n} · ${byId(CLASSES, p.k).name}`;
+    if (g.isHost && g.room && p.id !== 'host') {
+      const k = document.createElement('button');
+      k.className = 'gbtn small';
+      k.textContent = 'Kick';
+      k.onclick = async () => { if (await confirmDialog(`Remove ${p.u} from your camp?`, 'Kick')) g.kick(p.id); };
+      row.appendChild(k);
+    }
+    list.appendChild(row);
+  }
+  // vote to return to camp (only while out on a run)
+  const vote = $('#pause-vote');
+  vote.innerHTML = '';
+  if (snap.sc !== 'lobby' && snap.st === 'playing' && !g.waitSim) {
+    if (!snap.cv) {
+      const b = document.createElement('button');
+      b.className = 'gbtn';
+      b.textContent = snap.ps.length > 1 ? 'Vote to return to camp' : 'Return to camp';
+      b.onclick = () => g.voteCamp(true);
+      vote.appendChild(b);
+    } else {
+      const p = document.createElement('p');
+      p.className = 'note';
+      p.textContent = `Return to camp? ${snap.cv.n}/${snap.cv.of} agreed · ${snap.cv.t}s left`;
+      vote.appendChild(p);
+      if (!snap.cv.ids.includes(g.myId)) {
+        const y = document.createElement('button'); y.className = 'gbtn primary small'; y.textContent = 'Yes, go back'; y.onclick = () => g.voteCamp(true);
+        const n = document.createElement('button'); n.className = 'gbtn small'; n.textContent = 'No, keep going'; n.onclick = () => g.voteCamp(false);
+        vote.append(y, n);
+      }
+    }
+  }
+  // leaving
+  const leave = $('#pause-leave');
+  if (!g.isHost) { leave.textContent = 'Leave to my camp'; leave.classList.remove('hidden'); leave.onclick = () => { pause.close(); g.leave(''); }; }
+  else if (g.room) { leave.textContent = 'Close my camp to friends'; leave.classList.remove('hidden'); leave.onclick = async () => { if (await confirmDialog('Close your camp? Friends will be sent back to their own camps.', 'Close camp')) { g.closeRoom(); pause.lastKey = ''; } }; }
+  else leave.classList.add('hidden');
+};
+// buttons that never change
+document.addEventListener('DOMContentLoaded', () => {});
+$('#pause-resume').onclick = () => pause.close();
+$('#pause-settings').onclick = () => settings.show(true);
+$('#pause-controls').onclick = () => { pause.close(); pause.game && pause.game.controls.show(pause.game.cls); };
+$('#pause-copy').onclick = async () => {
+  const code = $('#pause-code').textContent;
+  try { await navigator.clipboard.writeText(code); toast('Room code copied. Paste it in Discord!'); } catch { toast('The room code is ' + code); }
+};
+
+// ---------------------------------------------------------- the campfire: host or join
+export const campPanel = makePanel('#camp');
+campPanel.fill = function (game) {
+  const host = game.isHost && !game.waitSim;
+  $('#camp-solo').classList.toggle('hidden', !(host && !game.room));
+  $('#camp-open').classList.toggle('hidden', !(host && game.room));
+  $('#camp-guest').classList.toggle('hidden', host);
+  $('#camp-error').textContent = '';
+  if (host && game.room) $('#camp-code').textContent = game.room.code;
+  if (!host) $('#camp-guest-text').textContent = game.waitSim ? 'The party is out in the forest. You\'re waiting at their camp until they return.' : 'You\'re at a friend\'s camp.';
+  const r = getRoomPref();
+  $('#camp-host-code').value = r.custom || r.last || '';
+  $('#camp-use-code').checked = r.use !== false && !!(r.custom || r.last);
+};
+$('#camp-host-code').addEventListener('input', () => { const el = $('#camp-host-code'); el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5); if (el.value) $('#camp-use-code').checked = true; });
+$('#camp-join-code').addEventListener('input', () => { const el = $('#camp-join-code'); el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5); });
+async function busyBtn(btn, fn) {
+  const label = btn.textContent; btn.disabled = true; btn.textContent = '…';
+  try { await fn(); } catch (err) { $('#camp-error').textContent = err.message; } finally { btn.disabled = false; btn.textContent = label; }
+}
+$('#camp-host').onclick = () => busyBtn($('#camp-host'), async () => {
+  const g = campPanel.game;
+  const code = $('#camp-host-code').value;
+  await g.hooks.host($('#camp-use-code').checked && code.length === 5 ? code : null, $('#camp-use-code').checked, code);
+  campPanel.fill(g);
+});
+$('#camp-join').onclick = () => busyBtn($('#camp-join'), async () => {
+  const code = $('#camp-join-code').value;
+  if (code.length !== 5) throw new Error('Room codes are 5 letters or numbers.');
+  await campPanel.game.hooks.join(code);
+});
+$('#camp-close').onclick = async () => { if (await confirmDialog('Close your camp? Friends will be sent back to their own camps.', 'Close camp')) { campPanel.game.closeRoom(); campPanel.fill(campPanel.game); } };
+$('#camp-copy').onclick = async () => { const c = $('#camp-code').textContent; try { await navigator.clipboard.writeText(c); toast('Room code copied. Paste it in Discord!'); } catch { toast('The room code is ' + c); } };
+$('#camp-leave').onclick = () => { const g = campPanel.game; campPanel.close(); g.leave(''); };
+$('#camp [data-close]').onclick = () => campPanel.close();
+
+// ---------------------------------------------------------- signpost: change character / log out
+export const signPanel = makePanel('#sign');
+$('#sign-chars').onclick = () => { const g = signPanel.game; signPanel.close(); g.hooks.toChars(); };
+$('#sign-logout').onclick = async () => { const g = signPanel.game; if (await confirmDialog('Log out of Wildwick?', 'Log out')) { signPanel.close(); g.hooks.logout(); } };
+$('#sign [data-close]').onclick = () => signPanel.close();
+
+// ---------------------------------------------------------- stats board
+export const boardPanel = makePanel('#board');
+boardPanel.fill = function (game) {
+  const st = game.char.stats || { runs: 0, kills: 0, bosses: 0, best: 0 };
+  const best = st.best >= 4 ? 'Defeated the Elder Treant' : st.best > 0 ? `Reached Thornwood ${['I', 'II', 'III'][st.best - 1]}` : 'No runs yet';
+  $('#board-name').textContent = `${game.char.name} the ${byId(CLASSES, game.char.cls).name}`;
+  $('#board-rows').innerHTML = '';
+  for (const [k, v] of [['Runs', st.runs], ['Monsters defeated', st.kills], ['Elder Treants felled', st.bosses], ['Best run', best]]) {
+    const row = document.createElement('div');
+    row.className = 'brow';
+    row.innerHTML = '<span></span><b></b>';
+    row.querySelector('span').textContent = k;
+    row.querySelector('b').textContent = v;
+    $('#board-rows').appendChild(row);
+  }
+};
+$('#board [data-close]').onclick = () => boardPanel.close();

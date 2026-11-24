@@ -346,11 +346,39 @@ export class Renderer {
   drawProp(ctx, p) {
     if (p.type === 'campfire') ctx.drawImage(propSprite('campfire'), p.x - 20, p.y - 16);
     else if (p.type === 'wardrobe') ctx.drawImage(propSprite('wardrobe'), p.x - 15, p.y - 44);
-    else if (p.type === 'shrine') ctx.drawImage(propSprite('shrine', byId(CLASSES, p.cls).available ? 1 : 0), p.x - 10, p.y - 32);
+    else if (p.type === 'shrine') {
+      // a banner in the class colour behind each shrine
+      const c = byId(CLASSES, p.cls);
+      ctx.fillStyle = '#3b2a1e'; ctx.fillRect(p.x + 9, p.y - 44, 2, 44);
+      ctx.fillStyle = c.available ? c.color : '#5a5e66';
+      ctx.beginPath(); ctx.moveTo(p.x + 11, p.y - 43); ctx.lineTo(p.x + 22, p.y - 41); ctx.lineTo(p.x + 19, p.y - 35); ctx.lineTo(p.x + 22, p.y - 29); ctx.lineTo(p.x + 11, p.y - 30); ctx.fill();
+      ctx.drawImage(propSprite('shrine', c.available ? 1 : 0), p.x - 10, p.y - 32);
+    }
+    else if (p.type === 'fence') ctx.drawImage(propSprite('fence'), p.x - 8, p.y - 18);
+    else if (p.type === 'tent') ctx.drawImage(propSprite('tent'), p.x - 38, p.y - 52);
+    else if (p.type === 'signpost') ctx.drawImage(propSprite('signpost'), p.x - 15, p.y - 42);
+    else if (p.type === 'board') ctx.drawImage(propSprite('board'), p.x - 20, p.y - 44);
+    else if (p.type === 'resetpost') ctx.drawImage(propSprite('resetpost'), p.x - 8, p.y - 28);
+    else if (p.type === 'log') ctx.drawImage(propSprite('log'), p.x - 20, p.y - 12);
+    else if (p.type === 'sign') ctx.drawImage(propSprite('signpost'), p.x - 15, p.y - 42);
+    else if (p.type === 'fox') ctx.drawImage(propSprite('fox', Math.floor(performance.now() / 900) % 2), p.x - 14, p.y - 14);
+    else if (p.type === 'owl') ctx.drawImage(propSprite('owl', performance.now() % 4000 < 160 ? 1 : 0), p.x - 12, p.y - 20);
   }
 
   drawEnemy(ctx, e, v, t) {
     const x = Math.round(v.x), y = Math.round(v.y);
+    if (e.t === 'dummy') {
+      const img = propSprite('dummy', e.kd === 'hitter' ? 1 : e.kd === 'facer' ? 2 : 0);
+      const wob = e.hu ? Math.round(Math.sin(t * 60) * 2) : 0;
+      ctx.save();
+      ctx.translate(x, y);
+      if (e.fx < 0) ctx.scale(-1, 1);
+      if (e.kd === 'hitter' && e.s === 2) ctx.rotate(-0.08); // winding up
+      ctx.drawImage(img, -15 + wob, -38);
+      if (e.hu) { ctx.globalAlpha = 0.7; ctx.drawImage(whiteOf(img), -15 + wob, -38); }
+      ctx.restore();
+      return;
+    }
     if (e.t === 'treant') {
       const img = treantSprite(e.s === 5 ? 1 : 0);
       const sway = Math.round(Math.sin(t * 1.5) * 1.5);
@@ -381,6 +409,7 @@ export class Renderer {
   }
 
   eyePos(e, v) {
+    if (e.t === 'dummy') return [];
     if (e.t === 'treant') return TREANT_EYES.map(([ex, ey]) => [v.x - 56 + ex, v.y - 116 + ey]);
     const variant = e.t === 'alpha' ? 'alpha' : e.el ? 'elite' : 'wolf';
     const frame = e.s === 2 ? 3 : e.s === 3 ? 4 : 0;
@@ -549,6 +578,10 @@ export class Renderer {
     world.shrines.forEach((s, i) => { if (!snap.sh[i]) L.push({ x: s.x, y: s.y - 16, r: 110, col: [255, 170, 90], i: 0.85 }); });
     if (world.readyZone && this.archLights) for (const a of this.archLights) L.push({ x: a.x, y: a.y, r: a.lit ? 90 : 26, col: [255, 200, 120], i: a.lit ? 0.9 : 0.4 });
     for (const p of snap.ps) if (p.hk > 0) { const v = game.playerView(p); L.push({ x: v.x, y: v.y - 16, r: 140, col: [255, 220, 140], i: 0.7 }); }
+    // camp lanterns: each area of the camp has its own warm light
+    for (const p of world.props) {
+      if (p.type === 'tent' || p.type === 'board' || p.type === 'sign' || p.type === 'resetpost') L.push({ x: p.x, y: p.y - 20, r: p.type === 'sign' ? 120 : 110, col: [255, 190, 110], i: 0.75 });
+    }
     for (const p of world.props) {
       if (p.type !== 'shrine') continue;
       const c = byId(CLASSES, p.cls);
@@ -747,7 +780,14 @@ export class Renderer {
     for (const e of snap.es) {
       const v = game.views.get('e' + e.id);
       if (!v || !vis(v.x, v.y, 150)) continue;
-      if (e.s === 2 && e.t !== 'treant') {
+      if (e.t === 'dummy' && e.s === 2) {
+        // the practice dummy's club swing: a ragged arc in front of it
+        ctx.fillStyle = warn(0.3);
+        ctx.beginPath(); ctx.moveTo(v.x, v.y - 6);
+        for (let i = 0; i <= 10; i++) { const a = e.fa - 1.1 + (2.2 * i) / 10, rr = 58 * (0.85 + 0.2 * jag(i, e.id)); ctx.lineTo(v.x + Math.cos(a) * rr, v.y - 6 + Math.sin(a) * rr); }
+        ctx.closePath(); ctx.fill();
+      }
+      if (e.s === 2 && e.t !== 'treant' && e.t !== 'dummy') {
         // three ragged claw-streaks showing where it's about to pounce
         const range = e.t === 'alpha' ? 140 : WOLF.lungeRange;
         ctx.save();
@@ -767,15 +807,26 @@ export class Renderer {
         }
         ctx.restore();
       }
-      // Bowman's mark: a pulsing gold target the whole party can see
+      // Bowman's mark: a beam of light from the sky, a spinning target and a bobbing arrow, easy for everyone to spot
       if (e.mk) {
         const r = e.t === 'treant' ? 40 : e.t === 'alpha' ? 22 : 15, py = v.y - (e.t === 'treant' ? 50 : 10);
-        ctx.strokeStyle = `rgba(255,210,100,${0.7 + Math.sin(t * 8) * 0.25})`; ctx.lineWidth = 1.5;
+        const top = v.y - (e.t === 'treant' ? 140 : e.t === 'alpha' ? 70 : 52);
+        ctx.globalCompositeOperation = 'lighter';
+        const beam = ctx.createLinearGradient(0, top - 90, 0, v.y);
+        beam.addColorStop(0, 'rgba(255,210,100,0)'); beam.addColorStop(1, `rgba(255,210,100,${0.28 + Math.sin(t * 6) * 0.08})`);
+        ctx.fillStyle = beam; ctx.fillRect(v.x - 7, top - 90, 14, v.y - top + 90);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = `rgba(255,215,110,${0.85 + Math.sin(t * 8) * 0.15})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(v.x, v.y, r + 4, (r + 4) * 0.55, 0, 0, TAU); ctx.stroke();
+        ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(v.x, py, r, 0, TAU); ctx.stroke();
-        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + t; ctx.beginPath(); ctx.moveTo(v.x + Math.cos(a) * (r - 4), py + Math.sin(a) * (r - 4)); ctx.lineTo(v.x + Math.cos(a) * (r + 4), py + Math.sin(a) * (r + 4)); ctx.stroke(); }
+        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + t * 2; ctx.beginPath(); ctx.moveTo(v.x + Math.cos(a) * (r - 4), py + Math.sin(a) * (r - 4)); ctx.lineTo(v.x + Math.cos(a) * (r + 5), py + Math.sin(a) * (r + 5)); ctx.stroke(); }
+        const ay = top + Math.sin(t * 5) * 3;
+        ctx.fillStyle = '#ffd36a'; ctx.strokeStyle = '#3b2a1e'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(v.x, ay + 7); ctx.lineTo(v.x - 6, ay); ctx.lineTo(v.x - 2, ay); ctx.lineTo(v.x - 2, ay - 6); ctx.lineTo(v.x + 2, ay - 6); ctx.lineTo(v.x + 2, ay); ctx.lineTo(v.x + 6, ay); ctx.closePath(); ctx.fill(); ctx.stroke();
       }
       // Rogue only: a dagger over enemies you're behind (your stab will be a backstab)
-      if (me.k === 'rogue' && !me.dn && Math.hypot(v.x - game.lp.x, v.y - game.lp.y) < 90) {
+      if (me.k === 'rogue' && !me.dn && Math.hypot(v.x - game.lp.x, v.y - game.lp.y) < 150) {
         let d = Math.atan2(game.lp.y - v.y, game.lp.x - v.x) - e.fa;
         while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
         if (Math.abs(d) > Math.PI / 2) {
@@ -963,9 +1014,23 @@ export class Renderer {
       const [x, y] = toS(s.x, s.y - 40);
       text(ctx, `[${game.keyLabel('interact')}] Light the Heartwood (+Wildfire)`, x, y, { size: 12, color: '#ffd59a' });
     });
+    // practice dummies: damage-per-second readout
+    for (const e of snap.es) {
+      if (e.t !== 'dummy') continue;
+      const v = game.views.get('e' + e.id);
+      if (!v || !vis(v.x, v.y)) continue;
+      const [x, y] = toS(v.x, v.y - 46);
+      text(ctx, `${e.dps || 0} dmg/sec`, x, y, { size: 12, color: e.dps ? '#ffe6b0' : '#9aa3ad' });
+      if (e.kd !== 'plain') { const [x2, y2] = toS(v.x, v.y + 10); text(ctx, e.kd === 'hitter' ? 'swings back' : 'always faces you', x2, y2, { size: 10, weight: 600, color: '#c9d6cd' }); }
+    }
+    for (const p of world.props) {
+      if (p.type !== 'sign' || !vis(p.x, p.y)) continue;
+      const [x, y] = toS(p.x, p.y - 48);
+      text(ctx, p.text, x, y, { size: 13, font: TITLE, color: '#ffe2b0' });
+    }
     for (const e of snap.es) {
       const v = game.views.get('e' + e.id);
-      if (!v || e.t === 'treant' || e.hp >= e.mx || !vis(v.x, v.y)) continue;
+      if (!v || e.t === 'treant' || e.t === 'dummy' || e.hp >= e.mx || !vis(v.x, v.y)) continue;
       const S = e.t === 'alpha' ? 1.5 : 1;
       const [x, y] = toS(v.x, v.y - 30 * S);
       const w = 30 * S * Z / 2;

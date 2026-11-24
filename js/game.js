@@ -9,7 +9,7 @@ import { World } from './world.js';
 import { Sim } from './sim.js';
 import { Input } from './input.js';
 import { Renderer } from './render.js';
-import { toast, Wardrobe, TreePanel, BoonPanel, ControlsPanel, settings, showClassTips } from './ui.js';
+import { toast, Wardrobe, TreePanel, BoonPanel, ControlsPanel, settings, pause, showClassTips, campPanel, signPanel, boardPanel } from './ui.js';
 import { buildHud, updateHud } from './hud.js';
 import { audio } from './audio.js';
 import { prefs, keyName } from './prefs.js';
@@ -34,7 +34,9 @@ function publicChar(c) {
 }
 
 export class Game {
-  constructor({ canvas, room, isHost, character, user, backend, onLeave }) {
+  // room is null for your own solo camp (until you open it to friends)
+  constructor({ canvas, room, isHost, character, user, backend, onLeave, hooks = {} }) {
+    this.hooks = hooks;
     this.canvas = canvas;
     this.room = room;
     this.isHost = isHost;
@@ -72,19 +74,18 @@ export class Game {
     this.stats = classStats(character.cls || 'warrior');
     this.cls = character.cls || 'warrior';
     settings.onLeave = () => this.leave();
-    settings.roomCode = room.code;
+    settings.roomCode = room ? room.code : null;
+    pause.game = this;
     buildHud(this.cls);
     document.getElementById('hud').classList.remove('hidden');
 
     if (isHost) {
-      this.sim = new Sim({ onScene: () => this.onHostScene() });
+      this.sim = new Sim({ onScene: () => this.onHostScene(), onJoinedFromWait: (p) => this.welcome(p) });
       this.sim.addPlayer('host', character, user);
       this.sim.goLobby();
-      room.handlers.data = (from, msg) => this.onHostData(from, msg);
-      room.handlers.leave = (id) => this.onPlayerLeft(id);
       this.lastTick = performance.now();
       this.simTimer = makeTicker(16, () => this.hostTick());
-      this.netTimer = makeTicker(50, () => this.hostBroadcast());
+      if (room) this.attachRoom(room);
     } else {
       room.handlers.data = (msg) => this.onClientData(msg);
       room.handlers.close = () => this.leave('The host closed the room.');
@@ -99,17 +100,64 @@ export class Game {
   }
 
   // ======================================================= host side
+  // Open your camp to friends without reloading anything.
+  attachRoom(room) {
+    this.room = room;
+    room.handlers.data = (from, msg) => this.onHostData(from, msg);
+    room.handlers.leave = (id) => this.onPlayerLeft(id);
+    this.netTimer = makeTicker(50, () => this.hostBroadcast());
+    settings.roomCode = room.code;
+    document.getElementById('room-code').textContent = room.code;
+  }
+
+  // Stop hosting: friends are sent home, you keep playing solo.
+  closeRoom() {
+    if (!this.isHost || !this.room) return;
+    this.room.broadcast({ t: 'closed' });
+    const r = this.room;
+    setTimeout(() => { try { r.close(); } catch (e) { /* ignore */ } }, 300);
+    if (this.netTimer) this.netTimer.stop();
+    this.netTimer = null;
+    this.room = null;
+    settings.roomCode = null;
+    for (const id of [...this.sim.players.keys()]) if (id !== 'host') this.sim.removePlayer(id);
+    this.sim.waiting.clear();
+    toast('Your camp is closed to friends.');
+  }
+
+  kick(id) {
+    if (!this.isHost || !this.room || id === 'host') return;
+    this.room.sendTo(id, { t: 'kicked' });
+    setTimeout(() => this.room && this.room.kick(id), 200);
+    this.onPlayerLeft(id);
+  }
+
+  isSolo() {
+    if (this.waitSim) return true;
+    return this.isHost && this.sim.players.size === 1;
+  }
+
   hostTick() {
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastTick) / 1000);
     this.lastTick = now;
+    if (pause.open && this.isSolo()) return; // playing alone: the pause menu really pauses
     this.sim.update(dt);
+    if (!this.room) return;
     for (const p of [...this.sim.players.values()]) {
       if (p.id !== 'host' && now - p.lastSeen > 10000) { this.room.kick(p.id); this.onPlayerLeft(p.id); }
     }
   }
 
+  welcome(p) {
+    if (!this.room) return;
+    this.room.sendTo(p.id, { t: 'welcome', id: p.id });
+    this.sendScene(p.id);
+    toast(`${p.user} joined the party`);
+  }
+
   hostBroadcast() {
+    if (!this.room) return;
     const s = this.sim.snapshot();
     s.fx = this.sim.fxNet;
     this.sim.fxNet = [];
@@ -121,12 +169,12 @@ export class Game {
     const me = this.sim.players.get('host');
     this.lp.x = me.x;
     this.lp.y = me.y;
-    for (const p of this.sim.players.values()) if (p.id !== 'host') this.sendScene(p.id);
+    if (this.room) for (const p of this.sim.players.values()) if (p.id !== 'host') this.sendScene(p.id);
   }
 
   sendScene(id) {
     const p = this.sim.players.get(id);
-    if (!p) return;
+    if (!p || !this.room) return;
     this.room.sendTo(id, { t: 'scene', sv: this.sim.sv, ...this.sim.world.toMsg(), you: { x: p.x, y: p.y } });
   }
 
@@ -140,13 +188,20 @@ export class Game {
           setTimeout(() => this.room.kick(from), 300);
           return;
         }
+        if (this.sim.scene !== 'lobby') {
+          // the party is out in the forest: wait at camp until they're back
+          if (this.sim.waiting.size + this.sim.players.size >= MAX_PLAYERS) { this.room.sendTo(from, { t: 'full' }); setTimeout(() => this.room.kick(from), 300); return; }
+          this.sim.waiting.set(from, { ch: msg.char || {}, user: msg.user });
+          this.room.sendTo(from, { t: 'wait', id: from });
+          toast(`${msg.user || 'Someone'} is waiting at camp for you`);
+          return;
+        }
         const p = this.sim.addPlayer(from, msg.char || {}, msg.user);
         this.sim.placeNewPlayer(p);
-        this.room.sendTo(from, { t: 'welcome', id: from });
-        this.sendScene(from);
-        toast(`${p.user} joined the party`);
+        this.welcome(p);
         break;
       }
+      case 'campVote': this.sim.voteCamp(from, !!msg.yes); break;
       case 'in': this.sim.applyInput(from, msg); break;
       case 'cosm': {
         const ok = this.sim.setCosmetic(from, msg.field, msg.value);
@@ -160,6 +215,7 @@ export class Game {
   }
 
   onPlayerLeft(id) {
+    if (this.sim.waiting.has(id)) { this.sim.waiting.delete(id); return; }
     const p = this.sim.players.get(id);
     if (!p) return;
     this.sim.removePlayer(id);
@@ -171,7 +227,11 @@ export class Game {
     if (!msg || typeof msg !== 'object') return;
     switch (msg.t) {
       case 'welcome': this.myId = msg.id; break;
+      case 'wait': this.startWaiting(msg.id); break;
+      case 'closed': this.leave('Your friend closed their camp.'); break;
+      case 'kicked': this.leave('You were removed from the camp.'); break;
       case 'scene':
+        if (this.waitSim) { this.waitSim = null; toast('The party is back. Welcome to the camp!'); }
         this.setWorld(World.fromMsg(msg), msg.sv);
         this.lp.x = msg.you.x;
         this.lp.y = msg.you.y;
@@ -207,6 +267,7 @@ export class Game {
 
   requestCosmetic(field, value) {
     audio.play('click');
+    if (this.waitSim) { if (this.waitSim.setCosmetic(this.myId, field, value)) this.saveCosmetic(field, value); return; }
     if (this.isHost) {
       if (this.sim.setCosmetic('host', field, value)) this.saveCosmetic(field, value);
       else { toast(field === 'cloak' ? 'Someone in your party already wears that colour.' : 'Not available yet.'); audio.play('nope'); }
@@ -222,6 +283,23 @@ export class Game {
     audio.play('boon');
     if (this.isHost) this.sim.pickBoon('host', i);
     else this.room.send({ t: 'pick', i });
+  }
+
+  // While the party is out in the forest, a late joiner waits in a practice camp of their own.
+  startWaiting(id) {
+    this.myId = id;
+    this.waitSim = new Sim({ onScene: () => { this.setWorld(this.waitSim.world, -7); } });
+    this.waitSim.noRun = true;
+    this.waitSim.addPlayer(id, this.char, this.user);
+    this.waitSim.goLobby();
+    const me = this.waitSim.players.get(id);
+    this.lp.x = me.x; this.lp.y = me.y;
+    this.banner('The party is out in the forest', 4, 'You can wait here at camp. They\'ll be back soon.');
+  }
+
+  voteCamp(yes) {
+    if (this.isHost) this.sim.voteCamp('host', yes);
+    else this.room.send({ t: 'campVote', yes });
   }
 
   // between forests: 'go' to continue, 'camp' to head back
@@ -256,12 +334,15 @@ export class Game {
     this.input.destroy();
     this.wardrobe.close();
     this.tree.close();
+    this.controls.close();
     settings.close();
+    pause.close();
+    campPanel.close(); signPanel.close(); boardPanel.close();
     settings.roomCode = null;
     document.getElementById('boons').classList.add('hidden');
     document.getElementById('hud').classList.add('hidden');
     audio.setScene('menu');
-    try { this.room.close(); } catch (e) { /* ignore */ }
+    try { if (this.room) this.room.close(); } catch (e) { /* ignore */ }
     this.onLeave(msg);
   }
 
@@ -278,11 +359,18 @@ export class Game {
     this.input.poll();
 
     let snap;
-    if (this.isHost) {
+    if (this.waitSim) {
+      // waiting at camp for the party: run a little practice camp locally
+      if (!(pause.open)) this.waitSim.update(realDt);
+      snap = this.waitSim.snapshot();
+      for (const f of this.waitSim.fxLocal) this.handleFx(f);
+      this.waitSim.fxLocal = [];
+    } else if (this.isHost) {
       snap = this.sim.snapshot();
       for (const f of this.sim.fxLocal) this.handleFx(f);
       this.sim.fxLocal = [];
     } else snap = this.snap;
+    this.lastSnap = snap;
 
     const me = snap && this.world && this.myId ? snap.ps.find((p) => p.id === this.myId) : null;
     if (!me) { this.renderer.drawLoading('Joining the campfire…', this.t); return; }
@@ -298,7 +386,8 @@ export class Game {
     audio.update(realDt);
 
     this.updateLocal(realDt, me, snap);
-    if (this.isHost) this.sendInput();
+    if (this.isHost || this.waitSim) this.sendInput();
+    pause.refresh(snap, me);
     this.updateViews(snap, realDt);
     this.updateParticles(dt, snap);
     this.updateCamera(realDt);
@@ -313,8 +402,8 @@ export class Game {
   }
 
   // Only the pause menu (Esc) stops you moving; skill tree, wardrobe and controls don't.
-  uiOpen() { return this.wardrobe.open || this.tree.open || settings.open; }
-  moveBlocked() { return settings.open; }
+  uiOpen() { return this.wardrobe.open || this.tree.open || settings.open || pause.open || campPanel.open || signPanel.open || boardPanel.open; }
+  moveBlocked() { return settings.open || pause.open; }
 
   // ---------------------------------------------------- your character
   updateLocal(dt, me, snap) {
@@ -322,17 +411,24 @@ export class Game {
     const pressed = (k) => c[k] > this.lastCounts[k];
     const blocked = this.uiOpen();
     const P = (k) => pressed(k) && !blocked;
-    const atkPressed = P('atk'), s1 = P('s1'), s2 = P('s2'), s3 = P('s3'), dashPressed = pressed('dash') && !settings.open, ultPressed = P('ult');
-    this.edges = { interact: pressed('interact') && !settings.open, esc: pressed('esc'), back: pressed('back'), tree: pressed('tree'), controls: pressed('controls') };
+    const atkPressed = P('atk'), s1 = P('s1'), s2 = P('s2'), s3 = P('s3'), dashPressed = pressed('dash') && !this.moveBlocked(), ultPressed = P('ult');
+    this.edges = { interact: pressed('interact') && !this.moveBlocked(), esc: pressed('esc'), back: pressed('back'), tree: pressed('tree'), controls: pressed('controls') };
     this.lastCounts = { ...c };
 
+    // Esc: close whatever is open, otherwise open the pause screen
+    const anyPanel = this.wardrobe.open || this.tree.open || this.controls.open || campPanel.open || signPanel.open || boardPanel.open;
     if (this.edges.esc) {
-      if (this.wardrobe.open || this.tree.open || this.controls.open) { this.wardrobe.close(); this.tree.close(); this.controls.close(); }
-      else settings.toggle(true);
+      if (settings.open) settings.close();
+      else if (anyPanel) { this.wardrobe.close(); this.tree.close(); this.controls.close(); campPanel.close(); signPanel.close(); boardPanel.close(); }
+      else pause.toggle();
     }
-    if (this.edges.back) { if (settings.open) settings.close(); else { this.wardrobe.close(); this.tree.close(); this.controls.close(); } }
-    if (this.edges.tree && !settings.open) this.tree.toggle();
-    if (this.edges.controls && !settings.open) this.controls.toggle(me.k);
+    if (this.edges.back) {
+      if (settings.open) settings.close();
+      else if (pause.open) pause.close();
+      else { this.wardrobe.close(); this.tree.close(); this.controls.close(); campPanel.close(); signPanel.close(); boardPanel.close(); }
+    }
+    if (this.edges.tree && !settings.open && !pause.open) this.tree.toggle();
+    if (this.edges.controls && !settings.open && !pause.open) this.controls.toggle(me.k);
 
     lp.dashCd -= dt; lp.atkCd -= dt; lp.comboT -= dt;
     const down = !!me.dn;
@@ -377,6 +473,7 @@ export class Game {
     if (lp.dashT > 0) {
       lp.dashT -= dt;
       vx = lp.ddx * WARRIOR.dashSpeed;
+      lp.vx = lp.ddx * S.speed; lp.vy = lp.ddy * S.speed; // carry some speed out of the dash
       vy = lp.ddy * WARRIOR.dashSpeed;
       this.particles.push({ x: lp.x + (Math.random() - 0.5) * 8, y: lp.y - 12 + (Math.random() - 0.5) * 12, vx: 0, vy: 0, life: 0.3, max: 0.3, size: 2, color: cls === 'rogue' ? '#b08cff' : byId(FLAMES, me.f).mid, glow: true, shrink: true });
     } else {
@@ -384,8 +481,13 @@ export class Game {
       if (guarding) sp *= WARRIOR.guardSlow;
       if (cls === 'bowman' && lp.drawing) sp *= S.drawSlow;
       if (cls === 'rogue' && (snap.zn || []).some((z) => z.k === 'smoke' && Math.hypot(lp.x - z.x, lp.y - z.y) < z.r)) sp *= ROGUE.smokeSpeed;
-      vx = mv.x * sp;
-      vy = mv.y * sp;
+      // a bit of momentum: you speed up, slow down and turn smoothly instead of instantly
+      const accel = mv.x || mv.y ? 9 : 11;
+      const k = 1 - Math.exp(-dt * accel);
+      lp.vx = (lp.vx || 0) + (mv.x * sp - (lp.vx || 0)) * k;
+      lp.vy = (lp.vy || 0) + (mv.y * sp - (lp.vy || 0)) * k;
+      vx = lp.vx;
+      vy = lp.vy;
     }
     let pos = this.world.collide(lp.x + vx * dt, lp.y + vy * dt, PLAYER_RADIUS);
     for (const e of snap.es) {
@@ -402,7 +504,9 @@ export class Game {
     if (s2) this.cnt.s2c++;
     if (s3) this.cnt.s3c++;
     if (ultPressed) this.cnt.uc++;
-    if (this.edges.interact && this.world.kind !== 'lobby') this.cnt.ic++;
+    if (this.edges.interact) this.cnt.ic++;
+    // Bowman: right-click while drawing cancels the shot
+    if (cls === 'bowman' && s2 && lp.drawing) { lp.drawing = false; lp.charge = 0; lp.atkCd = 0.15; audio.play('cancel'); }
     // show your own attack straight away (the host decides if it hit)
     if (cls !== 'bowman' && (atkPressed || held) && lp.atkCd <= 0 && !guarding) {
       lp.atkCd = S.atkCd;
@@ -410,6 +514,7 @@ export class Game {
         lp.combo = lp.comboT > 0 ? (lp.combo % 3) + 1 : 1;
         lp.comboT = 1.1;
         this.startSwing(this.myId, lp.aim, lp.combo === 3);
+        if (lp.combo === 3) lp.atkCd += WARRIOR.heavyRecover;
         audio.play(lp.combo === 3 ? 'heavy' : 'swing');
       } else if (cls === 'rogue') {
         lp.stabN = (lp.stabN % ROGUE.spinEvery) + 1;
@@ -437,6 +542,7 @@ export class Game {
       ah: this.input.attackHeld() && !blocked ? 1 : 0,
       g: this.input.guardHeld() && !blocked ? 1 : 0,
     };
+    if (this.waitSim) { this.waitSim.applyInput(this.myId, msg); this.room.send({ t: 'ping' }); return; }
     if (this.isHost) this.sim.applyInput('host', msg);
     else this.room.send(msg);
   }
@@ -536,7 +642,7 @@ export class Game {
   // a skill button flashes red when you can't use it (no mana, no target...)
   deny(slot) {
     audio.play('fizzle');
-    const map = { s1: ['sk-quake', 'sk-fire', 'sk-mark', 'sk-step'], s2: ['sk-gale', 'sk-rain', 'sk-smoke'], s3: ['sk-frost'], ult: ['sk-ult'] };
+    const map = { s1: ['sk-quake', 'sk-fire', 'sk-mark', 'sk-smoke'], s2: ['sk-gale', 'sk-rain', 'sk-step'], s3: ['sk-frost'], ult: ['sk-ult'] };
     for (const id of map[slot] || []) {
       const el = document.getElementById(id);
       if (el) { el.classList.remove('denied'); void el.offsetWidth; el.classList.add('denied'); }
@@ -575,7 +681,7 @@ export class Game {
         if (f.el === 'back') { f.big = 1; if (f.by === this.myId) audio.play('backstab', at); }
         this.burst(f.x, f.y, f.big ? 12 : 7, { color: col, speed: f.big ? 170 : 120, life: 0.35, glow: true });
         this.spark(f.x, f.y, f.el === 'frost' ? '190,235,255' : '255,240,200', f.big ? 16 : 11);
-        if (prefs.dmgNums) this.effects.push({ k: 'num', x: f.x, y: f.y - 8, dx: (f.kx || 0), text: f.el === 'back' ? 'Backstab ' + f.d : String(f.d), t0: this.t, life: 0.85, big: !!f.big, color: f.el === 'back' ? '#ff7a8a' : f.big ? '#ffb347' : '#ffffff' });
+        if (prefs.dmgNums) this.effects.push({ k: 'num', x: f.x, y: f.y - 8, dx: (f.kx || 0), text: String(f.d), t0: this.t, life: 0.85, big: !!f.big, color: f.el === 'back' ? '#ff7a8a' : f.big ? '#ffb347' : '#ffffff' });
         audio.play(f.big ? 'hitBig' : 'hit', at);
         if (f.by === this.myId) { this.hitstop = Math.max(this.hitstop, f.big ? 0.07 : 0.04); this.addShake(f.big ? 3 : 1.5); }
         break;
@@ -718,6 +824,21 @@ export class Game {
         if (mine) { this.banner('THOUSAND CUTS', 1.2); this.addShake(6); }
         break;
       }
+      case 'practiceHit':
+        this.burst(f.x, f.y - 14, 8, { color: '#ffb0a0', speed: 90, life: 0.3, glow: true });
+        if (mine) { this.addShake(3); this.hurtFlash = 0.2; audio.play('hurt'); this.banner('Hit!', 0.5, 'Block (or dodge) the dummy\'s swing'); }
+        break;
+      case 'thwack': audio.play('thwack', at); break;
+      case 'cancelDraw': if (!mine) audio.play('cancel', this.viewPos(f.id)); break;
+      case 'runEnd':
+        if (mine) {
+          // update this character's stats board
+          const st = this.char.stats || { runs: 0, kills: 0, bosses: 0, best: 0 };
+          st.runs++; st.kills += f.kills; if (f.won) st.bosses++; st.best = Math.max(st.best, f.won ? 4 : f.stage);
+          this.char.stats = st;
+          this.backend.saveChar(this.char).catch(() => {});
+        }
+        break;
       case 'vote':
         if (f.v === 'camp') toast(`${f.n} wants to return to camp`);
         break;
@@ -824,24 +945,46 @@ export class Game {
   updateInteract(me) {
     this.prompt = null;
     if (this.world.kind !== 'lobby') return;
-    let best = null, bd = 56;
+    const STATIONS = ['wardrobe', 'shrine', 'campfire', 'signpost', 'board', 'resetpost'];
+    let best = null, bd = 58;
     for (const p of this.world.props) {
-      if (p.type !== 'wardrobe' && p.type !== 'shrine') continue;
+      if (!STATIONS.includes(p.type)) continue;
       const d = Math.hypot(p.x - this.lp.x, p.y - this.lp.y);
       if (d < bd) { bd = d; best = p; }
     }
     if (!best) return;
     const key = this.keyLabel('interact');
-    if (best.type === 'wardrobe') {
-      this.prompt = { x: best.x, y: best.y - 56, text: `[${key}] Wardrobe`, sub: 'Change your cloak, hat and flame' };
-      if (this.edges.interact) this.wardrobe.toggle();
-    } else {
-      const c = byId(CLASSES, best.cls);
-      const text = !c.available ? `${c.name}: still dormant (coming soon)` : me.k === c.id ? `${c.name}: chosen` : `[${key}] Become a ${c.name}`;
-      this.prompt = { x: best.x, y: best.y - 66, text, sub: c.blurb };
-      if (this.edges.interact) {
-        if (!c.available) { toast(`The ${c.name} shrine is still dormant. Coming soon!`); audio.play('nope'); }
-        else if (me.k !== c.id) this.requestCosmetic('cls', c.id);
+    const go = this.edges.interact;
+    switch (best.type) {
+      case 'wardrobe':
+        this.prompt = { x: best.x, y: best.y - 56, text: `[${key}] Wardrobe`, sub: 'Change your cloak, hat and flame' };
+        if (go) this.wardrobe.toggle();
+        break;
+      case 'campfire': {
+        const sub = this.waitSim ? 'Waiting for the party to come back' : !this.isHost ? "You are in a friend's camp" : this.room ? `Your camp is open · code ${this.room.code}` : 'Host your camp or join a friend';
+        this.prompt = { x: best.x, y: best.y - 40, text: `[${key}] Campfire`, sub };
+        if (go) campPanel.toggle(this);
+        break;
+      }
+      case 'signpost':
+        this.prompt = { x: best.x, y: best.y - 46, text: `[${key}] Signpost`, sub: 'Change character or log out' };
+        if (go) signPanel.toggle(this);
+        break;
+      case 'board':
+        this.prompt = { x: best.x, y: best.y - 50, text: `[${key}] Stats board`, sub: `${this.char.name}'s journey so far` };
+        if (go) boardPanel.toggle(this);
+        break;
+      case 'resetpost':
+        this.prompt = { x: best.x, y: best.y - 40, text: `[${key}] Reset the dummies`, sub: 'Clears their damage-per-second' };
+        break;
+      default: {
+        const c = byId(CLASSES, best.cls);
+        const text = !c.available ? `${c.name}: still dormant (coming soon)` : me.k === c.id ? `${c.name}: chosen` : `[${key}] Become a ${c.name}`;
+        this.prompt = { x: best.x, y: best.y - 66, text, sub: c.blurb };
+        if (go) {
+          if (!c.available) { toast(`The ${c.name} shrine is still dormant. Coming soon!`); audio.play('nope'); }
+          else if (me.k !== c.id) this.requestCosmetic('cls', c.id);
+        }
       }
     }
   }

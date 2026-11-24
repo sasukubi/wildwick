@@ -36,6 +36,9 @@ export class Sim {
     this.shots = [];       // fireballs, frost shards
     this.strikes = [];     // Starfall meteors on their way down
     this.decoys = [];      // Rogue afterimages that enemies chase
+    this.waiting = new Map(); // players who joined mid-run, waiting at camp
+    this.campVote = null;     // vote to head back to camp mid-run
+    this.noRun = false;       // a waiting player's practice camp can't start runs
     this.flows = new Map();
     this.nextId = 1;
     this.sv = 0;
@@ -70,8 +73,13 @@ export class Sim {
     this.lvl = 1;
     this.world = makeLobby();
     this.clearStage();
+    this.campVote = null;
     this.sv++;
+    // anyone who joined while we were out in the forest has been waiting at camp
+    for (const [id, w] of this.waiting) { const p = this.addPlayer(id, w.ch, w.user); if (this.hooks.onJoinedFromWait) this.hooks.onJoinedFromWait(p); }
+    this.waiting.clear();
     for (const p of this.players.values()) this.resetRunStats(p);
+    for (const d of this.world.dummies) this.spawnDummy(d);
     this.placeAll(true);
     this.hooks.onScene();
   }
@@ -298,11 +306,22 @@ export class Sim {
       else this.warriorActions(p, dt);
       if (p.want.ult > 0) { this.ultimate(p); p.want.ult = 0; }
       if (p.want.int > 0 && this.scene === 'forest') { this.useShrine(p); p.want.int = 0; }
+      if (p.want.int > 0 && this.scene === 'lobby') {
+        p.want.int = 0;
+        const post = this.world.props.find((o) => o.type === 'resetpost');
+        if (post && Math.hypot(post.x - p.x, post.y - p.y) < 50) this.resetDummies();
+      }
     }
     this.updateRevives(dt);
 
-    if (this.scene === 'lobby') this.updateLobby(dt);
-    else if (this.state === 'playing') {
+    if (this.scene === 'lobby') {
+      this.updateLobby(dt);
+      this.updateDummies(dt);
+      this.updateShots(dt);
+      this.updateZones(dt);
+      this.updateStrikes(dt);
+    } else if (this.state === 'playing') {
+      this.updateCampVote(dt);
       this.stageTime += dt;
       this.runTime += dt;
       this.updateFlows();
@@ -322,6 +341,7 @@ export class Sim {
       if (ps.some((p) => p.vote === 'camp')) {
         const who = ps.find((p) => p.vote === 'camp');
         this.emit({ k: 'msg', text: `${who.user} chose to return to camp.` });
+        this.endRunStats(false);
         this.goLobby();
       } else if (ps.every((p) => p.picked && p.vote === 'go') || this.stateTimer <= 0) {
         for (const p of ps) if (!p.picked) this.pickBoon(p.id, 0);
@@ -338,7 +358,7 @@ export class Sim {
     const z = this.world.readyZone;
     const ps = [...this.players.values()];
     const allIn = ps.length > 0 && ps.every((p) => p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h);
-    if (allIn) {
+    if (allIn && !this.noRun) {
       if (this.countdown < 0) this.countdown = 3;
       this.countdown -= dt;
       if (this.countdown <= 0) { this.countdown = -1; this.startRun(); }
@@ -371,7 +391,6 @@ export class Sim {
 
   // Hit every enemy in a cone in front of the player that they can actually see.
   hitArc(p, range, arc, dmg, kb, aim = p.aim, opts = {}) {
-    if (this.scene === 'lobby') return 0;
     let hits = 0;
     const cx = p.x, cy = p.y - 8;
     for (const e of this.enemies) {
@@ -466,6 +485,7 @@ export class Sim {
     p.combo = p.comboT > 0 ? (p.combo % 3) + 1 : 1;
     p.comboT = 1.1;
     const heavy = p.combo === 3;
+    if (heavy) p.cd.atk += WARRIOR.heavyRecover;
     this.emit({ k: 'sw', id: p.id, a: r2(p.aim), h: heavy ? 1 : 0 });
     this.hitArc(p, WARRIOR.atkRange, WARRIOR.atkArc, WARRIOR.atkDmg * this.power(p) * (heavy ? S.heavyMult : 1), heavy ? 300 : 170);
   }
@@ -477,7 +497,7 @@ export class Sim {
     p.cd.s1 = S.quakeCd;
     if (inStage) p.hp -= S.quakeCost;
     this.emit({ k: 'slam', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(S.quakeRadius) });
-    if (inStage) this.hitCircle(p, p.x, p.y, S.quakeRadius, S.quakeDmg * this.power(p), 380, { stun: 0.6 });
+    this.hitCircle(p, p.x, p.y, S.quakeRadius, S.quakeDmg * this.power(p), 380, { stun: 0.6 });
   }
 
   updateGuard(p, dt) {
@@ -524,7 +544,6 @@ export class Sim {
     if (p.mana < cost) { this.emit({ k: 'nope', id: p.id, what: 'mana', slot }); return true; }
     p.mana -= cost;
     p.cd[slot] = S[el].cd * st.spellCd;
-    if (this.scene === 'lobby') { this.emit({ k: 'spell', id: p.id, el, a: r2(p.aim), x: Math.round(p.x), y: Math.round(p.y) }); return true; }
     if (fuse) {
       p.lastEl = null;
       p.cd.s1 = Math.max(p.cd.s1, 0.6); p.cd.s2 = Math.max(p.cd.s2, 0.6); p.cd.s3 = Math.max(p.cd.s3, 0.6);
@@ -571,6 +590,8 @@ export class Sim {
   bowmanActions(p, dt) {
     const B = BOWMAN, st = p.stats;
     if (p.want.s1 > 0 && p.cd.s1 <= 0) { p.want.s1 = 0; this.markTarget(p); }
+    // right-click while drawing cancels the shot instead of raining arrows
+    if (p.want.s2 > 0 && p.drawing) { p.want.s2 = 0; p.drawing = false; p.charge = 0; p.cd.atk = 0.15; this.emit({ k: 'cancelDraw', id: p.id }); }
     if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.rainOfArrows(p); }
     if (p.hawkT > 0) {
       // Hawk Eye: every shot is instantly full strength and seeks the nearest enemy
@@ -599,7 +620,6 @@ export class Sim {
     const speed = B.minSpeed + (B.maxSpeed - B.minSpeed) * c;
     const range = B.minRange + (B.maxRange - B.minRange) * c;
     this.emit({ k: 'shoot', id: p.id, c: r2(c), a: r2(p.aim) });
-    if (this.scene === 'lobby') return;
     this.shots.push({ id: this.nextId++, kind: 'arrow', owner: p.id, x: p.x + Math.cos(p.aim) * 10, y: p.y - 12 + Math.sin(p.aim) * 10,
       vx: Math.cos(p.aim) * speed, vy: Math.sin(p.aim) * speed, life: range / speed, dmg, pierce: full, hit: new Set(), homing, power: c });
   }
@@ -619,7 +639,6 @@ export class Sim {
     const c = this.aimPoint(p, BOWMAN.rainRange);
     p.cd.s2 = st.rainCd;
     this.emit({ k: 'rain', id: p.id, x: Math.round(c.x), y: Math.round(c.y), r: Math.round(st.rainR) });
-    if (this.scene === 'lobby') return;
     this.zones.push({ id: this.nextId++, kind: 'rain', owner: p.id, x: c.x, y: c.y, vx: 0, vy: 0, r: st.rainR, t: BOWMAN.rainTime, max: BOWMAN.rainTime,
       dps: 0, tick: 0, every: BOWMAN.rainTime / st.rainArrows, dmg: BOWMAN.rainDmg * this.power(p) * st.arrowMult });
   }
@@ -627,8 +646,9 @@ export class Sim {
   // ======================================================= Rogue
   rogueActions(p) {
     const G = ROGUE, st = p.stats;
-    if (p.want.s1 > 0 && p.cd.s1 <= 0) { p.want.s1 = 0; this.shadowstep(p); }
-    if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.smokeBomb(p); }
+    // E = Smoke Bomb, right-click = Shadowstep
+    if (p.want.s1 > 0 && p.cd.s1 <= 0) { p.want.s1 = 0; this.smokeBomb(p); }
+    if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.shadowstep(p); }
     if ((p.want.atk > 0 || p.ah) && p.cd.atk <= 0) {
       p.want.atk = 0;
       p.cd.atk = st.atkCd;
@@ -647,27 +667,26 @@ export class Sim {
 
   shadowstep(p) {
     const e = this.aimedEnemy(p, ROGUE.stepRange, 0.8);
-    if (!e) { p.cd.s1 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's1' }); return; }
+    if (!e) { p.cd.s2 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's2' }); return; }
     const back = (e.face || 0) + Math.PI;
     let spot = null;
     for (const off of [0, 0.6, -0.6, 1.2, -1.2]) {
       const x = e.x + Math.cos(back + off) * (e.r + 14), y = e.y + Math.sin(back + off) * (e.r + 14);
       if (!this.world.isSolid(Math.floor(x / TILE), Math.floor(y / TILE))) { spot = this.world.collide(x, y, PLAYER_RADIUS); break; }
     }
-    if (!spot) { p.cd.s1 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's1' }); return; }
+    if (!spot) { p.cd.s2 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's2' }); return; }
     const from = { x: Math.round(p.x), y: Math.round(p.y) };
     p.x = spot.x; p.y = spot.y;
     p.aim = Math.atan2(e.y - p.y, e.x - p.x);
     p.tpLock = 0.35;
     p.ambushT = 2;
-    p.cd.s1 = p.stats.stepCd;
+    p.cd.s2 = p.stats.stepCd;
     this.emit({ k: 'tp', id: p.id, x: Math.round(p.x), y: Math.round(p.y), fx: from.x, fy: from.y, a: r2(p.aim) });
   }
 
   smokeBomb(p) {
-    p.cd.s2 = p.stats.smokeCd;
+    p.cd.s1 = p.stats.smokeCd;
     this.emit({ k: 'smoke', id: p.id, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(p.stats.smokeR) });
-    if (this.scene === 'lobby') return;
     this.zones.push({ id: this.nextId++, kind: 'smoke', owner: p.id, x: p.x, y: p.y, vx: 0, vy: 0, r: p.stats.smokeR, t: p.stats.smokeTime, max: p.stats.smokeTime, dps: 0 });
   }
 
@@ -679,6 +698,94 @@ export class Sim {
     d.t = 0;
     this.emit({ k: 'decoyPop', x: Math.round(d.x), y: Math.round(d.y), boom: d.phantom ? 1 : 0 });
     if (d.phantom) this.hitCircle(this.players.get(d.owner) || null, d.x, d.y, 50, 25, 300);
+  }
+
+  // ======================================================= training dummies (camp only)
+  spawnDummy(d) {
+    const e = this.baseEnemy('dummy', d.x, d.y, 11, 1);
+    e.kind = d.kind;
+    e.log = [];
+    e.swingT = 2;
+    e.face = Math.PI / 2;
+    return e;
+  }
+
+  updateDummies(dt) {
+    for (const e of this.enemies) {
+      if (e.type !== 'dummy') continue;
+      e.hurtT -= dt; e.markT = (e.markT || 0) - dt; e.slowT -= dt; e.burnT -= dt; e.stun -= dt;
+      e.log = e.log.filter((l) => this.time - l[0] < 4);
+      e.vx = 0; e.vy = 0;
+      const near = this.nearestAlive(e.x, e.y, 120);
+      // the "facer" (and the hitter) turn to look at you, so you have to work to get behind them
+      if (near && (e.kind === 'facer' || e.kind === 'hitter')) {
+        const want = Math.atan2(near.y - e.y, near.x - e.x);
+        e.face += Math.max(-3 * dt, Math.min(3 * dt, angDiff(want, e.face)));
+      }
+      // the "hitter" slowly swings a club so you can practise blocking and dodging (no real damage)
+      if (e.kind === 'hitter') {
+        e.swingT -= dt;
+        if (e.state !== 'windup' && e.swingT <= 0 && near && Math.hypot(near.x - e.x, near.y - e.y) < 70) { e.state = 'windup'; e.t = 0.9; e.dx = Math.cos(e.face); e.dy = Math.sin(e.face); }
+        if (e.state === 'windup') {
+          e.t -= dt;
+          if (e.t <= 0) {
+            e.state = 'idle';
+            e.swingT = 2.2;
+            for (const p of this.alivePlayers()) {
+              const dx = p.x - e.x, dy = p.y - e.y;
+              if (Math.hypot(dx, dy) > 60 || Math.abs(angDiff(Math.atan2(dy, dx), e.face)) > 1.1) continue;
+              if (p.dashing) { this.emit({ k: 'dodge', id: p.id, x: Math.round(p.x), y: Math.round(p.y) }); continue; }
+              if (p.guard && Math.abs(angDiff(Math.atan2(e.y - p.y, e.x - p.x), p.aim)) < p.stats.guardArc / 2) { p.guardHeat += 10 * p.stats.heatMult; this.emit({ k: 'block', id: p.id, x: Math.round(p.x), y: Math.round(p.y), perfect: 0 }); continue; }
+              this.emit({ k: 'practiceHit', id: p.id, x: Math.round(p.x), y: Math.round(p.y) });
+            }
+            this.emit({ k: 'thwack', x: Math.round(e.x), y: Math.round(e.y) });
+          }
+        }
+      }
+      e.fx = Math.cos(e.face) >= 0 ? 1 : -1;
+    }
+  }
+
+  resetDummies() {
+    for (const e of this.enemies) if (e.type === 'dummy') e.log = [];
+    this.emit({ k: 'msg', text: 'Training dummies reset.' });
+  }
+
+  dps(e) {
+    if (!e.log || !e.log.length) return 0;
+    const total = e.log.reduce((s, l) => s + l[1], 0);
+    const span = Math.max(1, Math.min(4, this.time - e.log[0][0]));
+    return total / span;
+  }
+
+  // ======================================================= vote to go back to camp (mid-run)
+  voteCamp(id, yes) {
+    const p = this.players.get(id);
+    if (!p || this.scene === 'lobby' || this.state !== 'playing') return;
+    if (!this.campVote) {
+      if (!yes) return;
+      this.campVote = { t: 20, yes: new Set() };
+      this.emit({ k: 'msg', text: `${p.user} wants to return to camp. Open the pause menu (Esc) to vote.` });
+    }
+    if (!yes) { this.campVote = null; this.emit({ k: 'msg', text: `${p.user} voted to keep going.` }); return; }
+    this.campVote.yes.add(id);
+    if ([...this.players.keys()].every((k) => this.campVote.yes.has(k))) {
+      this.emit({ k: 'msg', text: 'The party heads back to camp.' });
+      this.endRunStats(false);
+      this.goLobby();
+    }
+  }
+
+  updateCampVote(dt) {
+    if (!this.campVote) return;
+    this.campVote.t -= dt;
+    if (this.campVote.t <= 0) { this.campVote = null; this.emit({ k: 'msg', text: 'The vote to return to camp ran out.' }); }
+  }
+
+  // tell everyone how their run went (for the stats board)
+  endRunStats(won) {
+    for (const p of this.players.values()) this.emit({ k: 'runEnd', id: p.id, kills: p.kills || 0, stage: this.stage, won: won ? 1 : 0 });
+    for (const p of this.players.values()) p.kills = 0;
   }
 
   // ======================================================= ultimates (Wildfire)
@@ -831,6 +938,14 @@ export class Sim {
 
   damageEnemy(e, dmg, kx, ky, kb, src = null, silent = false, el = null) {
     if (e.dead) return;
+    if (e.type === 'dummy') {
+      if (src && src.stats && src.stats.shatter && e.slowT > 0) dmg *= 1.3;
+      if (e.markT > 0) dmg *= 1 + (e.markBonus || BOWMAN.markBonus);
+      e.log.push([this.time, dmg]);
+      e.hurtT = 0.14;
+      if (!silent) this.emit({ k: 'hit', x: Math.round(e.x), y: Math.round(e.y - 22), d: Math.round(dmg), big: dmg >= 25 ? 1 : 0, by: src ? src.id : null, el, kx: r2(kx), ky: r2(ky) });
+      return;
+    }
     if (src && src.stats && src.stats.shatter && e.slowT > 0) dmg *= 1.3;
     if (e.markT > 0) {
       dmg *= 1 + (e.markBonus || BOWMAN.markBonus);
@@ -855,6 +970,7 @@ export class Sim {
 
   killEnemy(e, src) {
     e.dead = true;
+    if (src && src.id && this.players.has(src.id)) src.kills = (src.kills || 0) + 1;
     this.emit({ k: 'die', t: e.type, x: Math.round(e.x), y: Math.round(e.y), el: e.elite ? 1 : 0 });
     const drop = (kind, v) => this.pickups.push({ id: this.nextId++, kind, v, x: e.x, y: e.y, vx: R.float(-100, 100), vy: R.float(-100, 100), life: 30 });
     if (e.type === 'wolf') {
@@ -869,6 +985,7 @@ export class Sim {
     } else if (e.type === 'treant') {
       this.state = 'victory';
       this.stateTimer = 9;
+      this.endRunStats(true);
       this.hazards = [];
       this.strikes = [];
       for (const o of this.enemies) if (o !== e) o.dead = true;
@@ -1334,6 +1451,7 @@ export class Sim {
     if (ps.every((p) => p.down)) {
       this.state = 'defeat';
       this.stateTimer = 6;
+      this.endRunStats(false);
       this.hazards = [];
       this.strikes = [];
       this.emit({ k: 'defeat' });
@@ -1388,6 +1506,7 @@ export class Sim {
       go: this.gateOpen ? 1 : 0,
       sh: this.shrineUsed.map((u) => (u ? 1 : 0)),
       bb,
+      cv: this.campVote ? { n: this.campVote.yes.size, of: this.players.size, t: Math.ceil(this.campVote.t), ids: [...this.campVote.yes] } : null,
       ps: [...this.players.values()].map((p) => ({
         id: p.id, u: p.user, n: p.name, c: p.cloak, h: p.hat, f: p.flame, k: p.cls,
         x: r1(p.x), y: r1(p.y), a: r2(p.aim), m: p.moving ? 1 : 0, d: p.dashing ? 1 : 0,
@@ -1406,6 +1525,7 @@ export class Sim {
       es: this.enemies.map((e) => ({
         id: e.id, t: e.type, x: r1(e.x), y: r1(e.y), s: STATE_CODE[e.state], fx: e.fx, dx: r2(e.dx), dy: r2(e.dy),
         hp: Math.ceil(e.hp), mx: Math.ceil(e.max), hu: e.hurtT > 0 ? 1 : 0, b: e.burnT > 0 ? 1 : 0, sl: e.slowT > 0 ? 1 : 0,
+        kd: e.kind, dps: e.type === 'dummy' ? Math.round(this.dps(e)) : undefined,
         el: e.elite ? 1 : 0, sn: e.stun > 0 ? 1 : 0, mk: e.markT > 0 ? 1 : 0, fa: r2(e.face || 0), sm: e.smoked ? 1 : 0, bl: e.bleedT > 0 ? 1 : 0,
       })),
       pk: this.pickups.map((k) => ({ id: k.id, k: k.kind, x: Math.round(k.x), y: Math.round(k.y) })),

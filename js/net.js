@@ -30,12 +30,11 @@ function ensurePeer() {
 export function hostRoom(preferred = null) {
   ensurePeer();
   return new Promise((resolve, reject) => {
-    let tries = 0;
+    let tries = 0, prefTries = 0;
     let want = preferred && /^[A-Z0-9]{5}$/.test(preferred) ? preferred : null;
     const attempt = () => {
       const code = want || makeCode();
       const wasPreferred = !!want;
-      want = null;
       const peer = new Peer(PREFIX + code, { debug: 1 });
       const conns = new Map();
       let opened = false;
@@ -61,7 +60,14 @@ export function hostRoom(preferred = null) {
         if (!room.closing) setTimeout(() => { try { peer.reconnect(); } catch (e) { /* ignore */ } }, 2000);
       });
       peer.on('error', (err) => {
-        if (!opened && err.type === 'unavailable-id' && tries++ < 6) { peer.destroy(); attempt(); }
+        if (!opened && err.type === 'unavailable-id') {
+          peer.destroy();
+          // your code is usually still "held" for a few seconds after your last camp closed:
+          // keep trying it for ~10 seconds before giving up and using a random one
+          if (wasPreferred && prefTries++ < 7) { setTimeout(attempt, 1500); return; }
+          want = null;
+          if (tries++ < 6) attempt(); else reject(new Error('Could not open a room. Please try again.'));
+        }
         else if (!opened) { peer.destroy(); reject(new Error(friendly(err))); }
         else console.warn('PeerJS:', err.type, err);
       });

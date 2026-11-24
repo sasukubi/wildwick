@@ -6,7 +6,7 @@ import { hostRoom, joinRoom } from './net.js';
 import { Game } from './game.js';
 import { CLASSES, CLOAKS, byId } from './data.js';
 import { drawPreview } from './render.js';
-import { toast, settings } from './ui.js';
+import { toast, settings, pause } from './ui.js';
 import { getRoomPref, setRoomPref } from './prefs.js';
 import { audio } from './audio.js';
 
@@ -40,7 +40,7 @@ document.addEventListener('pointerover', (e) => {
 // Esc opens settings from the menus too
 addEventListener('keydown', (e) => { if (e.code === 'Escape' && !game) settings.toggle(false); });
 $('#menu-gear').addEventListener('click', () => settings.toggle(false));
-$('#btn-gear').addEventListener('click', () => settings.toggle(!!game));
+$('#btn-gear').addEventListener('click', () => { if (game) pause.toggle(game); else settings.toggle(false); });
 
 // ---------------------------------------------------- login
 $('#backend-note').textContent = backend.note;
@@ -95,7 +95,7 @@ async function showChars() {
     const play = document.createElement('button');
     play.className = 'gbtn primary';
     play.textContent = 'Play';
-    play.onclick = () => showMenu(c);
+    play.onclick = () => startOwnCamp(c);
     const del = document.createElement('button');
     del.className = 'gbtn small';
     del.textContent = 'Delete';
@@ -133,55 +133,40 @@ $('#btn-logout').addEventListener('click', async () => {
   show('screen-login');
 });
 
-// ---------------------------------------------------- host / join
-function fillRoomCode() {
-  const r = getRoomPref();
-  $('#host-code').value = r.custom || r.last || '';
-  $('#use-code').checked = r.use !== false && !!(r.custom || r.last);
-}
-$('#host-code').addEventListener('input', () => { $('#host-code').value = $('#host-code').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5); if ($('#host-code').value) $('#use-code').checked = true; });
-
-function showMenu(c) {
-  fillRoomCode();
-  current = c;
-  show('screen-menu');
-  drawPreview($('#menu-preview'), c);
-  $('#menu-name').textContent = c.name;
-  $('#menu-class').textContent = `${byId(CLASSES, c.cls).name} · played by ${backend.username}`;
-  $('#menu-error').textContent = '';
-}
-
-$('#btn-host').addEventListener('click', () => {
-  busy($('#btn-host'), async () => {
-    $('#menu-error').textContent = '';
-    const code = $('#host-code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const useCode = $('#use-code').checked && code.length === 5;
-    setRoomPref({ use: $('#use-code').checked, custom: code });
-    try {
-      const room = await hostRoom(useCode ? code : null);
+// ---------------------------------------------------- your campfire is the main screen
+// Pick a character -> you land in your own camp (solo). The campfire lets you
+// open your camp to friends (seamlessly) or join a friend's camp.
+function campHooks() {
+  return {
+    host: async (code, use, typed) => {
+      setRoomPref({ use, custom: typed });
+      const room = await hostRoom(code);
       setRoomPref({ last: room.code });
-      startGame(room, true);
-      if (room.codeChanged) toast(`Room code ${code} was busy, so your code this time is ${room.code}.`);
-    } catch (err) { $('#menu-error').textContent = err.message; }
-  });
-});
+      if (game) game.attachRoom(room);
+      toast(`Your camp is open! Room code: ${room.code}`);
+      if (room.codeChanged) toast(`${code} was still in use, so your code this time is ${room.code}.`);
+    },
+    join: async (code) => {
+      const room = await joinRoom(code); // connect first, so a bad code keeps you in your camp
+      startGame(room, false);
+    },
+    toChars: () => { const g = game; game = null; if (g) { g.onLeave = () => {}; g.leave(''); } showChars(); },
+    logout: async () => { const g = game; game = null; if (g) { g.onLeave = () => {}; g.leave(''); } await backend.logOut(); show('screen-login'); },
+  };
+}
 
-$('#join-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const code = $('#join-code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (code.length !== 5) { $('#menu-error').textContent = 'Room codes are 5 characters.'; return; }
-  busy($('#btn-join'), async () => {
-    $('#menu-error').textContent = '';
-    try { startGame(await joinRoom(code), false); } catch (err) { $('#menu-error').textContent = err.message; }
-  });
-});
-
-$('#btn-back').addEventListener('click', () => showChars());
+function startOwnCamp(c, msg) {
+  current = c;
+  startGame(null, true);
+  if (msg) toast(msg);
+}
 
 function startGame(room, isHost) {
+  const old = game;
+  if (old) { old.onLeave = () => {}; old.leave(''); }
   show(null);
   settings.close();
-  $('#room-code').textContent = room.code;
+  $('#room-code').textContent = room ? room.code : '';
   game = new Game({
     canvas: $('#game'),
     room,
@@ -189,11 +174,12 @@ function startGame(room, isHost) {
     character: current,
     user: backend.username,
     backend,
+    hooks: campHooks(),
+    // leaving a friend's camp (or them closing it) puts you back in your own camp
     onLeave: (msg) => {
       game = null;
       $('#help').classList.add('hidden');
-      showMenu(current);
-      if (msg) $('#menu-error').textContent = msg;
+      startOwnCamp(current, msg);
     },
   });
 }
@@ -202,6 +188,10 @@ $('#btn-copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText($('#room-code').textContent); toast('Room code copied. Paste it in Discord!'); }
   catch { toast('Could not copy. The code is ' + $('#room-code').textContent); }
 });
+
+// the main theme keeps playing on the menus (the game drives music once you're in camp)
+audio.setScene('menu');
+setInterval(() => { if (!game) audio.update(0.05); }, 50);
 
 // handy for testing in the browser console: wildwick.game
 window.wildwick = { get game() { return game; } };

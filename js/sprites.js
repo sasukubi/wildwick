@@ -611,6 +611,96 @@ export function propSprite(kind, extra = 0) {
       for (let y = 8; y < 50; y += 3) px(g, 5 + Math.floor(hash2(y, 5) * 6), y, 2, 2, PAL.l3);
       return c;
     }
+    if (kind === 'fence') {
+      const [c, g] = canvas(16, 20);
+      px(g, 6, 2, 4, 17, PAL.o); px(g, 7, 3, 2, 15, PAL.b2); px(g, 7, 3, 1, 15, PAL.b3);
+      px(g, 0, 7, 16, 3, PAL.o); px(g, 0, 8, 16, 1, PAL.b2);
+      px(g, 0, 13, 16, 3, PAL.o); px(g, 0, 14, 16, 1, PAL.b1);
+      px(g, 4, 18, 8, 2, 'rgba(0,0,0,0.3)');
+      return c;
+    }
+    if (kind === 'tent') {
+      const [c, g] = canvas(76, 58);
+      oval(g, 38, 54, 34, 4, 'rgba(0,0,0,0.3)');
+      for (let y = 0; y < 44; y++) {
+        const half = Math.round(4 + y * 0.78);
+        px(g, 38 - half - 1, 8 + y, half * 2 + 2, 1, PAL.o);
+        px(g, 38 - half, 8 + y, half, 1, '#8a5a3a');
+        px(g, 38, 8 + y, half, 1, '#a3704a');
+        if (y % 6 === 0) px(g, 38 - half, 8 + y, half * 2, 1, '#7a4a2e');
+      }
+      // open flap showing the dark inside
+      for (let y = 18; y < 52; y++) { const w = Math.round((y - 18) * 0.42); px(g, 38 - w, y, w * 2, 1, '#2a1a12'); }
+      px(g, 36, 0, 4, 10, PAL.b1); px(g, 30, 2, 16, 2, '#c4533a'); px(g, 32, 4, 12, 2, '#e8c45c');
+      return c;
+    }
+    if (kind === 'signpost') {
+      const [c, g] = canvas(30, 44);
+      px(g, 8, 40, 14, 3, 'rgba(0,0,0,0.3)');
+      px(g, 13, 6, 4, 36, PAL.o); px(g, 14, 7, 2, 34, PAL.b2);
+      px(g, 2, 8, 24, 9, PAL.o); px(g, 3, 9, 22, 7, PAL.b3); px(g, 26, 10, 3, 5, PAL.o);
+      px(g, 4, 20, 22, 8, PAL.o); px(g, 5, 21, 20, 6, PAL.b2); px(g, 1, 22, 3, 4, PAL.o);
+      for (let x = 6; x < 22; x += 3) { px(g, x, 11, 2, 1, PAL.b0); px(g, x + 1, 23, 2, 1, PAL.b0); }
+      return c;
+    }
+    if (kind === 'board') {
+      const [c, g] = canvas(40, 46);
+      px(g, 6, 42, 28, 3, 'rgba(0,0,0,0.3)');
+      px(g, 6, 18, 3, 26, PAL.o); px(g, 31, 18, 3, 26, PAL.o); px(g, 7, 19, 1, 24, PAL.b2); px(g, 32, 19, 1, 24, PAL.b2);
+      px(g, 2, 4, 36, 24, PAL.o); px(g, 3, 5, 34, 22, PAL.b2); px(g, 3, 5, 34, 2, PAL.b3);
+      px(g, 7, 9, 10, 8, '#efe4c8'); px(g, 20, 10, 12, 6, '#e8dcc0'); px(g, 10, 19, 14, 6, '#efe4c8');
+      for (let i = 0; i < 3; i++) px(g, 8, 11 + i * 2, 8, 1, '#8a7a60');
+      px(g, 11, 8, 2, 2, '#c4533a'); px(g, 25, 9, 2, 2, '#c4533a'); px(g, 16, 18, 2, 2, '#c4533a');
+      return c;
+    }
+    if (kind === 'resetpost') {
+      const [c, g] = canvas(16, 30);
+      px(g, 3, 27, 10, 2, 'rgba(0,0,0,0.3)');
+      px(g, 6, 8, 4, 20, PAL.o); px(g, 7, 9, 2, 18, PAL.b2);
+      oval(g, 8, 6, 5, 5, PAL.o); oval(g, 8, 6, 4, 4, '#d8b35a'); px(g, 7, 4, 2, 2, '#fff3c0');
+      return c;
+    }
+    if (kind === 'log') {
+      const [c, g] = canvas(40, 16);
+      oval(g, 20, 12, 18, 3, 'rgba(0,0,0,0.3)');
+      px(g, 3, 4, 34, 8, PAL.o); px(g, 4, 5, 32, 6, PAL.b2); px(g, 4, 5, 32, 2, PAL.b3);
+      oval(g, 36, 8, 3, 4, PAL.o); oval(g, 36, 8, 2, 3, '#c49a6a');
+      return c;
+    }
+    if (kind === 'dummy') {
+      // straw training dummy on a post; extra: 0 plain, 1 hitter (club), 2 facer (painted face)
+      const [c, g] = canvas(30, 40);
+      px(g, 8, 37, 14, 2, 'rgba(0,0,0,0.3)');
+      px(g, 14, 22, 3, 16, PAL.o); px(g, 15, 23, 1, 14, PAL.b2);
+      oval(g, 15, 18, 8, 7, PAL.o); oval(g, 15, 18, 7, 6, '#d8b86a'); px(g, 10, 15, 3, 1, '#f0d890'); px(g, 18, 20, 3, 1, '#b8984a');
+      px(g, 4, 16, 22, 3, PAL.o); px(g, 5, 17, 20, 1, '#c8a85a');
+      oval(g, 15, 8, 5, 5, PAL.o); oval(g, 15, 8, 4, 4, '#e0c070');
+      px(g, 11, 13, 9, 2, '#8a4a2a');
+      if (extra === 1) { px(g, 24, 6, 3, 14, PAL.o); px(g, 25, 7, 1, 12, PAL.b3); oval(g, 25, 5, 3, 3, PAL.o); oval(g, 25, 5, 2, 2, PAL.b2); }
+      if (extra === 2) { px(g, 13, 7, 1, 2, PAL.o); px(g, 17, 7, 1, 2, PAL.o); px(g, 13, 10, 5, 1, PAL.o); }
+      return c;
+    }
+    if (kind === 'fox') {
+      // a sleeping fox curled up by the fire (extra = breathing frame)
+      const [c, g] = canvas(28, 16);
+      oval(g, 14, 13, 12, 2, 'rgba(0,0,0,0.3)');
+      oval(g, 14, 9 - extra, 11, 5 + extra, PAL.o); oval(g, 14, 9 - extra, 10, 4 + extra, '#d0702a');
+      oval(g, 8, 10, 6, 3, '#e08a3a'); oval(g, 22, 10, 5, 3, '#f0e8dc');
+      oval(g, 5, 8, 4, 3, PAL.o); oval(g, 5, 8, 3, 2, '#d0702a'); px(g, 3, 5, 2, 2, '#d0702a'); px(g, 6, 5, 2, 2, '#d0702a');
+      px(g, 4, 8, 2, 1, PAL.o);
+      return c;
+    }
+    if (kind === 'owl') {
+      // an owl on a branch (extra = 1 when blinking)
+      const [c, g] = canvas(24, 24);
+      px(g, 0, 18, 24, 3, PAL.o); px(g, 1, 19, 22, 1, PAL.b2);
+      oval(g, 12, 11, 6, 7, PAL.o); oval(g, 12, 11, 5, 6, '#8a6a4a'); oval(g, 12, 13, 3, 4, '#c8b090');
+      px(g, 7, 3, 2, 3, PAL.o); px(g, 15, 3, 2, 3, PAL.o);
+      if (extra) { px(g, 9, 9, 2, 1, PAL.o); px(g, 13, 9, 2, 1, PAL.o); }
+      else { oval(g, 10, 9, 2, 2, '#ffd36a'); oval(g, 14, 9, 2, 2, '#ffd36a'); px(g, 10, 9, 1, 1, PAL.o); px(g, 14, 9, 1, 1, PAL.o); }
+      px(g, 12, 11, 1, 2, '#d8a040');
+      return c;
+    }
     if (kind === 'roots') {
       const [c, g] = canvas(40, 30);
       for (let i = 0; i < 5; i++) {

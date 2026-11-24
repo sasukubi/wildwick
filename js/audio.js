@@ -10,12 +10,6 @@ function loadVol() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('wildwick.volume') || '{}') }; } catch { return { ...DEFAULTS }; }
 }
 
-const SCALES = {
-  lobby: { root: 50, steps: [0, 2, 3, 5, 7, 9, 10], bpm: 84, chords: [[0, 3, 7], [-2, 2, 5], [-5, -1, 2], [0, 3, 7]] },
-  rest: { root: 53, steps: [0, 2, 4, 5, 7, 9, 11], bpm: 72, chords: [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]] },
-  forest: { root: 45, steps: [0, 2, 3, 5, 7, 8, 10], bpm: 96, chords: [[0, 3, 7], [-4, 0, 3], [-2, 2, 5], [-5, -2, 2]] },
-  boss: { root: 40, steps: [0, 1, 3, 5, 7, 8, 10], bpm: 132, chords: [[0, 3, 7], [1, 5, 8], [0, 3, 7], [-2, 1, 5]] },
-};
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
 class AudioEngine {
@@ -211,6 +205,9 @@ class AudioEngine {
   setScene(name) {
     if (!this.ctx) { this.pendingTrack = name; return; }
     if (this.track === name) return;
+    // the menus and the campfire share the main theme: keep it playing without restarting
+    const theme = (n) => n === 'menu' || n === 'lobby';
+    if (theme(this.track) && theme(name)) { this.track = name; this.startWind(name); return; }
     this.track = name;
     this.nextBeat = this.ctx.currentTime + 0.1;
     this.beat = 0;
@@ -220,7 +217,7 @@ class AudioEngine {
   startWind(name) {
     const ctx = this.ctx;
     if (this.amb) { const old = this.amb; old.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.5); setTimeout(() => { try { old.src.stop(); } catch { /* */ } }, 2000); }
-    if (!name || name === 'menu') { this.amb = null; return; }
+    if (!name || name === 'menu') { this.amb = null; return; } // menus: music only, no wind
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuf; src.loop = true;
     const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = name === 'boss' ? 260 : 420;
@@ -235,63 +232,127 @@ class AudioEngine {
 
   // call every frame
   update(dt) {
-    if (!this.ctx || !this.track || this.track === 'menu') return;
-    // ambience
-    const A = this.ambTimers;
-    A.cricket -= dt; A.crackle -= dt; A.owl -= dt;
-    if (A.cricket <= 0 && this.track !== 'boss') {
-      A.cricket = 0.6 + Math.random() * 2.5;
-      const f = 4000 + Math.random() * 900;
-      for (let i = 0; i < 3 + Math.floor(Math.random() * 4); i++) this.tone(f, 0.03, { gain: 0.025, bus: 'amb', delay: i * 0.07 });
-    }
-    if (this.track === 'lobby' && A.crackle <= 0) {
-      A.crackle = 0.05 + Math.random() * 0.35;
-      this.noise(0.02 + Math.random() * 0.03, { filter: 'highpass', freq: 1800 + Math.random() * 3000, gain: 0.05 + Math.random() * 0.08, bus: 'amb' });
-    }
-    if (this.track === 'forest' && A.owl <= 0) {
-      A.owl = 14 + Math.random() * 20;
-      this.tone(390, 0.35, { gain: 0.05, bus: 'amb', attack: 0.08, vib: 6, vibDepth: 6 });
-      this.tone(360, 0.55, { gain: 0.05, bus: 'amb', attack: 0.08, delay: 0.45, vib: 6, vibDepth: 6 });
+    if (!this.ctx || !this.track) return;
+    // ambience (not on the menus)
+    if (this.track !== 'menu') {
+      const A = this.ambTimers;
+      A.cricket -= dt; A.crackle -= dt; A.owl -= dt;
+      if (A.cricket <= 0 && this.track !== 'boss') {
+        A.cricket = 0.6 + Math.random() * 2.5;
+        const f = 4000 + Math.random() * 900;
+        for (let i = 0; i < 3 + Math.floor(Math.random() * 4); i++) this.tone(f, 0.03, { gain: 0.02, bus: 'amb', delay: i * 0.07 });
+      }
+      if (this.track === 'lobby' && A.crackle <= 0) {
+        A.crackle = 0.05 + Math.random() * 0.35;
+        this.noise(0.02 + Math.random() * 0.03, { filter: 'highpass', freq: 1800 + Math.random() * 3000, gain: 0.05 + Math.random() * 0.08, bus: 'amb' });
+      }
+      if ((this.track === 'forest' || this.track === 'lobby') && A.owl <= 0) {
+        A.owl = 14 + Math.random() * 20;
+        this.tone(390, 0.35, { gain: 0.04, bus: 'amb', attack: 0.08, vib: 6, vibDepth: 6 });
+        this.tone(360, 0.55, { gain: 0.04, bus: 'amb', attack: 0.08, delay: 0.45, vib: 6, vibDepth: 6 });
+      }
     }
     // music: schedule notes a little ahead of time
-    const S = SCALES[this.track] || SCALES.forest;
-    const step = 60 / S.bpm / 2; // eighth notes
-    while (this.nextBeat < this.ctx.currentTime + 0.25) {
-      this.playBeat(S, this.beat, this.nextBeat, step);
+    const song = SONGS[this.track] || SONGS.forest;
+    const step = 60 / song.bpm / 2; // eighth notes
+    while (this.nextBeat < this.ctx.currentTime + 0.3) {
+      this.playStep(song, this.beat, this.nextBeat, step);
       this.nextBeat += step;
       this.beat++;
     }
   }
 
-  playBeat(S, b, when, step) {
-    const bar = Math.floor(b / 8) % 4, pos = b % 8;
-    const chord = S.chords[bar];
-    const out = 'music';
-    const note = (deg, oct) => S.root + oct * 12 + deg;
-    if (this.track === 'boss') {
-      // driving bass, kick and snare
-      this.tone(midi(note(chord[0], 0)), step * 0.9, { type: 'sawtooth', lp: 500, gain: 0.18, bus: out, when });
-      if (pos % 4 === 0) this.tone(110, 0.18, { slide: 40, gain: 0.5, bus: out, when });
-      if (pos % 4 === 2) this.noise(0.12, { filter: 'bandpass', freq: 1800, q: 0.7, gain: 0.18, bus: out, when });
-      if (pos === 0) for (const c of chord) this.tone(midi(note(c, 2)), step * 7, { type: 'sawtooth', lp: 900, gain: 0.035, attack: 0.3, bus: out, when });
-      if (Math.random() < 0.35) this.tone(midi(note(S.steps[Math.floor(Math.random() * 7)], 3)), step * 1.5, { type: 'square', lp: 1600, gain: 0.04, bus: out, when });
+  // ---------------------------------------------------------- instruments (all made by code)
+  // breathy wooden flute: soft sine with a slow vibrato and a little air noise
+  flute(m, when, dur, gain = 0.08) {
+    this.tone(midi(m), dur, { type: 'sine', gain, attack: 0.09, bus: 'music', when, vib: 5, vibDepth: 3, lp: 2200 });
+    this.tone(midi(m) * 2, dur * 0.8, { type: 'sine', gain: gain * 0.12, attack: 0.12, bus: 'music', when });
+    this.noise(dur * 0.9, { filter: 'bandpass', freq: midi(m) * 2, q: 8, gain: gain * 0.25, attack: 0.08, bus: 'music', when });
+  }
+  // bowed strings: detuned saws, slow swell, darkened
+  strings(notes, when, dur, gain = 0.03, bright = 900) {
+    for (const m of notes) for (const d of [-7, 7]) this.tone(midi(m), dur, { type: 'sawtooth', gain, attack: Math.min(1.2, dur * 0.4), bus: 'music', when, detune: d, lp: bright });
+  }
+  // a low, warm cello drone
+  cello(m, when, dur, gain = 0.07) { this.tone(midi(m), dur, { type: 'sawtooth', gain, attack: 0.25, bus: 'music', when, lp: 420, vib: 4, vibDepth: 2 }); }
+  // soft plucked harp: a darker, rounder pluck (not a bell)
+  harp(m, when, gain = 0.05) { this.tone(midi(m), 1.4, { type: 'triangle', gain, attack: 0.006, bus: 'music', when, lp: 1300 }); }
+  drum(kind, when, gain = 0.4) {
+    if (kind === 'low') this.tone(85, 0.35, { slide: 45, gain, bus: 'music', when });
+    else if (kind === 'kick') this.tone(110, 0.2, { slide: 40, gain, bus: 'music', when });
+    else if (kind === 'snare') this.noise(0.14, { filter: 'bandpass', freq: 1700, q: 0.8, gain: gain * 0.5, bus: 'music', when });
+    else if (kind === 'frame') this.noise(0.22, { filter: 'lowpass', freq: 500, gain: gain * 0.6, bus: 'music', when, attack: 0.01 });
+  }
+  brass(notes, when, dur, gain = 0.05) {
+    for (const m of notes) this.tone(midi(m), dur, { type: 'sawtooth', gain, attack: 0.04, bus: 'music', when, lp: 1400 });
+  }
+
+  playStep(song, b, when, step) {
+    const bars = song.chords.length;
+    const pos = b % 8, bar = Math.floor(b / 8) % bars;
+    const chord = song.chords[bar];
+    const loopStep = b % (bars * 8);
+    if (song.style === 'theme') {
+      // pads and drone at the start of each bar
+      if (pos === 0) {
+        this.strings(chord.map((n) => n + 12), when, step * 8.6, 0.022, 800);
+        this.cello(chord[0] - 12, when, step * 8.4, 0.06);
+      }
+      // gentle broken-chord harp underneath
+      if (pos % 2 === 0) this.harp(chord[(pos / 2) % chord.length] + 12, when, song.soft ? 0.035 : 0.045);
+      // the melody
+      for (const [s0, m, len] of song.melody) if (s0 === loopStep) this.flute(m, when, step * len * 0.95, song.soft ? 0.055 : 0.075);
+      if (song.frame && (pos === 0 || pos === 5)) this.drum('frame', when, 0.25);
       return;
     }
-    // pads at the start of each bar
-    if (pos === 0) {
-      for (const c of chord) {
-        this.tone(midi(note(c, 1)), step * 8.5, { type: 'sawtooth', lp: 700, gain: 0.03, attack: 0.6, bus: out, when, detune: -6 });
-        this.tone(midi(note(c, 1)), step * 8.5, { type: 'sawtooth', lp: 700, gain: 0.03, attack: 0.6, bus: out, when, detune: 6 });
-      }
-      this.tone(midi(note(chord[0], 0)), step * 8, { type: 'sine', gain: 0.12, attack: 0.2, bus: out, when });
+    if (song.style === 'dark') {
+      if (pos === 0) { this.strings(chord.map((n) => n + 12), when, step * 8.6, 0.022, 650); this.cello(chord[0] - 12, when, step * 8.2, 0.07); }
+      // tense string ostinato
+      this.tone(midi(chord[pos % 2 === 0 ? 0 : 2]), step * 0.8, { type: 'sawtooth', gain: 0.028, attack: 0.02, bus: 'music', when, lp: 750 });
+      if (pos === 0 || pos === 4) this.drum('low', when, 0.35);
+      if (pos === 6 && bar % 2 === 1) this.drum('frame', when, 0.3);
+      for (const [s0, m, len] of song.melody) if (s0 === loopStep) this.flute(m, when, step * len * 0.95, 0.05);
+      return;
     }
-    // plucked arpeggio / melody
-    const sparse = this.track === 'forest' ? 0.45 : 0.75;
-    if (Math.random() < sparse) {
-      const deg = pos % 2 === 0 ? chord[(pos / 2) % 3] : S.steps[Math.floor(Math.random() * 7)];
-      this.tone(midi(note(deg, 2)), step * 2.2, { type: 'triangle', gain: 0.09, bus: out, when });
-    }
+    // boss: driving drums, brass stabs, fast strings
+    this.tone(midi(chord[0] - 12), step * 0.85, { type: 'sawtooth', gain: 0.07, attack: 0.01, bus: 'music', when, lp: 500 });
+    this.tone(midi(chord[pos % 3] + 12), step * 0.45, { type: 'sawtooth', gain: 0.02, attack: 0.01, bus: 'music', when, lp: 1600 });
+    this.tone(midi(chord[(pos + 1) % 3] + 12), step * 0.45, { type: 'sawtooth', gain: 0.02, attack: 0.01, bus: 'music', when: when + step / 2, lp: 1600 });
+    if (pos % 2 === 0) this.drum('kick', when, 0.5);
+    if (pos === 2 || pos === 6) this.drum('snare', when, 0.5);
+    if (pos === 0) { this.brass(chord.map((n) => n + 12), when, step * 1.6, 0.04); this.strings(chord.map((n) => n + 12), when, step * 8, 0.015, 1100); }
+    if (pos === 7 && bar % 2 === 1) this.brass(chord.map((n) => n + 12), when, step * 0.8, 0.035);
   }
 }
+
+// ---------------------------------------------------------- the songs (original)
+// Chords and melodies are MIDI note numbers. Steps are eighth notes.
+// "Wildwick" main theme: an enchanted, slightly mysterious forest in D minor.
+const THEME_CHORDS = [[50, 53, 57], [46, 50, 53], [41, 45, 48], [48, 52, 55], [50, 53, 57], [43, 46, 50], [45, 49, 52], [50, 53, 57]];
+const THEME_MELODY = [
+  [0, 69, 3], [3, 74, 2], [5, 72, 1], [6, 69, 2],
+  [8, 70, 2], [10, 69, 2], [12, 67, 2], [14, 65, 2],
+  [16, 69, 3], [19, 72, 2], [21, 77, 1], [22, 76, 2],
+  [24, 76, 2], [26, 74, 2], [28, 72, 4],
+  [32, 69, 2], [34, 74, 2], [36, 76, 2], [38, 77, 2],
+  [40, 79, 2], [42, 77, 2], [44, 74, 2], [46, 70, 2],
+  [48, 73, 2], [50, 76, 2], [52, 69, 4],
+  [56, 74, 8],
+];
+const SONGS = {
+  menu: { style: 'theme', bpm: 70, chords: THEME_CHORDS, melody: THEME_MELODY },
+  lobby: { style: 'theme', bpm: 70, chords: THEME_CHORDS, melody: THEME_MELODY, frame: true },
+  rest: { style: 'theme', bpm: 62, chords: THEME_CHORDS, melody: THEME_MELODY.filter((_, i) => i % 2 === 0), soft: true },
+  forest: {
+    style: 'dark', bpm: 84,
+    chords: [[50, 53, 57], [46, 50, 53], [43, 46, 50], [45, 49, 52], [50, 53, 57], [48, 51, 55], [46, 50, 53], [45, 49, 52]],
+    melody: [[0, 62, 4], [6, 65, 2], [16, 64, 3], [19, 62, 1], [24, 61, 6], [40, 69, 3], [43, 67, 1], [44, 65, 4], [56, 64, 6]],
+  },
+  boss: {
+    style: 'boss', bpm: 132,
+    chords: [[40, 43, 47], [41, 44, 48], [40, 43, 47], [38, 42, 45], [40, 43, 47], [43, 47, 50], [41, 44, 48], [39, 43, 46]],
+    melody: [],
+  },
+};
 
 export const audio = new AudioEngine();

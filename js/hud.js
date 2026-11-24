@@ -17,7 +17,7 @@ function set(el, prop, value) {
   else el.style[prop] = value;
 }
 
-const KITS = {
+export const KITS = {
   warrior: [
     { id: 'atk', name: 'Strike', key: 'strike', icon: '⚔' },
     { id: 'guard', name: 'Smoulder Guard (hold)', key: 'skill2', icon: '🛡' },
@@ -42,8 +42,8 @@ const KITS = {
   ],
   rogue: [
     { id: 'atk', name: 'Stab (every 4th spins)', key: 'strike', icon: '🗡' },
-    { id: 'step', name: 'Shadowstep', key: 'skill1', icon: '👣' },
-    { id: 'smoke', name: 'Smoke Bomb', key: 'skill2', icon: '💨' },
+    { id: 'smoke', name: 'Smoke Bomb', key: 'skill1', icon: '💨' },
+    { id: 'step', name: 'Shadowstep', key: 'skill2', icon: '👣' },
     { id: 'dash', name: 'Dash (leaves a decoy)', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Thousand Cuts (Wildfire)', key: 'ult', icon: '✴' },
   ],
@@ -99,7 +99,7 @@ export function updateHud(game, snap, me) {
   }
 
   // room code: only shown at the campfire (also in the Esc menu)
-  set($('#room-pill'), 'hide', snap.sc !== 'lobby');
+  set($('#room-pill'), 'hide', snap.sc !== 'lobby' || !game.room);
 
   // stage pill
   const mm = String(Math.floor(snap.tm / 60)).padStart(2, '0'), ss = String(snap.tm % 60).padStart(2, '0');
@@ -162,8 +162,8 @@ export function updateHud(game, snap, me) {
     if (s.id === 'atk') { rem = Math.max(0, game.lp.atkCd); total = me.k === 'bowman' ? 0.9 * stats.recoverMult : stats.atkCd; }
     else if (s.id === 'mark') { rem = me.c1; total = stats.markCd; }
     else if (s.id === 'rain') { rem = me.c2; total = stats.rainCd; }
-    else if (s.id === 'step') { rem = me.c1; total = stats.stepCd; }
-    else if (s.id === 'smoke') { rem = me.c2; total = stats.smokeCd; }
+    else if (s.id === 'step') { rem = me.c2; total = stats.stepCd; }
+    else if (s.id === 'smoke') { rem = me.c1; total = stats.smokeCd; }
     else if (s.id === 'dash') { rem = Math.max(0, game.lp.dashCd); total = stats.dashCd; }
     else if (s.id === 'guard') { rem = me.g ? 0 : me.c2; total = stats.guardCd; }
     else if (s.id === 'quake') { rem = me.c1; total = stats.quakeCd; }
