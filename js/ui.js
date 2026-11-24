@@ -2,9 +2,10 @@
 //  UI panels: toasts, wardrobe, skill tree, boon picker,
 //  settings and a yes/no dialog. (HTML in index.html.)
 // =============================================================
-import { CLOAKS, HATS, FLAMES, BOONS, WARRIOR_TREE, CAP_REQUIREMENT, byId, canBuy, branchSpent } from './data.js';
+import { CLOAKS, HATS, FLAMES, BOONS, TREES, CAP_REQUIREMENT, byId, canBuy, branchSpent } from './data.js';
 import { drawPreview } from './render.js';
 import { audio } from './audio.js';
+import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName } from './prefs.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -38,16 +39,85 @@ export function confirmDialog(message, yes = 'Yes', no = 'Cancel') {
 export const settings = {
   open: false,
   onLeave: null,
+  roomCode: null,
+  tab: 'audio',
   show(inGame) {
     this.open = true;
     $('#settings').classList.remove('hidden');
     $('#btn-leave').classList.toggle('hidden', !inGame);
+    $('#settings-room').classList.toggle('hidden', !this.roomCode);
+    $('#settings-code').textContent = this.roomCode || '';
     for (const k of ['master', 'music', 'sfx', 'amb', 'ui']) {
       const el = $(`#vol-${k}`);
       el.value = Math.round(audio.vol[k] * 100);
       el.nextElementSibling.textContent = el.value + '%';
     }
+    this.fill();
+    this.setTab(this.tab);
     audio.play('open');
+  },
+  setTab(tab) {
+    this.tab = tab;
+    document.querySelectorAll('#settings .tab').forEach((b) => b.classList.toggle('selected', b.dataset.tab === tab));
+    document.querySelectorAll('#settings .tabpage').forEach((p) => p.classList.toggle('hidden', p.dataset.page !== tab));
+  },
+  // Video / Gameplay / Controls controls are built from the saved settings
+  fill() {
+    const v = $('#page-video');
+    v.innerHTML = '';
+    v.append(
+      slider('Brightness', Math.round(prefs.brightness * 100), 50, 150, (x) => { prefs.brightness = x / 100; }),
+      choice('Zoom', [['auto', 'Auto'], ['1', '1×'], ['2', '2×'], ['3', '3×'], ['4', '4×']], String(prefs.zoom), (x) => { prefs.zoom = x === 'auto' ? 'auto' : Number(x); }),
+      slider('Screen shake', Math.round(prefs.shake * 100), 0, 100, (x) => { prefs.shake = x / 100; }),
+      choice('Particles', [['high', 'Lots'], ['low', 'Fewer']], prefs.particles, (x) => { prefs.particles = x; }),
+      button('Fullscreen', () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); }),
+    );
+    const g = $('#page-gameplay');
+    g.innerHTML = '';
+    g.append(
+      toggle('Damage numbers', prefs.dmgNums, (x) => { prefs.dmgNums = x; }),
+      toggle('Names above heads', prefs.names, (x) => { prefs.names = x; }),
+      toggle('Controls hint at the campfire', prefs.hint, (x) => { prefs.hint = x; const h = $('#help'); if (h && !x) h.classList.add('hidden'); }),
+      toggle('Colour-blind friendly warnings (blue instead of red)', prefs.cbSafe, (x) => { prefs.cbSafe = x; }),
+    );
+    const c = $('#page-controls');
+    c.innerHTML = '';
+    c.append(toggle('Tap to block instead of hold (Warrior)', prefs.guardToggle, (x) => { prefs.guardToggle = x; }));
+    const list = document.createElement('div');
+    list.className = 'binds';
+    for (const a of KEY_ACTIONS) {
+      const row = document.createElement('div');
+      row.className = 'bind';
+      const label = document.createElement('span');
+      label.textContent = a.name;
+      const b = document.createElement('button');
+      b.className = 'gbtn small';
+      b.textContent = keyName(prefs.keys[a.id]);
+      b.onclick = () => {
+        b.textContent = 'Press a key…';
+        window.__rebinding = true;
+        const onKey = (e) => {
+          e.preventDefault();
+          removeEventListener('keydown', onKey, true);
+          setTimeout(() => { window.__rebinding = false; }, 0);
+          if (e.code !== 'Escape') {
+            if (e.code === 'Backspace' || e.code === 'Delete') prefs.keys[a.id] = a.id === 'strike' || a.id === 'skill2' ? '' : prefs.keys[a.id];
+            else prefs.keys[a.id] = e.code;
+            savePrefs();
+          }
+          b.textContent = keyName(prefs.keys[a.id]);
+        };
+        addEventListener('keydown', onKey, true);
+      };
+      row.append(label, b);
+      list.appendChild(row);
+    }
+    c.appendChild(list);
+    c.append(button('Reset keys to default', () => { prefs.keys = { ...DEFAULT_KEYS }; savePrefs(); this.fill(); }));
+    const note = document.createElement('p');
+    note.className = 'note';
+    note.textContent = 'Controller: left stick move · right stick aim · RT strike · LT block/Gale · X Quake/Fire · LB Frost · RB ultimate · A dash · Y interact · View skill tree · Start settings.';
+    c.appendChild(note);
   },
   close() {
     if (!this.open) return;
@@ -63,6 +133,60 @@ for (const k of ['master', 'music', 'sfx', 'amb', 'ui']) {
   el.addEventListener('change', () => audio.play(k === 'ui' ? 'click' : 'ember'));
 }
 $('#settings [data-close]').onclick = () => settings.close();
+document.querySelectorAll('#settings .tab').forEach((b) => { b.onclick = () => settings.setTab(b.dataset.tab); });
+$('#settings-copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(settings.roomCode); toast('Room code copied. Paste it in Discord!'); }
+  catch { toast('The room code is ' + settings.roomCode); }
+};
+
+// small builders for settings rows
+function row(labelText, control, extra) {
+  const r = document.createElement('div');
+  r.className = 'slider';
+  const l = document.createElement('label');
+  l.textContent = labelText;
+  r.append(l, control);
+  if (extra) r.append(extra);
+  return r;
+}
+function slider(labelText, value, min, max, onChange) {
+  const i = document.createElement('input');
+  i.type = 'range'; i.min = min; i.max = max; i.value = value;
+  const s = document.createElement('span');
+  s.textContent = value + '%';
+  i.oninput = () => { s.textContent = i.value + '%'; onChange(Number(i.value)); savePrefs(); };
+  return row(labelText, i, s);
+}
+function choice(labelText, options, value, onChange) {
+  const box = document.createElement('div');
+  box.className = 'choices';
+  for (const [v, name] of options) {
+    const b = document.createElement('button');
+    b.className = 'gbtn small' + (v === value ? ' selected' : '');
+    b.textContent = name;
+    b.onclick = () => { box.querySelectorAll('button').forEach((x) => x.classList.remove('selected')); b.classList.add('selected'); onChange(v); savePrefs(); };
+    box.appendChild(b);
+  }
+  return row(labelText, box);
+}
+function toggle(labelText, value, onChange) {
+  const r = document.createElement('label');
+  r.className = 'toggle';
+  const i = document.createElement('input');
+  i.type = 'checkbox'; i.checked = value;
+  i.onchange = () => { onChange(i.checked); savePrefs(); };
+  const s = document.createElement('span');
+  s.textContent = labelText;
+  r.append(i, s);
+  return r;
+}
+function button(text, onClick) {
+  const b = document.createElement('button');
+  b.className = 'gbtn small block-ish';
+  b.textContent = text;
+  b.onclick = onClick;
+  return b;
+}
 $('#btn-leave').onclick = async () => {
   if (await confirmDialog('Leave the game? If you are the host, this closes the room for everyone.', 'Leave')) {
     settings.close();
@@ -155,13 +279,14 @@ export class TreePanel {
   refresh(me) {
     if (!this.open) return;
     const tree = me.tr || {};
-    const key = JSON.stringify([tree, me.pts]);
+    const key = JSON.stringify([me.k, tree, me.pts]);
     if (key === this.lastKey) return;
     this.lastKey = key;
+    $('#tree-title').textContent = me.k === 'sorcerer' ? 'Sorcerer skills' : 'Warrior skills';
     $('#tree-pts').textContent = me.pts === 1 ? '1 point to spend' : `${me.pts} points to spend`;
     const cols = $('#tree-cols');
     cols.innerHTML = '';
-    for (const br of WARRIOR_TREE) {
+    for (const br of TREES[me.k] || TREES.warrior) {
       const col = document.createElement('div');
       col.className = 'tree-col';
       col.style.setProperty('--c', br.color);
@@ -172,7 +297,7 @@ export class TreePanel {
       for (const n of br.nodes) {
         const rank = tree[n.id] || 0;
         const b = document.createElement('button');
-        const ok = canBuy(tree, me.pts, n.id);
+        const ok = canBuy(me.k, tree, me.pts, n.id);
         b.className = 'node gbtn' + (rank ? ' owned' : '') + (ok ? ' can' : '') + (n.cap ? ' cap' : '');
         b.disabled = !ok;
         const dots = Array.from({ length: n.max }, (_, i) => `<i class="${i < rank ? 'on' : ''}"></i>`).join('');

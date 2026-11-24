@@ -4,10 +4,11 @@
 //  -> darkness/light -> glowing things -> names & numbers.
 //  (The HUD is HTML, see hud.js.)
 // =============================================================
-import { TILE, CLOAKS, FLAMES, CLASSES, WARRIOR, WOLF, TREANT, byId } from './data.js';
+import { TILE, CLOAKS, FLAMES, CLASSES, WARRIOR, SORCERER, WOLF, byId } from './data.js';
 import { hash2 } from './rng.js';
+import { prefs } from './prefs.js';
 import {
-  grassTile, dirtTile, paintDecor, treeSprite, boulderSprite, charSprite, downSprite, swordSprite,
+  grassTile, dirtTile, paintDecor, treeSprite, boulderSprite, charSprite, downSprite, swordSprite, staffSprite, whiteOf,
   wolfSprite, wolfEye, treantSprite, TREANT_EYES, propSprite, TORCH, CHAR_W,
 } from './sprites.js';
 
@@ -21,9 +22,11 @@ export function hexRgb(hex) {
 }
 function rgba(c, a) { return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
 function hexA(hex, a) { return rgba(hexRgb(hex), a); }
-function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
+function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, TAU); ctx.fill(); }
 const easeOut = (p) => 1 - Math.pow(1 - p, 3);
 function idSeed(id) { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0; return (h >>> 0) % 1000; }
+// warning colour for enemy attacks (blue/white when colour-blind friendly mode is on)
+const warn = (a) => (prefs.cbSafe ? `rgba(90,170,255,${a})` : `rgba(255,70,50,${a})`);
 
 function text(ctx, s, x, y, { size = 13, font = FONT, weight = 800, color = '#fff', align = 'center', alpha = 1 } = {}) {
   ctx.font = `${weight} ${size}px ${font}`;
@@ -38,10 +41,11 @@ function text(ctx, s, x, y, { size = 13, font = FONT, weight = 800, color = '#ff
   ctx.globalAlpha = 1;
 }
 
+// 8 directions
+const DIRS = ['right', 'downright', 'down', 'downleft', 'left', 'upleft', 'up', 'upright'];
 export function facing(aim) {
-  const c = Math.cos(aim), s = Math.sin(aim);
-  if (Math.abs(c) > 0.62) return c >= 0 ? 'right' : 'left';
-  return s < 0 ? 'up' : 'down';
+  const i = Math.round(((aim % TAU) + TAU) % TAU / (Math.PI / 4)) % 8;
+  return DIRS[i];
 }
 
 // A teardrop flame. ratio 0..1 sets its size. This is your health.
@@ -70,7 +74,11 @@ export function drawFlame(ctx, x, y, ratio, pal, t, wild = false, seed = 0, scal
 }
 
 // ---------------------------------------------------------- characters
-// o: { look:{cloak,hat}, aim, moving, swing, heavy, down, hurt, dash, guard }
+const HAND = {
+  down: [7, -10], downright: [6, -10], right: [5, -10], upright: [-2, -11],
+  up: [-6, -11], upleft: [2, -11], left: [-5, -10], downleft: [-6, -10],
+};
+// o: { look:{cloak,hat}, cls, aim, moving, swing, heavy, down, hurt, dash, guard, cast }
 export function drawCharacter(ctx, x, y, o, t) {
   x = Math.round(x); y = Math.round(y);
   if (o.down) { ctx.drawImage(downSprite(o.look), x - 16, y - 12); return; }
@@ -78,24 +86,27 @@ export function drawCharacter(ctx, x, y, o, t) {
   if (o.hurt && Math.floor(t * 30) % 2) ctx.globalAlpha = 0.5;
   if (o.dash) ctx.globalAlpha = 0.75;
   const dir = facing(o.aim);
-  const frame = o.moving ? 1 + (Math.floor(t * 8) % 2) : 0;
-  const { img, flip } = charSprite(o.look, dir, frame);
-  const bob = o.moving && frame === 1 ? -1 : 0;
-  const hand = { down: [7, -10], up: [-6, -11], right: [5, -10], left: [-5, -10] }[dir];
-  const sword = () => {
-    const sw = swordSprite(o.heavy && o.swing >= 0);
+  const frame = o.moving ? [1, 0, 2, 0][Math.floor(t * 7) % 4] : 0;
+  const { img, flip } = charSprite(o.look, dir, frame, o.cls);
+  const bob = o.moving && frame !== 0 ? -1 : 0;
+  const hand = HAND[dir];
+  const sorc = o.cls === 'sorcerer';
+  const weapon = () => {
+    const sw = sorc ? staffSprite() : swordSprite(o.heavy && o.swing >= 0);
     let ang;
-    if (o.guard) ang = o.aim - Math.PI / 2 * (Math.cos(o.aim) >= 0 ? 1 : -1);
-    else if (o.swing >= 0) { const span = o.heavy ? 1.6 : 1.25; ang = o.aim - span + easeOut(o.swing) * span * 2; }
-    else ang = o.aim + 0.8 * (Math.cos(o.aim) >= 0 ? 1 : -1);
+    if (o.guard) ang = o.aim - (Math.PI / 2) * (Math.cos(o.aim) >= 0 ? 1 : -1);
+    else if (o.swing >= 0) { const span = sorc ? 1.0 : o.heavy ? 1.6 : 1.25; ang = o.aim - span + easeOut(o.swing) * span * 2; }
+    else if (o.cast >= 0) ang = -Math.PI / 2 + (Math.cos(o.aim) >= 0 ? 0.3 : -0.3); // staff raised to cast
+    else ang = sorc ? -Math.PI / 2 + 0.35 * (Math.cos(o.aim) >= 0 ? 1 : -1) : o.aim + 0.8 * (Math.cos(o.aim) >= 0 ? 1 : -1);
     const gx = o.guard ? Math.cos(o.aim) * 7 : 0, gy = o.guard ? Math.sin(o.aim) * 5 : 0;
     ctx.save();
     ctx.translate(x + hand[0] + gx, y + hand[1] + bob + gy);
     ctx.rotate(ang);
-    ctx.drawImage(sw, -3, -3.5);
+    ctx.drawImage(sw, sorc ? -6 : -3, sorc ? -4.5 : -3.5);
     ctx.restore();
   };
-  if (dir === 'up') sword();
+  const behind = dir === 'up' || dir === 'upleft' || dir === 'upright';
+  if (behind) weapon();
   if (flip) {
     ctx.save();
     ctx.translate(x, 0);
@@ -103,15 +114,22 @@ export function drawCharacter(ctx, x, y, o, t) {
     ctx.drawImage(img, -CHAR_W / 2, y - 35 + bob);
     ctx.restore();
   } else ctx.drawImage(img, x - CHAR_W / 2, y - 35 + bob);
-  if (dir !== 'up') sword();
+  if (!behind) weapon();
   ctx.restore();
 }
 
 export function torchPoint(x, y, aim, moving, t) {
-  const dir = facing(aim);
-  const a = TORCH[dir];
-  const bob = moving && Math.floor(t * 8) % 2 === 0 ? -1 : 0;
-  return [x + a[0], y + a[1] + bob];
+  const a = TORCH[facing(aim)];
+  const frame = moving ? [1, 0, 2, 0][Math.floor(t * 7) % 4] : 0;
+  return [x + a[0], y + a[1] + (moving && frame !== 0 ? -1 : 0)];
+}
+
+// tip of the sorcerer's staff (for spell sparkles)
+function staffTip(x, y, o) {
+  const hand = HAND[facing(o.aim)];
+  let ang = o.cast >= 0 ? -Math.PI / 2 + (Math.cos(o.aim) >= 0 ? 0.3 : -0.3) : -Math.PI / 2 + 0.35 * (Math.cos(o.aim) >= 0 ? 1 : -1);
+  if (o.swing >= 0) ang = o.aim - 1 + easeOut(o.swing) * 2;
+  return [x + hand[0] + Math.cos(ang) * 20, y + hand[1] + Math.sin(ang) * 20];
 }
 
 // Character portrait for menus and the wardrobe.
@@ -130,8 +148,9 @@ export function drawPreview(canvas, ch, t = 1) {
   ctx.save();
   const fx = canvas.width / 2 / s, fy = (canvas.height - 3 * s) / s;
   ctx.scale(s, s);
-  drawCharacter(ctx, fx, fy, { look: { cloak: byId(CLOAKS, ch.cloak).hex, hat: ch.hat }, aim: 1.2, moving: false, swing: -1 }, t);
-  const [tx, ty] = torchPoint(Math.round(fx), Math.round(fy), 1.2, false, t);
+  const aim = 0.75;
+  drawCharacter(ctx, fx, fy, { look: { cloak: byId(CLOAKS, ch.cloak).hex, hat: ch.hat }, cls: ch.cls, aim, moving: false, swing: -1, cast: -1 }, t);
+  const [tx, ty] = torchPoint(Math.round(fx), Math.round(fy), aim, false, t);
   drawFlame(ctx, tx, ty, 1, pal, t, false, 3);
   ctx.restore();
 }
@@ -162,7 +181,6 @@ function buildWorldGfx(world) {
       g.drawImage(s.trunk, tx * T + 16 - s.ox, ty * T + 30 - s.oy);
     }
   }
-  // canopy: drawn on top of characters, so the trees hide what's behind them
   const [canopy, c] = mk();
   for (let ty = 0; ty < world.h; ty++) {
     for (let tx = 0; tx < world.w; tx++) {
@@ -192,7 +210,7 @@ export class Renderer {
     const w = innerWidth, h = innerHeight;
     if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
     if (this.light.width !== w || this.light.height !== h) { this.light.width = w; this.light.height = h; }
-    this.zoom = Math.max(1, Math.round(h / 480));
+    this.zoom = prefs.zoom === 'auto' ? Math.max(1, Math.round(h / 480)) : Number(prefs.zoom);
   }
 
   viewSize() { this.resize(); return { w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom }; }
@@ -232,13 +250,13 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     this.blit(this.gfx.ground, ox, oy, vw, vh);
 
-    // ground markings
     if (world.readyZone) this.drawReadyZone(ctx, world.readyZone, t);
     if (world.exit) this.drawGateGround(ctx, world.exit, snap.go, t);
     for (const h of snap.hz) if (vis(h.x, h.y, 200)) this.drawHazard(ctx, h, t);
-    for (const f of snap.fi) if (vis(f[0], f[1])) { ctx.fillStyle = 'rgba(40,15,5,0.45)'; ctx.fillRect(f[0] - 9, f[1] - 3, 18, 6); }
+    for (const z of snap.zn || []) if (vis(z.x, z.y, 120)) this.drawZoneGround(ctx, z, t);
+    for (const s of snap.sf || []) if (vis(s.x, s.y)) this.drawStrikeGround(ctx, s, t);
+    for (const e of game.effects) if (e.k === 'crack') this.drawCrack(ctx, e, t);
 
-    // everything that stands up, sorted by depth
     const list = [];
     for (const p of world.props) if (vis(p.x, p.y)) list.push({ y: p.y, d: () => this.drawProp(ctx, p) });
     world.shrines.forEach((s, i) => { if (vis(s.x, s.y)) list.push({ y: s.y, d: () => ctx.drawImage(propSprite('heartwood', snap.sh[i] ? 1 : 0), s.x - 14, s.y - 31) }); });
@@ -256,15 +274,12 @@ export class Renderer {
     this.drawParticles(ctx, game.particles, false);
     this.blit(this.gfx.canopy, ox, oy, vw, vh);
 
-    // darkness + light
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawLighting(game, snap, toS, W, H, t);
 
-    // glowing things
     ctx.setTransform(Z, 0, 0, Z, -ox * Z, -oy * Z);
     this.drawPostLight(ctx, game, snap, me, t, vis);
 
-    // names, numbers, prompts (screen space for crisp text)
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawScreenText(ctx, game, snap, me, toS, vis, t);
     this.drawScreenFx(ctx, game, snap, me, W, H, t);
@@ -283,24 +298,28 @@ export class Renderer {
       const img = treantSprite(e.s === 5 ? 1 : 0);
       const sway = Math.round(Math.sin(t * 1.5) * 1.5);
       ctx.drawImage(img, x - 56 + sway, y - 116);
-      if (e.hu) { ctx.globalAlpha = 0.35; ctx.fillStyle = '#fff'; ctx.fillRect(x - 30, y - 70, 60, 60); ctx.globalAlpha = 1; }
+      if (e.hu) { ctx.globalAlpha = 0.55; ctx.drawImage(whiteOf(img), x - 56 + sway, y - 116); ctx.globalAlpha = 1; }
       return;
     }
     const variant = e.t === 'alpha' ? 'alpha' : e.el ? 'elite' : 'wolf';
-    const frame = e.s === 2 ? 3 : e.s === 3 ? 4 : v.moving ? 1 + (Math.floor(t * 10) % 2) : 0;
+    const frame = e.s === 2 ? 3 : e.s === 3 ? 4 : v.moving ? 1 + (Math.floor(t * 8) % 2) : 0;
     const img = wolfSprite(frame, variant);
     const S = variant === 'alpha' ? 1.5 : 1;
     const top = y - img.height + Math.round(3 * S);
-    const shake = e.s === 2 ? Math.round(Math.sin(t * 70)) : 0;
+    const shake = e.s === 2 ? Math.round(Math.sin(t * 60)) : 0;
+    // squash when hit
+    const squash = e.hu ? 0.85 : 1;
     ctx.save();
-    if (e.fx < 0) { ctx.translate(x, 0); ctx.scale(-1, 1); ctx.drawImage(img, -img.width / 2 + shake, top); }
-    else ctx.drawImage(img, x - img.width / 2 + shake, top);
+    ctx.translate(x, y);
+    ctx.scale(e.fx < 0 ? -1 : 1, 1);
+    ctx.scale(1 / squash, squash);
+    ctx.drawImage(img, -img.width / 2 + shake, top - y);
+    if (e.hu) { ctx.globalAlpha = 0.85; ctx.drawImage(whiteOf(img), -img.width / 2 + shake, top - y); }
+    else if (e.sl) { ctx.globalAlpha = 0.35; ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = '#8fd8ff'; ctx.fillRect(-img.width / 2, top - y, img.width, img.height); }
     ctx.restore();
-    if (e.hu || e.b) {
-      ctx.globalAlpha = e.hu ? 0.5 : 0.3;
-      ctx.fillStyle = e.hu ? '#fff' : '#ff8a30';
-      ctx.fillRect(x - 12 * S, y - 18 * S, 24 * S, 12 * S);
-      ctx.globalAlpha = 1;
+    if (e.sn) {
+      ctx.fillStyle = '#fff6b0';
+      for (let i = 0; i < 3; i++) { const a = t * 5 + (i * TAU) / 3; ctx.fillRect(Math.round(x + Math.cos(a) * 9), Math.round(top - 4 + Math.sin(a) * 3), 2, 2); }
     }
   }
 
@@ -319,14 +338,49 @@ export class Renderer {
   drawHazard(ctx, h, t) {
     if (h.k === 'root') {
       if (h.done) { ctx.drawImage(propSprite('roots'), h.x - 20, h.y - 28); return; }
-      ctx.fillStyle = `rgba(200,40,30,${0.12 + h.p * 0.3})`;
+      ctx.fillStyle = warn(0.12 + h.p * 0.3);
       ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r * 0.7, 0, 0, TAU); ctx.fill();
-      ctx.strokeStyle = `rgba(255,90,60,${0.5 + h.p * 0.5})`;
+      ctx.strokeStyle = warn(0.5 + h.p * 0.5);
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r * h.p, h.r * 0.7 * h.p, 0, 0, TAU); ctx.stroke();
     } else if (h.k === 'cone') {
-      ctx.fillStyle = `rgba(220,40,30,${0.1 + h.p * 0.3})`;
+      ctx.fillStyle = warn(0.1 + h.p * 0.3);
       ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.arc(h.x, h.y, h.r, h.a - h.arc / 2, h.a + h.arc / 2); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  drawZoneGround(ctx, z, t) {
+    const fade = Math.min(1, z.t / 0.5);
+    if (z.k === 'pyre') { ctx.fillStyle = `rgba(40,15,5,${0.45 * fade})`; ctx.fillRect(z.x - 9, z.y - 3, 18, 6); }
+    else if (z.k === 'blizzard') {
+      ctx.fillStyle = `rgba(170,220,255,${0.18 * fade})`;
+      ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.7, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = `rgba(220,245,255,${0.5 * fade})`; ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]); ctx.lineDashOffset = t * 12;
+      ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.7, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    } else if (z.k === 'storm') { ctx.fillStyle = `rgba(60,20,5,${0.4 * fade})`; ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.5, 0, 0, TAU); ctx.fill(); }
+  }
+
+  drawStrikeGround(ctx, s, t) {
+    const p = Math.max(0, Math.min(1, 1 - s.t / 0.6));
+    if (s.t > 0.6) return;
+    ctx.fillStyle = `rgba(255,180,90,${0.1 + p * 0.25})`;
+    ctx.beginPath(); ctx.ellipse(s.x, s.y, s.r, s.r * 0.6, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = `rgba(255,220,150,${0.4 + p * 0.5})`; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(s.x, s.y, s.r * p, s.r * 0.6 * p, 0, 0, TAU); ctx.stroke();
+  }
+
+  drawCrack(ctx, e, t) {
+    const p = (t - e.t0) / e.life;
+    if (p < 0 || p > 1) return;
+    ctx.strokeStyle = `rgba(30,18,8,${0.7 * (1 - p)})`;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * TAU + e.seed;
+      ctx.beginPath(); ctx.moveTo(e.x, e.y);
+      ctx.lineTo(e.x + Math.cos(a) * e.r * 0.45, e.y + Math.sin(a) * e.r * 0.3 + 3);
+      ctx.lineTo(e.x + Math.cos(a + 0.2) * e.r * 0.8, e.y + Math.sin(a + 0.2) * e.r * 0.55);
+      ctx.stroke();
     }
   }
 
@@ -348,12 +402,11 @@ export class Renderer {
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.ellipse(ex.x, ex.y, ex.r, ex.r * 0.55, 0, 0, TAU); ctx.stroke();
     if (!open) {
-      ctx.fillStyle = '#3b2a1a';
       for (let i = 0; i < 12; i++) {
         const x = ex.x - 40 + i * 7;
         const yy = ex.y - 30 + Math.round(Math.sin(i * 1.7) * 4);
-        ctx.fillRect(x, yy, 7, 2);
         ctx.fillStyle = i % 2 ? '#5a3a22' : '#3b2a1a';
+        ctx.fillRect(x, yy, 7, 2);
         ctx.fillRect(x + 3, yy - 2, 1, 2);
       }
     }
@@ -365,7 +418,7 @@ export class Renderer {
     const L = [], world = game.world;
     for (const p of snap.ps) {
       const v = game.playerView(p);
-      if (p.dn) { L.push({ x: v.x, y: v.y - 6, r: 55, col: [255, 90, 50], i: 0.7 }); continue; }
+      if (p.dn) { L.push({ x: v.x, y: v.y - 6, r: 55 + 80 * p.rv, col: [255, 90, 50], i: 0.7 }); continue; }
       const pal = byId(FLAMES, p.f);
       const ratio = p.hp / p.mx;
       const fl = 1 + Math.sin(t * 9 + v.x * 0.01) * 0.02 + Math.sin(t * 23) * 0.015;
@@ -375,12 +428,13 @@ export class Renderer {
     if (world.campfire) L.push({ x: world.campfire.x, y: world.campfire.y - 8, r: 250 + Math.sin(t * 7) * 10 + Math.sin(t * 13) * 6, col: [255, 150, 70], i: 1 });
     for (const g of world.glows) L.push({ x: g.x, y: g.y, r: 52, col: g.c, i: 0.55 });
     for (const k of snap.pk) L.push({ x: k.x, y: k.y, r: k.k === 'f' ? 80 : 48, col: k.k === 'f' ? [255, 230, 140] : [255, 160, 70], i: 0.85 });
-    for (const f of snap.fi) L.push({ x: f[0], y: f[1] - 6, r: 60, col: [255, 140, 50], i: 0.8 });
+    for (const z of snap.zn || []) L.push({ x: z.x, y: z.y - 6, r: z.k === 'blizzard' ? z.r * 1.3 : z.k === 'storm' ? 110 : 60, col: z.k === 'blizzard' ? [150, 210, 255] : [255, 140, 50], i: 0.8 });
+    for (const s of snap.sp || []) L.push({ x: s.x, y: s.y, r: s.k === 'fire' ? 90 : 50, col: s.k === 'fire' ? [255, 150, 60] : [150, 220, 255], i: 0.9 });
+    for (const s of snap.sf || []) if (s.t < 0.6) L.push({ x: s.x, y: s.y, r: 70, col: [255, 190, 110], i: 0.6 });
     for (const e of snap.es) {
       const v = game.views.get('e' + e.id);
       if (!v) continue;
-      if (e.el) L.push({ x: v.x, y: v.y - 10, r: 50, col: [255, 140, 60], i: 0.5 });
-      if (e.b) L.push({ x: v.x, y: v.y - 10, r: 46, col: [255, 140, 60], i: 0.5 });
+      if (e.el || e.b) L.push({ x: v.x, y: v.y - 10, r: 48, col: [255, 140, 60], i: 0.5 });
     }
     if (world.exit) L.push({ x: world.exit.x, y: world.exit.y - 20, r: snap.go ? 220 : 120, col: snap.go ? [160, 255, 170] : [255, 100, 80], i: 0.85 });
     world.shrines.forEach((s, i) => { if (!snap.sh[i]) L.push({ x: s.x, y: s.y - 16, r: 110, col: [255, 170, 90], i: 0.85 }); });
@@ -391,16 +445,17 @@ export class Renderer {
       L.push({ x: p.x, y: p.y - 30, r: c.available ? 90 : 36, col: hexRgb(c.color), i: c.available ? 0.9 : 0.5 });
     }
     for (const e of game.effects) {
-      if (e.k !== 'ring' && e.k !== 'pyre') continue;
+      if (!e.light) continue;
       const a = 1 - (t - e.t0) / e.life;
-      if (a > 0) L.push({ x: e.x, y: e.y, r: (e.r || 120) * 1.6, col: [255, 170, 80], i: a });
+      if (a > 0) L.push({ x: e.x, y: e.y, r: e.light, col: e.lcol || [255, 170, 80], i: a });
     }
     return L;
   }
 
   drawLighting(game, snap, toS, W, H, t) {
     const l = this.lctx, ctx = this.ctx, Z = this.zoom;
-    const dark = game.world.kind === 'lobby' ? 0.72 : game.world.kind === 'arena' ? 0.9 : 0.95;
+    const base = game.world.kind === 'lobby' ? 0.72 : game.world.kind === 'arena' ? 0.9 : 0.95;
+    const dark = Math.max(0.2, Math.min(0.99, base * (1.5 - prefs.brightness * 0.5)));
     l.globalCompositeOperation = 'source-over';
     l.clearRect(0, 0, W, H);
     l.fillStyle = `rgba(3,5,14,${dark})`;
@@ -471,7 +526,6 @@ export class Renderer {
       ctx.moveTo(p.x, p.y - 46 + bob); ctx.lineTo(p.x + 5, p.y - 39 + bob); ctx.lineTo(p.x, p.y - 33 + bob); ctx.lineTo(p.x - 5, p.y - 39 + bob);
       ctx.fill();
     }
-    // the gate
     if (world.exit && snap.go && vis(world.exit.x, world.exit.y, 120)) {
       const ex = world.exit;
       ctx.globalCompositeOperation = 'lighter';
@@ -483,11 +537,9 @@ export class Renderer {
       }
       ctx.globalCompositeOperation = 'source-over';
     }
-    // Heartwood shrines
     world.shrines.forEach((s, i) => {
       if (snap.sh[i] || !vis(s.x, s.y)) return;
-      const a = 0.6 + Math.sin(t * 3) * 0.3;
-      ctx.fillStyle = `rgba(255,170,90,${a})`;
+      ctx.fillStyle = `rgba(255,170,90,${0.6 + Math.sin(t * 3) * 0.3})`;
       ctx.fillRect(s.x - 4, s.y - 13, 9, 5);
     });
     // pickups
@@ -503,19 +555,58 @@ export class Renderer {
       ctx.fillStyle = big ? '#fffbe0' : '#ffb347';
       ctx.fillRect(k.x - (big ? 2 : 1), y - (big ? 2 : 1), big ? 4 : 2, big ? 4 : 2);
     }
-    for (const f of snap.fi) if (vis(f[0], f[1])) drawFlame(ctx, f[0], f[1], Math.min(1, f[2] / 2), FLAMES[0], t * 1.3, false, f[0] + f[1], 1.1);
+    // ground spells
+    for (const z of snap.zn || []) {
+      if (!vis(z.x, z.y, 120)) continue;
+      const fade = Math.min(1, z.t / 0.5);
+      if (z.k === 'pyre') drawFlame(ctx, z.x, z.y, Math.min(1, z.t / 2), FLAMES[0], t * 1.3, false, z.x + z.y, 1.1);
+      else if (z.k === 'storm') {
+        for (let i = 0; i < 4; i++) {
+          const a = t * 8 + i * 1.6, rr = 6 + i * 4;
+          drawFlame(ctx, z.x + Math.cos(a) * rr, z.y - 4 - i * 7 + Math.sin(a) * rr * 0.4, 0.8 * fade, FLAMES[0], t + i, false, i, 1.1 - i * 0.15);
+        }
+      } else if (z.k === 'blizzard') {
+        ctx.fillStyle = `rgba(235,248,255,${0.85 * fade})`;
+        for (let i = 0; i < 26; i++) {
+          const sx = z.x + (hash2(i, z.id) - 0.5) * z.r * 2, sy = z.y - z.r * 0.6 + ((t * 40 + hash2(z.id, i) * 200) % (z.r * 1.2));
+          if (Math.hypot((sx - z.x) / z.r, (sy - z.y) / (z.r * 0.7)) < 1) ctx.fillRect(Math.round(sx), Math.round(sy), 1, 1);
+        }
+      }
+    }
+    // projectiles and falling meteors
+    for (const s of snap.sp || []) {
+      if (!vis(s.x, s.y)) continue;
+      if (s.k === 'fire') {
+        const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 10);
+        g.addColorStop(0, 'rgba(255,245,200,1)'); g.addColorStop(0.4, 'rgba(255,150,50,0.9)'); g.addColorStop(1, 'rgba(255,80,20,0)');
+        ctx.fillStyle = g; circle(ctx, s.x, s.y, 10);
+      } else {
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
+        ctx.fillStyle = '#d9f4ff'; ctx.fillRect(-5, -1, 9, 2); ctx.fillStyle = '#8fd8ff'; ctx.fillRect(-7, -1, 3, 2);
+        ctx.restore();
+      }
+    }
+    for (const s of snap.sf || []) {
+      if (s.t > 0.6 || !vis(s.x, s.y)) continue;
+      const h = s.t * 260;
+      const g = ctx.createLinearGradient(s.x - h * 0.4, s.y - h, s.x, s.y);
+      g.addColorStop(0, 'rgba(255,200,120,0)'); g.addColorStop(1, 'rgba(255,240,200,0.95)');
+      ctx.strokeStyle = g; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(s.x - h * 0.4, s.y - h); ctx.lineTo(s.x, s.y - 4); ctx.stroke();
+      ctx.fillStyle = '#fff3c0'; circle(ctx, s.x, s.y - 4, 3);
+    }
     ctx.globalCompositeOperation = 'source-over';
     // enemies: lunge warnings, glowing eyes
     for (const e of snap.es) {
       const v = game.views.get('e' + e.id);
       if (!v || !vis(v.x, v.y, 150)) continue;
       if (e.s === 2 && e.t !== 'treant') {
-        const range = e.t === 'alpha' ? 150 : WOLF.lungeRange;
+        const range = e.t === 'alpha' ? 140 : WOLF.lungeRange;
         ctx.save();
         ctx.translate(v.x, v.y - 6);
         ctx.rotate(Math.atan2(e.dy, e.dx));
         const g = ctx.createLinearGradient(0, 0, range + 24, 0);
-        g.addColorStop(0, 'rgba(255,70,50,0.4)'); g.addColorStop(1, 'rgba(255,70,50,0)');
+        g.addColorStop(0, warn(0.45)); g.addColorStop(1, warn(0));
         ctx.fillStyle = g;
         ctx.fillRect(0, -8, range + 24, 16);
         ctx.restore();
@@ -536,7 +627,7 @@ export class Renderer {
         ctx.globalCompositeOperation = 'source-over';
       }
     }
-    // players: torch flames, guard shield, rekindle rings
+    // players: torch flames, guard shield, torch-to-torch rekindling
     for (const p of snap.ps) {
       const v = game.playerView(p);
       if (!vis(v.x, v.y)) continue;
@@ -544,13 +635,8 @@ export class Renderer {
       const seed = idSeed(p.id);
       const o = game.charOpts(p, v);
       if (p.dn) {
-        drawFlame(ctx, v.x - 12, v.y - 6, 0.05 + Math.abs(Math.sin(t * 3 + seed)) * 0.1, { core: '#ffe0c0', mid: '#ff6a3a', outer: '#a02010' }, t, false, seed);
-        if (p.rv > 0) {
-          ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.arc(v.x, v.y - 8, 18, 0, TAU); ctx.stroke();
-          ctx.strokeStyle = pal.mid; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(v.x, v.y - 8, 18, -Math.PI / 2, -Math.PI / 2 + TAU * p.rv); ctx.stroke();
-        }
+        const ex = v.x - 12, ey = v.y - 6;
+        drawFlame(ctx, ex, ey, 0.05 + p.rv * 0.6 + Math.abs(Math.sin(t * 3 + seed)) * 0.08, p.rv > 0 ? pal : { core: '#ffe0c0', mid: '#ff6a3a', outer: '#a02010' }, t, false, seed);
         continue;
       }
       if (p.gl) {
@@ -561,28 +647,60 @@ export class Renderer {
         ctx.globalCompositeOperation = 'source-over';
       }
       if (o.guard) {
-        const a = o.aim;
+        ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = `rgba(255,190,110,${0.6 + Math.sin(t * 20) * 0.2})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(v.x, v.y - 14, 20, a - 1.05, a + 1.05); ctx.stroke();
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(v.x, v.y - 14, 20, o.aim - 1.05, o.aim + 1.05); ctx.stroke();
+        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,240,200,0.8)';
+        ctx.beginPath(); ctx.arc(v.x, v.y - 14, 22, o.aim - 0.9, o.aim + 0.9); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      if (p.k === 'sorcerer') {
+        const [sx, sy] = staffTip(v.x, v.y, o);
+        const col = p.le === 'fire' ? '255,150,60' : p.le === 'frost' ? '150,220,255' : p.le === 'gale' ? '190,245,210' : '127,224,255';
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, p.le ? 9 : 5);
+        g.addColorStop(0, `rgba(${col},0.95)`); g.addColorStop(1, `rgba(${col},0)`);
+        ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; circle(ctx, sx, sy, p.le ? 9 : 5); ctx.globalCompositeOperation = 'source-over';
       }
       const [tx, ty] = torchPoint(v.x, v.y, o.aim, o.moving, t);
       drawFlame(ctx, tx, ty, p.hp / p.mx, pal, t, !!p.gl, seed);
+      // reviving someone: hold your torch out, flame flows to theirs
+      const patient = snap.ps.find((q) => q.dn && q.rh === p.id);
+      if (patient) {
+        const pv = game.playerView(patient);
+        const x1 = pv.x - 12, y1 = pv.y - 8;
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 10; i++) {
+          const k = ((t * 1.6 + i / 10) % 1);
+          const bx = tx + (x1 - tx) * k, by = ty + (y1 - ty) * k - Math.sin(k * Math.PI) * 16 + Math.sin(t * 9 + i) * 2;
+          ctx.fillStyle = hexA(i % 3 ? pal.mid : pal.core, 0.9 * Math.sin(k * Math.PI));
+          ctx.fillRect(Math.round(bx), Math.round(by), 2, 2);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
     }
     this.drawParticles(ctx, game.particles, true);
-    // effects
+    // attack & ability effects
     for (const e of game.effects) {
       const p = (t - e.t0) / e.life;
       if (p < 0 || p > 1) continue;
-      if (e.k === 'arc' || e.k === 'counter') {
+      if (e.k === 'arc' || e.k === 'counter' || e.k === 'staff') {
         const v = game.viewFor(e.id);
-        const span = e.k === 'counter' ? 1.4 : e.heavy ? 1.6 : 1.25;
-        const a0 = e.aim - span;
-        const cur = a0 + span * 2 * easeOut(Math.min(1, p * 1.6));
-        ctx.strokeStyle = e.k === 'counter' ? `rgba(255,160,70,${(1 - p) * 0.95})` : e.heavy ? `rgba(255,190,110,${(1 - p) * 0.9})` : `rgba(255,240,215,${(1 - p) * 0.8})`;
-        ctx.lineWidth = e.k === 'counter' ? 5 : e.heavy ? 4 : 3;
-        ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.arc(v.x, v.y - 12, e.k === 'counter' ? 54 : e.heavy ? 44 : 38, Math.max(a0, cur - 1.4), cur); ctx.stroke();
+        const span = e.k === 'counter' ? 1.4 : e.k === 'staff' ? 0.95 : e.heavy ? 1.6 : 1.25;
+        const R = e.k === 'counter' ? 54 : e.k === 'staff' ? 34 : e.heavy ? 46 : 40;
+        const a0 = e.aim - span, a1 = a0 + span * 2 * easeOut(Math.min(1, p * 1.7));
+        const tail = Math.max(a0, a1 - 1.6);
+        const col = e.k === 'counter' ? [255, 150, 60] : e.k === 'staff' ? [140, 230, 255] : e.heavy ? [255, 190, 100] : [255, 245, 225];
+        ctx.globalCompositeOperation = 'lighter';
+        // filled crescent: thick at the blade, thin at the tail
+        const steps = 14;
+        ctx.beginPath();
+        for (let i = 0; i <= steps; i++) { const a = tail + (a1 - tail) * (i / steps); ctx.lineTo(v.x + Math.cos(a) * R, v.y - 12 + Math.sin(a) * R); }
+        for (let i = steps; i >= 0; i--) { const a = tail + (a1 - tail) * (i / steps); const th = (e.heavy || e.k === 'counter' ? 12 : 8) * (i / steps); ctx.lineTo(v.x + Math.cos(a) * (R - th), v.y - 12 + Math.sin(a) * (R - th)); }
+        ctx.closePath();
+        ctx.fillStyle = rgba(col, 0.75 * (1 - p));
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
       } else if (e.k === 'pyre') {
         const v = game.viewFor(e.id);
         const r = WARRIOR.pyreRange * easeOut(Math.min(1, p * 2));
@@ -596,9 +714,29 @@ export class Renderer {
         const r = e.r * easeOut(p);
         ctx.strokeStyle = e.color || 'rgba(255,180,90,1)';
         ctx.globalAlpha = 1 - p;
-        ctx.lineWidth = 3 * (1 - p) + 1;
+        ctx.lineWidth = 4 * (1 - p) + 1;
         ctx.beginPath(); ctx.ellipse(e.x, e.y, r, r * 0.65, 0, 0, TAU); ctx.stroke();
         ctx.globalAlpha = 1;
+      } else if (e.k === 'spark') {
+        // 4-point star burst where a hit lands
+        const s = e.size * (0.5 + easeOut(p));
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(${e.col},${1 - p})`;
+        ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.rot);
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU, rr = i % 2 ? s * 0.25 : s; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+        ctx.closePath(); ctx.fill(); ctx.restore();
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (e.k === 'cloud') {
+        ctx.fillStyle = `rgba(235,240,245,${0.5 * (1 - p)})`;
+        for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU + e.seed; circle(ctx, e.x + Math.cos(a) * e.r * 0.6 * easeOut(p), e.y - 6 + Math.sin(a) * e.r * 0.35 * easeOut(p), 10 + 10 * p); }
+      } else if (e.k === 'gust') {
+        const v = game.viewFor(e.id);
+        ctx.strokeStyle = `rgba(200,250,220,${0.8 * (1 - p)})`; ctx.lineWidth = 2;
+        for (let i = -2; i <= 2; i++) {
+          const a = e.aim + i * 0.3, r0 = 12 + p * 70;
+          ctx.beginPath(); ctx.arc(v.x, v.y - 12, r0, a - 0.15, a + 0.15); ctx.stroke();
+        }
       }
     }
   }
@@ -617,7 +755,7 @@ export class Renderer {
     world.shrines.forEach((s, i) => {
       if (snap.sh[i] || Math.hypot(s.x - game.lp.x, s.y - game.lp.y) > 60) return;
       const [x, y] = toS(s.x, s.y - 40);
-      text(ctx, `[${game.input.device === 'pad' ? 'Y' : 'F'}] Light the Heartwood (+Wildfire)`, x, y, { size: 12, color: '#ffd59a' });
+      text(ctx, `[${game.keyLabel('interact')}] Light the Heartwood (+Wildfire)`, x, y, { size: 12, color: '#ffd59a' });
     });
     for (const e of snap.es) {
       const v = game.views.get('e' + e.id);
@@ -631,18 +769,22 @@ export class Renderer {
     for (const p of snap.ps) {
       const v = game.playerView(p);
       if (!vis(v.x, v.y)) continue;
-      if (p.id !== game.myId) {
+      if (p.id !== game.myId && prefs.names) {
         const [x, y] = toS(v.x, v.y - (p.h === 'witch' || p.h === 'antlers' ? 50 : 44));
         text(ctx, p.u, x, y, { size: 12, color: '#f4f1ea' });
       }
-      if (p.dn) { const [x, y] = toS(v.x, v.y - 30); text(ctx, p.id === game.myId ? 'Waiting to be rekindled…' : 'Stand close to rekindle', x, y, { size: 11, color: '#ffb59a' }); }
+      if (p.dn) {
+        const [x, y] = toS(v.x, v.y - 30);
+        text(ctx, p.rv > 0 ? 'Rekindling…' : p.id === game.myId ? 'Waiting to be rekindled…' : 'Stand close to rekindle', x, y, { size: 11, color: p.rv > 0 ? '#ffe0a0' : '#ffb59a' });
+      }
     }
     for (const e of game.effects) {
-      if (e.k !== 'num') continue;
+      if (e.k !== 'num' || !prefs.dmgNums) continue;
       const p = (t - e.t0) / e.life;
       if (p < 0 || p > 1) continue;
-      const [x, y] = toS(e.x, e.y - p * 18);
-      text(ctx, e.text, x, y, { size: e.big ? 18 : 14, color: e.color, alpha: 1 - p * p });
+      const [x, y] = toS(e.x + e.dx * p * 10, e.y - p * 18);
+      const pop = p < 0.15 ? 1 + (0.15 - p) * 4 : 1;
+      text(ctx, e.text, x, y, { size: Math.round((e.big ? 18 : 14) * pop), color: e.color, alpha: 1 - p * p });
     }
     if (game.prompt) {
       const pr = game.prompt;
@@ -661,7 +803,7 @@ export class Renderer {
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     }
     if (game.hurtFlash > 0) { ctx.fillStyle = `rgba(255,40,30,${game.hurtFlash * 0.4})`; ctx.fillRect(0, 0, W, H); }
-    // arrow towards the gate once it's open
+    if (game.flash > 0) { ctx.fillStyle = `rgba(255,200,120,${game.flash * 0.35})`; ctx.fillRect(0, 0, W, H); }
     const ex = game.world.exit;
     if (ex && snap.go) {
       const Z = this.zoom;

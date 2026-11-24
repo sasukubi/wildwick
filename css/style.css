@@ -226,3 +226,41 @@ input[type=range] { accent-color: #ff9a4a; width: 100%; }
   #tree-cols, #boon-cards { grid-template-columns: 1fr; }
   #help { display: none; }
 }
+
+/* ---------- round 3: logo, mana, weave, cooldown rings, settings tabs ---------- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+#logo svg { display: block; width: 100%; height: auto; margin: -6px 0 14px; filter: drop-shadow(0 6px 18px rgba(255, 120, 40, 0.35)); }
+#mana-fill { background: linear-gradient(90deg, #2a5bd8, #5cc8ff, #c8f0ff); }
+#bars .mana { height: 9px; }
+.skillcol { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#weave { font-size: 11px; font-weight: 800; padding: 4px 12px; position: relative; overflow: hidden; }
+#weave::after { content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: calc(var(--w, 0) * 100%); background: #bff5ff; }
+
+.skill { overflow: visible; }
+.skill::after { display: none; }
+.skill .ring { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); transform: rotate(-90deg); pointer-events: none; }
+.skill .ring circle { fill: none; stroke-width: 3; }
+.skill .ring .track { stroke: rgba(255, 255, 255, 0.12); }
+.skill .ring .prog { stroke: var(--el, #ffd38a); stroke-linecap: round; opacity: 0; transition: opacity 0.2s; }
+.skill.cooling .ring .prog { opacity: 1; stroke: rgba(255, 255, 255, 0.85); }
+.skill.cooling .ico { opacity: 0.4; filter: grayscale(0.7); }
+.skill .cdnum { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 17px; z-index: 3; text-shadow: 0 1px 3px #000; }
+.skill.nomana .ico { opacity: 0.35; filter: grayscale(1); }
+.skill.nomana { box-shadow: inset 0 0 0 2px rgba(90, 150, 255, 0.5); }
+.skill.primed { box-shadow: 0 0 0 2px var(--el), 0 0 16px var(--el); }
+.skill.flash { animation: ready-flash 0.45s ease-out; }
+@keyframes ready-flash { 0% { box-shadow: 0 0 0 0 rgba(255, 240, 200, 0.95); transform: scale(1.12); } 100% { box-shadow: 0 0 0 14px rgba(255, 240, 200, 0); transform: scale(1); } }
+
+.tabs { display: flex; gap: 6px; margin: 4px 0 10px; flex-wrap: wrap; }
+.tab.selected, .choices .selected { background: linear-gradient(180deg, rgba(255, 178, 102, 0.85), rgba(222, 100, 44, 0.8)); color: #1d0d04; }
+.choices { display: flex; gap: 4px; flex-wrap: wrap; grid-column: 2 / 4; }
+.toggle { display: flex; align-items: center; gap: 10px; margin: 10px 0; color: var(--text); font-weight: 700; font-size: 14px; cursor: pointer; }
+.toggle input { width: 18px; height: 18px; accent-color: #ff9a4a; }
+.binds { display: grid; gap: 6px; margin: 8px 0; max-height: 300px; overflow-y: auto; padding-right: 4px; }
+.bind { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; }
+.bind .gbtn { min-width: 110px; }
+.block-ish { margin-top: 8px; }
+#settings-room { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 6px 8px 6px 14px; width: fit-content; }
+#settings-code { letter-spacing: 3px; color: var(--gold); }
+#settings { width: min(460px, calc(100vw - 28px)); }
+#help { left: auto; right: 14px; bottom: auto; top: 66px; }

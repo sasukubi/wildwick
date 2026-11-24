@@ -189,6 +189,32 @@ $('#btn-copy').addEventListener('click', async () => {
 // handy for testing in the browser console: wildwick.game
 window.wildwick = { get game() { return game; } };
 
+// ---------------------------------------------------- the Pixel Campfire logo (+ browser tab icon)
+const FLAME_MAP = [
+  '.....O......', '....OO......', '....OMO.....', '...OMMO..O..', '...OMMMO.OO.', '..OMMYMMOMO.',
+  '..OMMYYMMMO.', '.OMMYYYMMMMO', '.OMYYWYYMMMO', '.OMYWWWYYMMO', '.OMYWWWWYMMO', '.OMMYWWYYMMO',
+  '..OMYYYYYMO.', '...OMMMMMO..', '..BBOOOOOBB.', '.bbBBBBBBbb.', '..bb....bb..',
+];
+const FLAME_COL = { O: '#d8401f', M: '#ff8a2b', Y: '#ffc94d', W: '#fff3c4', B: '#7a4a26', b: '#4a2c16' };
+function flameRects(px, ox, oy) {
+  let r = '';
+  FLAME_MAP.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (FLAME_COL[ch]) r += `<rect x="${ox + x * px}" y="${oy + y * px}" width="${px}" height="${px}" fill="${FLAME_COL[ch]}"/>`;
+  }));
+  return r;
+}
+$('#logo').innerHTML = `
+  <svg viewBox="0 0 660 220" shape-rendering="crispEdges">
+    <defs><radialGradient id="lgWarm" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ffb347" stop-opacity="0.55"/><stop offset="1" stop-color="#ff7a2b" stop-opacity="0"/></radialGradient></defs>
+    <circle cx="88" cy="110" r="95" fill="url(#lgWarm)" shape-rendering="auto"/>
+    ${flameRects(9, 34, 28)}
+    <rect x="150" y="30" width="6" height="6" fill="#ffc94d"/><rect x="24" y="60" width="6" height="6" fill="#ffc94d"/><rect x="160" y="90" width="6" height="6" fill="#ffc94d"/>
+    <text x="172" y="138" font-family="'Pixelify Sans'" font-weight="700" font-size="92" fill="#6b230c">WILDWICK</text>
+    <text x="166" y="132" font-family="'Pixelify Sans'" font-weight="700" font-size="92" fill="#ffcf5a" stroke="#2a1608" stroke-width="4" paint-order="stroke">WILDWICK</text>
+    <text x="170" y="180" font-family="'Pixelify Sans'" font-weight="700" font-size="20" letter-spacing="3" fill="#9fc25a">KEEP YOUR FLAME ALIVE</text>
+  </svg>`;
+$('#favicon').href = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 17" shape-rendering="crispEdges">${flameRects(1, 0, 0)}</svg>`);
+
 // fireflies behind the menus
 const ff = $('#fireflies');
 for (let i = 0; i < 26; i++) {

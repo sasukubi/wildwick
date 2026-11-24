@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wildwick</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Nunito:wght@600;700;800&family=Pixelify+Sans:wght@700&display=swap" rel="stylesheet">
+  <link id="favicon" rel="icon" href="data:,">
   <link rel="stylesheet" href="css/style.css">
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
@@ -17,8 +18,8 @@
   <!-- Log in / sign up -->
   <section id="screen-login" class="screen hidden">
     <div class="panel glass">
-      <h1 class="logo">Wildwick</h1>
-      <p class="tagline">Keep your flame alive.</p>
+      <h1 class="sr-only">Wildwick</h1>
+      <div id="logo" aria-hidden="true"></div>
       <form id="login-form" autocomplete="on">
         <label>Username <input id="username" maxlength="16" autocomplete="username" required></label>
         <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
@@ -74,7 +75,7 @@
     <div id="party"></div>
     <div id="stage-pill" class="glass pill"><b id="stage-name"></b><small id="stage-sub"></small></div>
     <div id="top-right">
-      <div class="glass pill room"><span class="muted">Room</span> <strong id="room-code"></strong><button id="btn-copy" class="gbtn small">Copy</button></div>
+      <div id="room-pill" class="glass pill room"><span class="muted">Room</span> <strong id="room-code"></strong><button id="btn-copy" class="gbtn small">Copy</button></div>
       <button id="btn-gear" class="gbtn round" title="Settings (Esc)">⚙</button>
     </div>
     <div id="bossbar" class="glass hidden"><b id="boss-name"></b><div class="bar"><i id="boss-fill"></i></div></div>
@@ -83,19 +84,20 @@
       <div id="bars" class="glass">
         <div id="fury"></div>
         <div class="bar flame"><i id="flame-fill"></i><span id="flame-text"></span></div>
+        <div id="mana-row" class="bar mana hidden"><i id="mana-fill"></i><span id="mana-text"></span></div>
         <div class="bar wild"><i id="wild-fill"></i><span id="wild-text"></span></div>
         <div class="xprow"><b id="lvl">Lv 1</b><div class="bar xp"><i id="xp-fill"></i></div><span id="pts" class="ptsbadge hidden"></span></div>
       </div>
-      <div id="skills"></div>
+      <div class="skillcol"><div id="weave" class="glass pill hidden"></div><div id="skills"></div></div>
     </div>
   </div>
 
   <div id="help" class="glass hidden">
     <b>Controls</b>
     <span><kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> strike (hold to keep swinging)</span>
-    <span><kbd>Right-click</kbd> hold to block, let go to counter · <kbd>E</kbd> Cinder Quake · <kbd>R</kbd> Pyre Cleave</span>
-    <span><kbd>Space</kbd> dash · <kbd>F</kbd> interact · <kbd>T</kbd> skill tree · <kbd>Esc</kbd> settings</span>
-    <span class="muted">Controller: sticks move/aim · RT strike · LT block · X quake · RB Pyre Cleave · A dash · Y interact · View tree · Start settings</span>
+    <span><b>Warrior:</b> <kbd>Right-click</kbd> hold to block, let go to counter · <kbd>E</kbd> Cinder Quake · <kbd>R</kbd> Pyre Cleave</span>
+    <span><b>Sorcerer:</b> <kbd>E</kbd> Fire · <kbd>Q</kbd> Frost · <kbd>Right-click</kbd> Gale · two different spells quickly = weave · <kbd>R</kbd> Starfall</span>
+    <span><kbd>Space</kbd> dash · <kbd>F</kbd> interact · <kbd>T</kbd> skill tree · <kbd>Esc</kbd> settings (change keys there)</span>
   </div>
 
   <!-- Panels -->
@@ -113,7 +115,7 @@
   </div>
 
   <div id="tree" class="panel glass modal hidden">
-    <div class="panel-head"><h2>Warrior skills</h2><span id="tree-pts" class="ptsbadge"></span><button data-close class="gbtn small">Close (T)</button></div>
+    <div class="panel-head"><h2 id="tree-title">Skills</h2><span id="tree-pts" class="ptsbadge"></span><button data-close class="gbtn small">Close (T)</button></div>
     <p class="note">The whole party earns EXP together. Every level gives you 1 point. Your upgrades last until the run ends.</p>
     <div id="tree-cols"></div>
   </div>
@@ -129,11 +131,23 @@
 
   <div id="settings" class="panel glass modal hidden">
     <div class="panel-head"><h2>Settings</h2><button data-close class="gbtn small">Close (Esc)</button></div>
-    <div class="slider"><label>Master</label><input id="vol-master" type="range" min="0" max="100"><span></span></div>
-    <div class="slider"><label>Music</label><input id="vol-music" type="range" min="0" max="100"><span></span></div>
-    <div class="slider"><label>Sound effects</label><input id="vol-sfx" type="range" min="0" max="100"><span></span></div>
-    <div class="slider"><label>Forest ambience</label><input id="vol-amb" type="range" min="0" max="100"><span></span></div>
-    <div class="slider"><label>Menu sounds</label><input id="vol-ui" type="range" min="0" max="100"><span></span></div>
+    <div id="settings-room" class="glass pill room hidden"><span class="muted">Room code</span> <strong id="settings-code"></strong><button id="settings-copy" class="gbtn small">Copy</button></div>
+    <div class="tabs">
+      <button class="tab gbtn small" data-tab="audio">Audio</button>
+      <button class="tab gbtn small" data-tab="video">Video</button>
+      <button class="tab gbtn small" data-tab="controls">Controls</button>
+      <button class="tab gbtn small" data-tab="gameplay">Gameplay</button>
+    </div>
+    <div class="tabpage" data-page="audio">
+      <div class="slider"><label>Master</label><input id="vol-master" type="range" min="0" max="100"><span></span></div>
+      <div class="slider"><label>Music</label><input id="vol-music" type="range" min="0" max="100"><span></span></div>
+      <div class="slider"><label>Sound effects</label><input id="vol-sfx" type="range" min="0" max="100"><span></span></div>
+      <div class="slider"><label>Forest ambience</label><input id="vol-amb" type="range" min="0" max="100"><span></span></div>
+      <div class="slider"><label>Menu sounds</label><input id="vol-ui" type="range" min="0" max="100"><span></span></div>
+    </div>
+    <div class="tabpage hidden" data-page="video" id="page-video"></div>
+    <div class="tabpage hidden" data-page="controls" id="page-controls"></div>
+    <div class="tabpage hidden" data-page="gameplay" id="page-gameplay"></div>
     <button id="btn-leave" class="gbtn danger block hidden">Leave game</button>
   </div>
 

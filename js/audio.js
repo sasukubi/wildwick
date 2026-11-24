@@ -163,6 +163,17 @@ class AudioEngine {
       case 'nope': T(140, 0.12, { type: 'square', lp: 800, gain: 0.12 }); break;
       case 'boon': [784, 988, 1175].forEach((f, i) => T(f, 0.4, { gain: 0.12, delay: i * 0.05 })); break;
       case 'step': N(0.05, { filter: 'lowpass', freq: 500, gain: 0.05 }); break;
+      case 'dodge': N(0.15, { freq: 2500, slide: 5000, q: 2, gain: 0.12 }); break;
+      // Sorcerer
+      case 'staff': N(0.12, { freq: 600, slide: 1600, q: 1.5, gain: 0.16 }); T(220, 0.08, { type: 'triangle', gain: 0.08 }); break;
+      case 'fire': N(0.3, { filter: 'lowpass', freq: 900, slide: 2400, gain: 0.25 }); T(180, 0.25, { slide: 320, type: 'sawtooth', lp: 900, gain: 0.08 }); break;
+      case 'frost': for (const f of [1760, 2350, 2790]) T(f, 0.25, { type: 'triangle', gain: 0.05 }); N(0.12, { filter: 'highpass', freq: 4000, gain: 0.1 }); break;
+      case 'gale': N(0.45, { freq: 300, slide: 1400, q: 0.7, gain: 0.3, attack: 0.05 }); break;
+      case 'weave': [660, 990, 1320, 1980].forEach((f, i) => T(f, 0.4, { gain: 0.08, delay: i * 0.04, vib: 7, vibDepth: 6 })); break;
+      case 'boom': T(110, 0.3, { slide: 40, gain: 0.4 }); N(0.35, { filter: 'lowpass', freq: 1400, slide: 200, gain: 0.35 }); break;
+      case 'steam': N(0.8, { filter: 'highpass', freq: 1500, slide: 600, gain: 0.3, attack: 0.02 }); T(90, 0.3, { slide: 45, gain: 0.3 }); break;
+      case 'starfall': [523, 784, 1046, 1568].forEach((f, i) => T(f, 1.2, { gain: 0.07, delay: i * 0.09, vib: 5, vibDepth: 5 })); break;
+      case 'meteor': T(70, 0.35, { slide: 30, gain: 0.45 }); N(0.3, { filter: 'lowpass', freq: 1200, slide: 150, gain: 0.3 }); break;
       // UI
       case 'click': this.tone(1250, 0.04, { gain: 0.12 * v, bus: 'ui' }); break;
       case 'hover': this.tone(1900, 0.025, { gain: 0.04 * v, bus: 'ui' }); break;

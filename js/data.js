@@ -44,16 +44,16 @@ export const CLASSES = [
   { id: 'warlock',  name: 'Warlock',  available: false, color: '#9b6bff', blurb: 'Commands a shadow familiar that feeds on darkness.' },
   { id: 'bowman',   name: 'Bowman',   available: false, color: '#8fd36b', blurb: 'Charged shots that pierce whole packs.' },
   { id: 'rogue',    name: 'Rogue',    available: false, color: '#d0d4e0', blurb: 'Dashes leave afterimages that draw enemies away.' },
-  { id: 'sorcerer', name: 'Sorcerer', available: false, color: '#58b8ff', blurb: 'Weaves two spells together into one.' },
+  { id: 'sorcerer', name: 'Sorcerer', available: true,  color: '#58b8ff', blurb: 'Weaves two spells together into one.' },
   { id: 'cleric',   name: 'Cleric',   available: false, color: '#ffe08a', blurb: 'Gives away their own flame to heal allies.' },
 ];
 
 // ---- Warrior ------------------------------------------------
 export const WARRIOR = {
-  speed: 150,
+  speed: 120,
   maxFlame: 100,
-  atkCd: 0.42, atkRange: 58, atkArc: 2.0, atkDmg: 14, heavyMult: 1.7,
-  dashSpeed: 520, dashTime: 0.17, dashCd: 1.1,
+  atkCd: 0.5, atkRange: 58, atkArc: 2.0, atkDmg: 15, heavyMult: 1.7,
+  dashSpeed: 420, dashTime: 0.2, dashCd: 1.3, dashSafe: 0.12, // only the first part of a dash dodges
   // Cinder Quake: burn some of your own flame to slam the ground
   quakeCd: 9, quakeCost: 10, quakeRadius: 108, quakeDmg: 30,
   // Smoulder Guard: hold to block hits from the front, release to counter-slash
@@ -64,85 +64,131 @@ export const WARRIOR = {
   furyMax: 0.8,      // Dark Fury: up to +80% damage at almost no flame
 };
 
+// ---- Sorcerer -----------------------------------------------
+export const SORCERER = {
+  speed: 118,
+  maxFlame: 85,
+  staffCd: 0.55, staffRange: 46, staffArc: 1.9, staffDmg: 7, staffKb: 320, // weak but pushes enemies away
+  mana: 100, manaRegen: 13,
+  fire:  { cost: 22, cd: 0.5, speed: 250, dmg: 24, r: 34, range: 260 },
+  frost: { cost: 18, cd: 0.6, dmg: 10, shards: 3, spread: 0.32, speed: 300, range: 160, slow: 0.5, slowT: 2 },
+  gale:  { cost: 16, cd: 0.7, range: 92, arc: 1.7, kb: 440, dmg: 6 },
+  weaveWindow: 1.6, weaveRefund: 15,
+  steam:     { r: 70, dmg: 34, stun: 1.3, range: 150 },
+  firestorm: { r: 30, dps: 42, t: 3, speed: 90 },
+  blizzard:  { r: 92, dps: 12, t: 4, slow: 0.45, range: 160 },
+  starfall:  { r: 120, meteors: 12, t: 3, dmg: 34, hitR: 36, range: 220 },
+};
+export const ELEMENTS = {
+  fire:  { name: 'Fire',  color: '#ff8a3c', icon: '🔥' },
+  frost: { name: 'Frost', color: '#8fd8ff', icon: '❄' },
+  gale:  { name: 'Gale',  color: '#bff5d2', icon: '🌀' },
+};
+export const WEAVES = {
+  'fire+frost': { id: 'steam', name: 'Steam Burst' },
+  'fire+gale':  { id: 'firestorm', name: 'Firestorm' },
+  'frost+gale': { id: 'blizzard', name: 'Blizzard' },
+};
+export function weaveOf(a, b) { return WEAVES[[a, b].sort().join('+')] || null; }
+
 // ---- Enemies ------------------------------------------------
 export const WOLF = {
-  r: 11, hp: 42, aggro: 300, chaseSpeed: 138,
-  lungeRange: 104, windup: 0.5, lungeTime: 0.28, lungeSpeed: 420, recover: 0.65,
+  r: 11, hp: 42, aggro: 260, chaseSpeed: 110,
+  lungeRange: 96, windup: 0.6, lungeTime: 0.3, lungeSpeed: 340, recover: 0.8,
   dmg: 12, xp: 6,
+  wanderRadius: 150, wanderSpeed: 38,
+  giveUp: 5,           // seconds without seeing you before it loses interest
 };
 // Ember-touched elites: rare, tougher, and they drop Wildfire.
-export const ELITE = { chance: 0.12, hpMult: 2.6, speedMult: 1.15, dmgMult: 1.3, xp: 25, fuel: 35 };
+export const ELITE = { chance: 0.12, hpMult: 2.6, speedMult: 1.12, dmgMult: 1.3, xp: 25, fuel: 35 };
 // Mini boss guarding each forest's gate.
 export const ALPHA = {
-  name: 'Alpha Thornwolf', r: 18, hp: 420, aggro: 360, chaseSpeed: 128,
-  lungeRange: 150, windup: 0.65, lunges: 3, lungeTime: 0.3, lungeSpeed: 470, recover: 1.1,
-  dmg: 18, howlCd: 12, xp: 90, fuel: 60,
+  name: 'Alpha Thornwolf', r: 18, hp: 300, aggro: 300, chaseSpeed: 100,
+  lungeRange: 140, windup: 0.85, lunges: 2, lungeTime: 0.32, lungeSpeed: 380, recover: 1.4,
+  dmg: 15, howlCd: 18, xp: 90, fuel: 60,
+  wanderRadius: 90, wanderSpeed: 30, giveUp: 6,
+  leash: 380,          // runs back home if you drag it further than this
+  homeHeal: 0.005,     // heals 0.5% of its health per second while going home (tiny)
 };
 // Final boss.
 export const TREANT = {
-  name: 'The Elder Treant', r: 40, hp: 1800, speed: 26, attackCd: 2.3,
-  rootDelay: 1.0, rootR: 38, rootDmg: 20,
-  sweepRange: 160, sweepArc: 2.1, sweepWindup: 0.8, sweepDmg: 26,
-  fuel: 100,
+  name: 'The Elder Treant', r: 40, hp: 1800, speed: 20, attackCd: 2.8,
+  rootDelay: 1.2, rootR: 38, rootDmg: 20,
+  sweepRange: 160, sweepArc: 2.1, sweepWindup: 1.0, sweepDmg: 26,
+  fuel: 100, leash: 260, homeHeal: 0.005,
 };
 
 // ---- Flame, Wildfire, reviving, runs ------------------------
 export const RULES = {
-  emberHeal: 12,          // flame restored by one ember
-  emberChance: 0.45,      // chance a normal enemy drops an ember
+  emberHeal: 12,
+  emberChance: 0.45,
   wildfireMax: 100,
-  shrineFuel: 50,         // Heartwood shrines
-  shrineChance: 0.6,      // chance a forest has a shrine
+  shrineFuel: 50,
+  shrineChance: 0.6,
   reviveTime: 3, reviveFlame: 35, reviveRange: 48,
-  forestStages: 3,        // then the final boss
-  restTime: 45,           // seconds to pick a boon between stages
+  forestStages: 3,
+  restTime: 45,
 };
 
 export function xpToNext(level) { return 30 + level * 25; }
 
-// ---- Warrior skill tree -------------------------------------
-// Each level gives everyone 1 point. Spend them here (T / Tab).
+// ---- Skill trees --------------------------------------------
+// Each level gives everyone 1 point. Spend them with T / Tab.
 // The last upgrade in each group unlocks after 5 points in that group.
-export const WARRIOR_TREE = [
-  {
-    id: 'fury', name: 'Fury', color: '#ff7a4c', blurb: 'Hit harder the lower your flame.',
-    nodes: [
+export const CAP_REQUIREMENT = 5;
+export const TREES = {
+  warrior: [
+    { id: 'fury', name: 'Fury', color: '#ff7a4c', blurb: 'Hit harder the lower your flame.', nodes: [
       { id: 'darkfury', name: 'Deeper Dark', max: 3, desc: 'Dark Fury can reach +25% more damage.' },
       { id: 'swift', name: 'Swift Blade', max: 3, desc: 'Swing your sword 8% faster.' },
       { id: 'third', name: 'Crushing Third', max: 2, desc: 'Every 3rd hit deals +40% more.' },
       { id: 'embers', name: 'Embers in the Dark', max: 1, cap: true, desc: 'Kills while under 40% flame restore 4 flame.' },
-    ],
-  },
-  {
-    id: 'bulwark', name: 'Bulwark', color: '#7fb6ff', blurb: 'Block, counter and outlast.',
-    nodes: [
+    ] },
+    { id: 'bulwark', name: 'Bulwark', color: '#7fb6ff', blurb: 'Block, counter and outlast.', nodes: [
       { id: 'guard', name: 'Tempered Guard', max: 3, desc: 'Wider block, and blocked hits store 25% more heat.' },
       { id: 'wick', name: 'Thick Wick', max: 3, desc: '+15 max flame.' },
       { id: 'riposte', name: 'Riposte', max: 2, desc: 'Counter-slash deals +30% damage.' },
       { id: 'unbroken', name: 'Unbroken', max: 1, cap: true, desc: 'Blocking right as a hit lands stuns the attacker.' },
-    ],
-  },
-  {
-    id: 'cinder', name: 'Cinder', color: '#ffc24c', blurb: 'Bigger quakes, longer fires.',
-    nodes: [
+    ] },
+    { id: 'cinder', name: 'Cinder', color: '#ffc24c', blurb: 'Bigger quakes, longer fires.', nodes: [
       { id: 'wide', name: 'Wide Quake', max: 3, desc: 'Cinder Quake reaches 15% further.' },
       { id: 'sear', name: 'Searing Quake', max: 3, desc: 'Cinder Quake deals +20% damage.' },
       { id: 'lean', name: 'Lean Burn', max: 2, desc: 'Cinder Quake costs 3 less flame.' },
       { id: 'pyrelord', name: 'Pyre Lord', max: 1, cap: true, desc: 'Pyre Cleave fire lasts twice as long, and you gain Wildfire 25% faster.' },
-    ],
-  },
-];
-export const CAP_REQUIREMENT = 5;
+    ] },
+  ],
+  sorcerer: [
+    { id: 'pyro', name: 'Pyromancy', color: '#ff8a4c', blurb: 'Bigger, hotter fire.', nodes: [
+      { id: 'searing', name: 'Searing Flames', max: 3, desc: 'Fire spells deal +20% damage.' },
+      { id: 'blast', name: 'Wide Blast', max: 2, desc: 'Fireball explosions are 25% bigger.' },
+      { id: 'raging', name: 'Raging Storm', max: 2, desc: 'Firestorm lasts 1 second longer.' },
+      { id: 'cataclysm', name: 'Cataclysm', max: 1, cap: true, desc: 'Starfall drops 50% more meteors.' },
+    ] },
+    { id: 'rime', name: 'Rime', color: '#8fd8ff', blurb: 'Slow them down, then shatter them.', nodes: [
+      { id: 'shard', name: 'Extra Shard', max: 2, desc: 'Frost fires 1 more shard.' },
+      { id: 'chill', name: 'Deep Chill', max: 3, desc: 'Slows last 30% longer and Frost deals +15% damage.' },
+      { id: 'whiteout', name: 'Whiteout', max: 2, desc: 'Blizzard is 25% bigger.' },
+      { id: 'shatter', name: 'Shatter', max: 1, cap: true, desc: 'Slowed enemies take 30% more damage from you.' },
+    ] },
+    { id: 'tempest', name: 'Tempest', color: '#bff5d2', blurb: 'Wind, mana and faster weaving.', nodes: [
+      { id: 'gust', name: 'Gale Force', max: 3, desc: 'Gale pushes 25% harder and deals more damage.' },
+      { id: 'well', name: 'Deep Well', max: 3, desc: '+20 max mana.' },
+      { id: 'quickweave', name: 'Quick Weave', max: 2, desc: '+0.5s to weave, and fusing refunds 10 more mana.' },
+      { id: 'eye', name: 'Eye of the Storm', max: 1, cap: true, desc: 'Fused spells refund all their mana.' },
+    ] },
+  ],
+};
+export const WARRIOR_TREE = TREES.warrior;
 
-export function treeNode(id) {
-  for (const b of WARRIOR_TREE) for (const n of b.nodes) if (n.id === id) return { branch: b, node: n };
+export function treeNode(cls, id) {
+  for (const b of TREES[cls] || []) for (const n of b.nodes) if (n.id === id) return { branch: b, node: n };
   return null;
 }
 export function branchSpent(tree, branch) {
   return branch.nodes.reduce((s, n) => s + (tree[n.id] || 0), 0);
 }
-export function canBuy(tree, pts, id) {
-  const f = treeNode(id);
+export function canBuy(cls, tree, pts, id) {
+  const f = treeNode(cls, id);
   if (!f || pts <= 0) return false;
   if ((tree[id] || 0) >= f.node.max) return false;
   if (f.node.cap && branchSpent(tree, f.branch) < CAP_REQUIREMENT) return false;
@@ -156,38 +202,71 @@ export const BOONS = [
   { id: 'swift',   name: 'Fleetfoot Moss', icon: '🍃', desc: '+10% move speed' },
   { id: 'ember',   name: 'Ember Pouch',    icon: '🔥', desc: 'Embers heal 50% more' },
   { id: 'dash',    name: 'Feather Cloak',  icon: '🪶', desc: 'Dash recharges 25% faster' },
-  { id: 'quake',   name: 'Rumbling Stone', icon: '🪨', desc: 'Cinder Quake recharges 20% faster' },
+  { id: 'focus',   name: 'Focus Stone',    icon: '🪨', desc: 'Skills recharge 15% faster' },
   { id: 'kindle',  name: 'Kindling',       icon: '✨', desc: '+30 Wildfire now, +15% Wildfire gain' },
   { id: 'leech',   name: 'Hungry Flame',   icon: '🩸', desc: 'Every hit restores 1 flame' },
   { id: 'thorn',   name: 'Thornhide',      icon: '🌿', desc: 'Take 12% less damage' },
   { id: 'scholar', name: "Owl's Wisdom",   icon: '🦉', desc: '+25% EXP for the whole party' },
+  { id: 'spring',  name: 'Mana Spring',    icon: '💧', desc: '+40% mana regeneration', cls: 'sorcerer' },
 ];
 
-// Works out a Warrior's real numbers from their skill tree and boons.
-export function warriorStats(tree = {}, boons = []) {
+// Works out a player's real numbers from their class, skill tree and boons.
+export function classStats(cls, tree = {}, boons = []) {
   const r = (id) => tree[id] || 0;
   const b = (id) => boons.filter((x) => x === id).length;
+  const focus = Math.pow(0.85, b('focus'));
+  const base = {
+    cls,
+    dmgMult: 1 + 0.12 * b('sharp'),
+    emberHeal: RULES.emberHeal * (1 + 0.5 * b('ember')),
+    leech: b('leech'),
+    dmgTaken: Math.pow(0.88, b('thorn')),
+    dashCd: WARRIOR.dashCd * Math.pow(0.75, b('dash')),
+    wfGain: 1 + 0.15 * b('kindle'),
+  };
+  if (cls === 'sorcerer') {
+    const S = SORCERER;
+    return {
+      ...base,
+      maxFlame: S.maxFlame + 15 * b('wick'),
+      speed: S.speed * (1 + 0.1 * b('swift')),
+      atkCd: S.staffCd,
+      maxMana: S.mana + 20 * r('well'),
+      manaRegen: S.manaRegen * (1 + 0.4 * b('spring')),
+      spellCd: focus,
+      fireMult: 1 + 0.2 * r('searing'),
+      blastR: S.fire.r * (1 + 0.25 * r('blast')),
+      stormT: S.firestorm.t + r('raging'),
+      meteors: Math.round(S.starfall.meteors * (r('cataclysm') ? 1.5 : 1)),
+      shards: S.frost.shards + r('shard'),
+      slowT: S.frost.slowT * (1 + 0.3 * r('chill')),
+      frostMult: 1 + 0.15 * r('chill'),
+      blizzR: S.blizzard.r * (1 + 0.25 * r('whiteout')),
+      shatter: r('shatter') > 0,
+      galeMult: 1 + 0.25 * r('gust'),
+      weaveWindow: S.weaveWindow + 0.5 * r('quickweave'),
+      weaveRefund: r('eye') ? 999 : S.weaveRefund + 10 * r('quickweave'),
+      furyMax: 0,
+    };
+  }
   const W = WARRIOR;
   return {
+    ...base,
     maxFlame: W.maxFlame + 15 * r('wick') + 15 * b('wick'),
     speed: W.speed * (1 + 0.1 * b('swift')),
-    dmgMult: 1 + 0.12 * b('sharp'),
     atkCd: W.atkCd * Math.pow(0.92, r('swift')),
     heavyMult: W.heavyMult + 0.4 * r('third'),
     furyMax: W.furyMax + 0.25 * r('darkfury'),
-    dashCd: W.dashCd * Math.pow(0.75, b('dash')),
-    quakeCd: W.quakeCd * Math.pow(0.8, b('quake')),
+    quakeCd: W.quakeCd * focus,
+    guardCd: W.guardCd * focus,
     quakeRadius: W.quakeRadius * (1 + 0.15 * r('wide')),
     quakeDmg: W.quakeDmg * (1 + 0.2 * r('sear')),
     quakeCost: Math.max(0, W.quakeCost - 3 * r('lean')),
     guardArc: W.guardArc + 0.25 * r('guard'),
     heatMult: 1 + 0.25 * r('guard'),
     counterMult: 1 + 0.3 * r('riposte'),
-    emberHeal: RULES.emberHeal * (1 + 0.5 * b('ember')),
-    wfGain: (1 + 0.15 * b('kindle')) * (r('pyrelord') ? 1.25 : 1),
+    wfGain: base.wfGain * (r('pyrelord') ? 1.25 : 1),
     trailMult: r('pyrelord') ? 2 : 1,
-    leech: b('leech'),
-    dmgTaken: Math.pow(0.88, b('thorn')),
     embersInDark: r('embers') > 0,
     unbroken: r('unbroken') > 0,
   };

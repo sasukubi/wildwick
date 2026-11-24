@@ -194,31 +194,41 @@ export function boulderSprite(v) {
 }
 
 // ---------------------------------------------------------- characters (24 x 36, feet at y=35)
+// 8 facing directions. Left-facing ones are the right-facing ones mirrored.
 export const CHAR_W = 24, CHAR_H = 36, CHAR_FOOT = 35;
 // where the backpack torch's flame sits, relative to the feet
-export const TORCH = { down: [6, -31], up: [3, -31], right: [-7, -31], left: [7, -31] };
+export const TORCH = {
+  down: [-7, -32], downright: [-6, -32], right: [-7, -32], upright: [-3, -32], up: [4, -32],
+  downleft: [6, -32], left: [7, -32], upleft: [3, -32],
+};
+export const BASE_DIR = { down: 'down', downright: 'downright', right: 'right', upright: 'upright', up: 'up', downleft: 'downright', left: 'right', upleft: 'upright' };
 
 function paintHead(g, dir, hat, cloak) {
-  const hx = dir === 'right' ? 13 : 12, hy = 14;
+  const hx = dir === 'right' ? 13 : dir === 'downright' ? 12 : 12, hy = 14;
+  const front = dir === 'down' || dir === 'downright';
   oval(g, hx, hy, 5, 5, PAL.o);
-  if (dir === 'up') { oval(g, hx, hy, 4, 4, PAL.hair); px(g, hx - 2, hy - 3, 3, 1, PAL.hair2); }
-  else {
+  if (dir === 'up' || dir === 'upright') {
+    oval(g, hx, hy, 4, 4, PAL.hair);
+    px(g, hx - 2, hy - 3, 3, 1, PAL.hair2);
+    if (dir === 'upright') { px(g, hx + 3, hy, 2, 3, PAL.skin); px(g, hx + 4, hy + 1, 1, 1, PAL.skin2); }
+  } else {
     oval(g, hx, hy, 4, 4, PAL.skin);
     px(g, hx - 4, hy + 2, 1, 2, PAL.skin2);
-    // hair
     px(g, hx - 4, hy - 4, 9, 3, PAL.hair);
     px(g, hx - 4, hy - 1, 1, 2, PAL.hair);
     if (dir === 'down') { px(g, hx + 4, hy - 1, 1, 2, PAL.hair); px(g, hx - 2, hy + 1, 1, 2, PAL.o); px(g, hx + 2, hy + 1, 1, 2, PAL.o); }
+    else if (dir === 'downright') { px(g, hx - 4, hy - 1, 2, 3, PAL.hair); px(g, hx, hy + 1, 1, 2, PAL.o); px(g, hx + 3, hy + 1, 1, 2, PAL.o); px(g, hx + 4, hy + 2, 1, 1, PAL.skin2); }
     else { px(g, hx - 4, hy - 1, 3, 4, PAL.hair); px(g, hx + 2, hy + 1, 1, 2, PAL.o); px(g, hx + 5, hy + 2, 1, 1, PAL.skin2); }
   }
   const dk = shadeHex(cloak, -0.3);
+  const hatDir = front ? (dir === 'down' ? 'down' : 'right') : dir === 'right' ? 'right' : 'up';
   switch (hat) {
     case 'hood':
-      if (dir === 'up') { oval(g, hx, hy - 1, 6, 6, PAL.o); oval(g, hx, hy - 1, 5, 5, dk); }
+      if (hatDir === 'up') { oval(g, hx, hy - 1, 6, 6, PAL.o); oval(g, hx, hy - 1, 5, 5, dk); if (dir === 'upright') px(g, hx + 4, hy, 1, 3, PAL.skin); }
       else {
         px(g, hx - 6, hy - 6, 13, 4, PAL.o); px(g, hx - 5, hy - 6, 11, 3, dk);
         px(g, hx - 6, hy - 3, 2, 7, PAL.o); px(g, hx - 5, hy - 3, 1, 6, dk);
-        if (dir === 'down') { px(g, hx + 5, hy - 3, 2, 7, PAL.o); px(g, hx + 5, hy - 3, 1, 6, dk); }
+        if (hatDir === 'down') { px(g, hx + 5, hy - 3, 2, 7, PAL.o); px(g, hx + 5, hy - 3, 1, 6, dk); }
         px(g, hx - 4, hy - 7, 9, 1, PAL.o);
       }
       break;
@@ -240,64 +250,75 @@ function paintHead(g, dir, hat, cloak) {
       break;
     case 'circlet':
       px(g, hx - 4, hy - 3, 9, 1, '#e8c45c');
-      if (dir !== 'up') px(g, hx + (dir === 'right' ? 2 : 0), hy - 3, 1, 1, '#7fe8ff');
+      if (front || dir === 'right') px(g, hx + (dir === 'down' ? 0 : 2), hy - 3, 1, 1, '#7fe8ff');
       break;
   }
 }
 
-function paintPack(g, dir) {
-  if (dir === 'up') {
-    px(g, 6, 20, 12, 11, PAL.o); px(g, 7, 21, 10, 9, PAL.pack); px(g, 7, 21, 10, 3, PAL.pack2); px(g, 11, 24, 2, 2, PAL.gold);
-    px(g, 15, 4, 1, 17, PAL.b2); px(g, 14, 3, 3, 2, PAL.steel2);
-  } else if (dir === 'right') {
-    px(g, 3, 20, 6, 11, PAL.o); px(g, 4, 21, 4, 9, PAL.pack); px(g, 4, 21, 4, 2, PAL.pack2);
-    px(g, 5, 4, 1, 17, PAL.b2); px(g, 4, 3, 3, 2, PAL.steel2);
-  } else {
-    px(g, 18, 4, 1, 16, PAL.b2); px(g, 17, 3, 3, 2, PAL.steel2);
-  }
+// backpack + the torch pole; the flame itself is drawn live (it's your health)
+function paintPack(g, dir, behind) {
+  const pole = (x) => { px(g, x, 4, 1, 17, PAL.b2); px(g, x - 1, 3, 3, 2, PAL.steel2); px(g, x - 1, 2, 3, 1, PAL.o); };
+  if (dir === 'up') { if (!behind) return; px(g, 6, 20, 12, 11, PAL.o); px(g, 7, 21, 10, 9, PAL.pack); px(g, 7, 21, 10, 3, PAL.pack2); px(g, 11, 24, 2, 2, PAL.gold); pole(16); }
+  else if (dir === 'upright') { if (!behind) return; px(g, 4, 20, 11, 11, PAL.o); px(g, 5, 21, 9, 9, PAL.pack); px(g, 5, 21, 9, 3, PAL.pack2); px(g, 8, 24, 2, 2, PAL.gold); pole(9); }
+  else if (dir === 'right') { if (behind) return; px(g, 3, 20, 6, 11, PAL.o); px(g, 4, 21, 4, 9, PAL.pack); px(g, 4, 21, 4, 2, PAL.pack2); pole(5); }
+  else if (dir === 'downright') { if (behind) return; px(g, 3, 21, 4, 9, PAL.o); px(g, 4, 22, 2, 7, PAL.pack); pole(6); }
+  else { if (behind) return; pole(5); }
 }
 
-function paintBody(g, dir, cloak, frame) {
+function paintBody(g, dir, cloak, frame, cls) {
   const C = cloak, Cd = shadeHex(cloak, -0.35), Cl = shadeHex(cloak, 0.18);
-  // legs
+  const robe = cls === 'sorcerer';
   const s = frame === 1 ? 1 : frame === 2 ? -1 : 0;
-  if (dir === 'right') {
-    px(g, 9 + s * 2, 30, 4, 5, PAL.boot); px(g, 13 - s * 2, 30, 4, 5, PAL.boot);
-  } else {
+  if (dir === 'right') { px(g, 9 + s * 2, 30, 4, 5, PAL.boot); px(g, 13 - s * 2, 30, 4, 5, PAL.boot); }
+  else {
     px(g, 8, 30 - Math.max(0, s), 3, 5 + Math.max(0, s), PAL.boot);
     px(g, 13, 30 - Math.max(0, -s), 3, 5 + Math.max(0, -s), PAL.boot);
   }
-  // cloak (a trapezoid)
-  const cx = dir === 'right' ? 12 : 12;
-  for (let y = 19; y <= 31; y++) {
-    const half = dir === 'right' ? 4 + Math.floor((y - 19) / 4) : 5 + Math.floor((y - 19) / 4);
+  const cx = 12, bottom = robe ? 33 : 31;
+  for (let y = 19; y <= bottom; y++) {
+    const half = (dir === 'right' ? 4 : 5) + Math.floor((y - 19) / (robe ? 3.5 : 4));
     px(g, cx - half - 1, y, half * 2 + 3, 1, PAL.o);
     px(g, cx - half, y, half * 2 + 1, 1, C);
     px(g, cx - half, y, 2, 1, Cl);
     px(g, cx + half - 1, y, 2, 1, Cd);
   }
-  px(g, cx - 6, 31, 13, 1, Cd);
-  px(g, cx - 5, 25, 11, 2, PAL.belt);
-  if (dir !== 'up') px(g, dir === 'right' ? cx + 1 : cx - 1, 25, 2, 2, PAL.gold);
-  // hands
-  if (dir === 'down') { px(g, 4, 25, 2, 2, PAL.skin); px(g, 18, 25, 2, 2, PAL.skin); px(g, 8, 20, 1, 4, PAL.strap); px(g, 15, 20, 1, 4, PAL.strap); }
-  if (dir === 'right') px(g, 15, 25, 2, 2, PAL.skin);
+  px(g, cx - 7, bottom, 15, 1, Cd);
+  if (robe) {
+    // sorcerer: long robe with a gold-trimmed hem, a sash and wide sleeves
+    for (let x = cx - 7; x <= cx + 7; x += 3) px(g, x, bottom - 1, 1, 1, PAL.gold);
+    px(g, cx - 5, 24, 11, 2, shadeHex(cloak, -0.5));
+    if (dir !== 'up' && dir !== 'upright') px(g, cx - 1, 20, 3, 4, shadeHex(cloak, 0.35));
+  } else {
+    px(g, cx - 5, 25, 11, 2, PAL.belt);
+    if (dir !== 'up' && dir !== 'upright') px(g, dir === 'right' ? cx + 1 : cx - 1, 25, 2, 2, PAL.gold);
+  }
+  const sleeve = robe ? Cd : null;
+  if (dir === 'down') {
+    if (sleeve) { px(g, 3, 22, 3, 3, sleeve); px(g, 18, 22, 3, 3, sleeve); }
+    px(g, 4, 25, 2, 2, PAL.skin); px(g, 18, 25, 2, 2, PAL.skin); px(g, 8, 20, 1, 4, PAL.strap); px(g, 15, 20, 1, 4, PAL.strap);
+  } else if (dir === 'downright') {
+    if (sleeve) px(g, 16, 22, 3, 3, sleeve);
+    px(g, 17, 25, 2, 2, PAL.skin); px(g, 9, 20, 1, 4, PAL.strap);
+  } else if (dir === 'right') {
+    if (sleeve) px(g, 14, 22, 3, 3, sleeve);
+    px(g, 15, 25, 2, 2, PAL.skin);
+  } else if (dir === 'upright') px(g, 17, 24, 2, 2, PAL.skin);
 }
 
 // frame: 0 idle, 1 and 2 walking
-export function charSprite(look, dir, frame) {
-  const sideDir = dir === 'left' ? 'right' : dir;
-  const key = `ch|${look.cloak}|${look.hat}|${sideDir}|${frame}`;
+export function charSprite(look, dir, frame, cls = 'warrior') {
+  const base = BASE_DIR[dir] || 'down';
+  const key = `ch|${look.cloak}|${look.hat}|${base}|${frame}|${cls}`;
   const img = cached(key, () => {
     const [c, g] = canvas(CHAR_W, CHAR_H);
     px(g, 6, 34, 12, 2, 'rgba(0,0,0,0.3)');
-    if (sideDir !== 'up') paintPack(g, sideDir === 'down' ? 'down' : 'right');
-    paintBody(g, sideDir, look.cloak, frame);
-    if (sideDir === 'up') paintPack(g, 'up');
-    paintHead(g, sideDir, look.hat, look.cloak);
+    paintPack(g, base, false);
+    paintBody(g, base, look.cloak, frame, cls);
+    paintPack(g, base, true);
+    paintHead(g, base, look.hat, look.cloak);
     return c;
   });
-  return { img, flip: dir === 'left' };
+  return { img, flip: dir === 'left' || dir === 'downleft' || dir === 'upleft' };
 }
 
 export function downSprite(look) {
@@ -308,6 +329,30 @@ export function downSprite(look) {
     px(g, 4, 6, 6, 5, PAL.pack); px(g, 2, 3, 6, 1, PAL.b2);
     return c;
   });
+}
+
+// sorcerer's staff, pointing right, grip at x=0
+export function staffSprite() {
+  return cached('staff', () => {
+    const [c, g] = canvas(30, 9);
+    px(g, 0, 3, 23, 3, PAL.o); px(g, 1, 4, 22, 1, PAL.b3);
+    px(g, 21, 1, 3, 7, PAL.o); px(g, 22, 2, 1, 5, PAL.b2);
+    oval(g, 26, 4, 3, 3, PAL.o); oval(g, 26, 4, 2, 2, '#7fe0ff'); px(g, 25, 3, 1, 1, '#ffffff');
+    return c;
+  });
+}
+
+// a plain white copy of a sprite, for the "you got hit" flash
+export function whiteOf(img) {
+  if (!img.__white) {
+    const [c, g] = canvas(img.width, img.height);
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, img.width, img.height);
+    img.__white = c;
+  }
+  return img.__white;
 }
 
 // sword pointing to the right, grip at x=0..5

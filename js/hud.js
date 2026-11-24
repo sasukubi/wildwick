@@ -2,12 +2,13 @@
 //  The in-game HUD (HTML, glass style). Updated every frame, but
 //  only touches the page when a value actually changes.
 // =============================================================
-import { CLOAKS, FLAMES, WARRIOR, RULES, byId } from './data.js';
+import { CLOAKS, FLAMES, SORCERER, ELEMENTS, RULES, byId } from './data.js';
 
 const $ = (s) => document.querySelector(s);
 const last = new Map();
 function set(el, prop, value) {
-  const k = el.id + prop;
+  if (!el) return;
+  const k = (el.id || el.className) + prop;
   if (last.get(k) === value) return;
   last.set(k, value);
   if (prop === 'text') el.textContent = value;
@@ -16,32 +17,47 @@ function set(el, prop, value) {
   else el.style[prop] = value;
 }
 
-const SKILLS = [
-  { id: 'atk', name: 'Strike', kb: 'LMB', pad: 'RT', icon: '⚔' },
-  { id: 'guard', name: 'Smoulder Guard', kb: 'RMB', pad: 'LT', icon: '🛡' },
-  { id: 'quake', name: 'Cinder Quake', kb: 'E', pad: 'X', icon: '💥' },
-  { id: 'dash', name: 'Dash', kb: 'Space', pad: 'A', icon: '»' },
-  { id: 'ult', name: 'Pyre Cleave', kb: 'R', pad: 'RB', icon: '🔥' },
-];
+const KITS = {
+  warrior: [
+    { id: 'atk', name: 'Strike', key: 'strike', icon: '⚔' },
+    { id: 'guard', name: 'Smoulder Guard (hold)', key: 'skill2', icon: '🛡' },
+    { id: 'quake', name: 'Cinder Quake', key: 'skill1', icon: '💥' },
+    { id: 'dash', name: 'Dash', key: 'dash', icon: '»' },
+    { id: 'ult', name: 'Pyre Cleave (Wildfire)', key: 'ult', icon: '🔥' },
+  ],
+  sorcerer: [
+    { id: 'atk', name: 'Staff (pushes back)', key: 'strike', icon: '🪄' },
+    { id: 'gale', name: 'Gale', key: 'skill2', icon: '🌀', el: 'gale' },
+    { id: 'fire', name: 'Fire', key: 'skill1', icon: '🔥', el: 'fire' },
+    { id: 'frost', name: 'Frost', key: 'skill3', icon: '❄', el: 'frost' },
+    { id: 'dash', name: 'Dash', key: 'dash', icon: '»' },
+    { id: 'ult', name: 'Starfall (Wildfire)', key: 'ult', icon: '☄' },
+  ],
+};
+const RING = 2 * Math.PI * 23;
+const readyAt = new Map();
 
-export function buildHud() {
+export function buildHud(cls = 'warrior') {
   const box = $('#skills');
   box.innerHTML = '';
-  for (const s of SKILLS) {
+  for (const s of KITS[cls] || KITS.warrior) {
     const el = document.createElement('div');
     el.className = 'skill glass' + (s.id === 'ult' ? ' ult' : '');
     el.id = 'sk-' + s.id;
     el.title = s.name;
-    el.innerHTML = `<span class="ico"></span><span class="key"></span>`;
+    el.innerHTML = `<svg class="ring" viewBox="0 0 52 52"><circle class="track" cx="26" cy="26" r="23"/><circle class="prog" cx="26" cy="26" r="23" stroke-dasharray="${RING}" stroke-dashoffset="0"/></svg><span class="ico"></span><span class="cdnum"></span><span class="key"></span>`;
     el.querySelector('.ico').textContent = s.icon;
+    if (s.el) el.style.setProperty('--el', ELEMENTS[s.el].color);
     box.appendChild(el);
   }
+  $('#mana-row').classList.toggle('hidden', cls !== 'sorcerer');
   last.clear();
+  readyAt.clear();
 }
 
 export function updateHud(game, snap, me) {
-  const pad = game.input.device === 'pad';
   const stats = game.myStats();
+  const sorc = me.k === 'sorcerer';
   // party
   const party = $('#party');
   const pk = snap.ps.map((p) => p.id).join(',');
@@ -61,12 +77,15 @@ export function updateHud(game, snap, me) {
     if (!c) continue;
     c.querySelector('.dot').style.background = byId(CLOAKS, p.c).hex;
     c.querySelector('b').textContent = p.u + (p.id === game.myId ? ' (you)' : '');
-    c.querySelector('small').textContent = p.dn ? 'Flame out!' : p.n;
+    c.querySelector('small').textContent = p.dn ? (p.rv > 0 ? 'Being rekindled…' : 'Flame out!') : `${p.n} · ${p.k === 'sorcerer' ? 'Sorcerer' : 'Warrior'}`;
     c.classList.toggle('down', !!p.dn);
     const fill = c.querySelector('.mini i');
     fill.style.width = (p.hp / p.mx) * 100 + '%';
     fill.style.background = byId(FLAMES, p.f).mid;
   }
+
+  // room code: only shown at the campfire (also in the Esc menu)
+  set($('#room-pill'), 'hide', snap.sc !== 'lobby');
 
   // stage pill
   const mm = String(Math.floor(snap.tm / 60)).padStart(2, '0'), ss = String(snap.tm % 60).padStart(2, '0');
@@ -84,58 +103,82 @@ export function updateHud(game, snap, me) {
   set($('#stage-name'), 'text', name);
   set($('#stage-sub'), 'text', sub);
 
-  // boss bar
   set($('#bossbar'), 'hide', !snap.bb);
   if (snap.bb) {
     set($('#boss-name'), 'text', snap.bb.n);
     set($('#boss-fill'), 'width', (snap.bb.hp / snap.bb.mx) * 100 + '%');
   }
 
-  // flame
+  // bars
   const ratio = me.hp / me.mx;
   const pal = byId(FLAMES, me.f);
   set($('#flame-fill'), 'width', ratio * 100 + '%');
   set($('#flame-fill'), 'background', `linear-gradient(90deg, ${pal.outer}, ${pal.mid} 60%, ${pal.core})`);
   set($('#flame-text'), 'text', me.dn ? 'Flame out' : `Flame ${me.hp} / ${me.mx}`);
-  // wildfire
+  if (sorc) {
+    set($('#mana-fill'), 'width', (me.mn / me.mm) * 100 + '%');
+    set($('#mana-text'), 'text', `Mana ${me.mn} / ${me.mm}`);
+  }
   const wf = me.wf / RULES.wildfireMax;
   set($('#wild-fill'), 'width', wf * 100 + '%');
-  set($('#bars'), '--ready', wf >= 1 ? '1' : '0');
   $('#bars').classList.toggle('ready', wf >= 1);
-  set($('#wild-text'), 'text', wf >= 1 ? `Wildfire ready! [${pad ? 'RB' : 'R'}]` : `Wildfire ${me.wf}%`);
-  // exp
+  set($('#wild-text'), 'text', wf >= 1 ? `Wildfire ready! [${game.keyLabel('ult')}]` : `Wildfire ${me.wf}%`);
   set($('#lvl'), 'text', `Lv ${snap.lvl}`);
   set($('#xp-fill'), 'width', (snap.xp / snap.nx) * 100 + '%');
   set($('#pts'), 'hide', !me.pts);
-  set($('#pts'), 'text', `+${me.pts} skill point${me.pts > 1 ? 's' : ''} [${pad ? 'View' : 'T'}]`);
-  const fury = Math.round(stats.furyMax * (1 - ratio) * 100);
-  set($('#fury'), 'text', snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage` : '');
-  set($('#hud'), '--lowflame', ratio < 0.35 && snap.sc !== 'lobby' ? '1' : '0');
+  set($('#pts'), 'text', `+${me.pts} skill point${me.pts > 1 ? 's' : ''} [${game.keyLabel('tree')}]`);
+  const fury = Math.round((stats.furyMax || 0) * (1 - ratio) * 100);
+  set($('#fury'), 'text', !sorc && snap.sc !== 'lobby' && !me.dn && fury >= 5 ? `Dark Fury +${fury}% damage` : '');
 
-  // skills (cooldown sweep)
-  const cds = {
-    atk: Math.max(0, game.lp.atkCd) / stats.atkCd,
-    guard: me.g ? 0 : me.gc / WARRIOR.guardCd,
-    quake: me.qc / stats.quakeCd,
-    dash: Math.max(0, game.lp.dashCd) / stats.dashCd,
-    ult: 1 - wf,
-  };
-  for (const s of SKILLS) {
+  // weaving: show which element is "primed" and how long you have to fuse it
+  const weave = $('#weave');
+  set(weave, 'hide', !(sorc && me.le));
+  if (sorc && me.le) {
+    const E = ELEMENTS[me.le];
+    set(weave, 'text', `${E.icon} ${E.name} primed: cast another element to weave!`);
+    set(weave, '--w', String(Math.max(0, me.lt / stats.weaveWindow)));
+  }
+
+  // skills: a clean ring fills up as each one recharges
+  const kit = KITS[me.k] || KITS.warrior;
+  for (const s of kit) {
     const el = document.getElementById('sk-' + s.id);
-    set(el, '--cd', Math.max(0, Math.min(1, cds[s.id])).toFixed(2));
+    if (!el) continue;
+    let rem = 0, total = 1, noMana = false;
+    if (s.id === 'atk') { rem = Math.max(0, game.lp.atkCd); total = stats.atkCd; }
+    else if (s.id === 'dash') { rem = Math.max(0, game.lp.dashCd); total = stats.dashCd; }
+    else if (s.id === 'guard') { rem = me.g ? 0 : me.c2; total = stats.guardCd; }
+    else if (s.id === 'quake') { rem = me.c1; total = stats.quakeCd; }
+    else if (s.id === 'fire') { rem = me.c1; total = SORCERER.fire.cd * stats.spellCd; noMana = me.mn < SORCERER.fire.cost; }
+    else if (s.id === 'gale') { rem = me.c2; total = SORCERER.gale.cd * stats.spellCd; noMana = me.mn < SORCERER.gale.cost; }
+    else if (s.id === 'frost') { rem = me.c3; total = SORCERER.frost.cd * stats.spellCd; noMana = me.mn < SORCERER.frost.cost; }
+    else if (s.id === 'ult') { rem = 1 - wf; total = 1; }
+    const frac = Math.max(0, Math.min(1, rem / total));
+    const prog = el.querySelector('.prog');
+    const off = (RING * frac).toFixed(1);
+    if (prog.getAttribute('stroke-dashoffset') !== off) prog.setAttribute('stroke-dashoffset', off);
+    el.classList.toggle('cooling', frac > 0);
+    el.classList.toggle('nomana', noMana);
+    const num = s.id !== 'ult' && rem >= 0.95 ? String(Math.ceil(rem)) : '';
+    const n = el.querySelector('.cdnum');
+    if (n.textContent !== num) n.textContent = num;
     const key = el.querySelector('.key');
-    const k = pad ? s.pad : s.kb;
+    const k = game.keyLabel(s.key);
     if (key.textContent !== k) key.textContent = k;
     el.classList.toggle('active', s.id === 'guard' && !!me.g);
     el.classList.toggle('ready', s.id === 'ult' && wf >= 1);
+    el.classList.toggle('primed', !!s.el && me.le === s.el);
+    // little flash the moment a skill comes back
+    const was = readyAt.get(s.id);
+    if (frac === 0 && was === false) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    readyAt.set(s.id, frac === 0);
   }
 
-  // centre banner
   let big = '', small = '';
   if (snap.cd > 0) { big = `Into the Wilds in ${snap.cd}`; small = 'Stay on the path…'; }
   else if (snap.st === 'victory') { big = 'The Heart of the Wood is free'; small = `You defeated the Elder Treant! Back to camp in ${snap.stt}…`; }
   else if (snap.st === 'defeat') { big = 'All flames went out'; small = `The forest grows dark. Back to camp in ${snap.stt}…`; }
-  else if (me.dn && snap.st === 'playing') { big = 'Your flame went out'; small = 'An ally can rekindle you by standing close.'; }
+  else if (me.dn && snap.st === 'playing') { big = 'Your flame went out'; small = me.rv > 0 ? 'A friend is rekindling you…' : 'An ally can rekindle you by standing close.'; }
   else if (game.bannerT > 0) { big = game.bannerText; small = game.bannerSub || ''; }
   set($('#banner'), 'hide', !big);
   set($('#banner-big'), 'text', big);

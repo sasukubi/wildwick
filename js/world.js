@@ -95,6 +95,62 @@ export class World {
     return { x, y };
   }
 
+  // Can you see (and hit) from one point to another without a tree or rock in the way?
+  lineOfSight(x0, y0, x1, y1) {
+    const d = Math.hypot(x1 - x0, y1 - y0);
+    const steps = Math.ceil(d / 6);
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      if (this.isSolid(Math.floor((x0 + (x1 - x0) * t) / TILE), Math.floor((y0 + (y1 - y0) * t) / TILE))) return false;
+    }
+    return true;
+  }
+
+  // Distance map (in tiles) from a point to everywhere, walking around trees.
+  // Enemies follow it downhill to find their way to you.
+  flowField(x, y) {
+    const w = this.w, h = this.h;
+    const dist = new Int16Array(w * h).fill(-1);
+    const sx = Math.floor(x / TILE), sy = Math.floor(y / TILE);
+    if (this.isSolid(sx, sy)) return dist;
+    const q = new Int32Array(w * h);
+    let head = 0, tail = 0;
+    dist[sy * w + sx] = 0;
+    q[tail++] = sy * w + sx;
+    while (head < tail) {
+      const i = q[head++], cx = i % w, cy = (i / w) | 0, nd = dist[i] + 1;
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+        if (!ox && !oy) continue;
+        const nx = cx + ox, ny = cy + oy;
+        if (this.isSolid(nx, ny)) continue;
+        if (ox && oy && (this.isSolid(cx + ox, cy) || this.isSolid(cx, cy + oy))) continue; // no corner cutting
+        const j = ny * w + nx;
+        if (dist[j] !== -1) continue;
+        dist[j] = nd;
+        q[tail++] = j;
+      }
+    }
+    return dist;
+  }
+
+  // Which way to step from (x, y) to go downhill on a flow field.
+  flowDir(dist, x, y) {
+    const w = this.w, cx = Math.floor(x / TILE), cy = Math.floor(y / TILE);
+    const here = dist[cy * w + cx];
+    let best = null, bd = here < 0 ? 1e9 : here;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+      if (!ox && !oy) continue;
+      const nx = cx + ox, ny = cy + oy;
+      if (this.isSolid(nx, ny)) continue;
+      if (ox && oy && (this.isSolid(cx + ox, cy) || this.isSolid(cx, cy + oy))) continue;
+      const v = dist[ny * w + nx];
+      if (v >= 0 && v < bd) { bd = v; best = [nx, ny]; }
+    }
+    if (!best) return null;
+    const tx = (best[0] + 0.5) * TILE - x, ty = (best[1] + 0.5) * TILE - y, l = Math.hypot(tx, ty) || 1;
+    return [tx / l, ty / l];
+  }
+
   randomOpenPoint(rng, cx, cy, minD, maxD, tries = 40) {
     for (let i = 0; i < tries; i++) {
       const a = rng.float(0, Math.PI * 2);
