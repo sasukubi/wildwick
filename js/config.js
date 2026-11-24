@@ -15,4 +15,9 @@ export const SUPABASE_ANON_KEY = 'sb_publishable_KQFerb1TqatF7P_bCPlmsw_q9HwbLsP
 //  Paste the TURN details from your relay account here, e.g.
 //    { urls: 'turn:global.relay.metered.ca:80', username: '...', credential: '...' }
 // =============================================================
-export const RELAY_SERVERS = [];
+const RELAY_USER = '7e9dcd2b164d8961c2ea84f7';
+const RELAY_PASS = 'PkgrvzajMEqMdHks';
+export const RELAY_SERVERS = [
+  { urls: 'stun:stun.relay.metered.ca:80' },
+  { urls: ['turn:global.relay.metered.ca:80', 'turn:global.relay.metered.ca:80?transport=tcp', 'turn:global.relay.metered.ca:443', 'turns:global.relay.metered.ca:443?transport=tcp'], username: RELAY_USER, credential: RELAY_PASS },
+];
