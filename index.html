@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wildwick</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <div id="menu-bg"><div id="fireflies"></div></div>
+  <canvas id="game"></canvas>
+
+  <!-- Log in / sign up -->
+  <section id="screen-login" class="screen hidden">
+    <div class="panel">
+      <h1 class="logo">Wildwick</h1>
+      <p class="tagline">Keep your flame alive.</p>
+      <form id="login-form" autocomplete="on">
+        <label>Username <input id="username" maxlength="16" autocomplete="username" required></label>
+        <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
+        <div class="row">
+          <button id="btn-login" class="primary" type="submit">Log in</button>
+          <button id="btn-signup" class="ghost" type="button">Create account</button>
+        </div>
+        <p id="login-error" class="error"></p>
+      </form>
+      <p id="backend-note" class="note"></p>
+    </div>
+  </section>
+
+  <!-- Characters -->
+  <section id="screen-chars" class="screen hidden">
+    <div class="panel wide">
+      <div class="panel-head">
+        <h2>Your characters</h2>
+        <span class="muted">Logged in as <strong id="who"></strong> · <button id="btn-logout" class="link">Log out</button></span>
+      </div>
+      <div id="char-list"></div>
+      <form id="create-form" class="row">
+        <input id="new-name" maxlength="16" placeholder="New character name" required>
+        <button id="btn-create" class="primary" type="submit">Create</button>
+      </form>
+      <p id="chars-error" class="error"></p>
+    </div>
+  </section>
+
+  <!-- Host or join -->
+  <section id="screen-menu" class="screen hidden">
+    <div class="panel">
+      <div class="menu-hero">
+        <canvas id="menu-preview" width="110" height="122"></canvas>
+        <div>
+          <h2 id="menu-name"></h2>
+          <span id="menu-class" class="muted"></span>
+        </div>
+      </div>
+      <button id="btn-host" class="primary block">Host a game</button>
+      <p class="note">You'll get a room code to share with up to 3 friends. The game runs while you have it open.</p>
+      <form id="join-form" class="row">
+        <input id="join-code" maxlength="5" placeholder="ROOM CODE" autocomplete="off">
+        <button id="btn-join" class="primary" type="submit">Join</button>
+      </form>
+      <p id="menu-error" class="error"></p>
+      <button id="btn-back" class="link">← Back to characters</button>
+    </div>
+  </section>
+
+  <!-- In-game overlays -->
+  <div id="hud-top" class="hidden">
+    <span class="muted">Room</span> <strong id="room-code"></strong>
+    <button id="btn-copy" class="ghost small">Copy</button>
+    <button id="btn-leave" class="ghost small">Leave</button>
+  </div>
+
+  <div id="help" class="hidden">
+    <strong>Controls</strong>
+    <span><kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> strike (hold to keep swinging)</span>
+    <span><kbd>Space</kbd> dash · <kbd>E</kbd> / <kbd>Right-click</kbd> Cinder Quake · <kbd>F</kbd> interact</span>
+    <span class="muted">Controller: left stick move · right stick aim · RT strike · A dash · X quake · Y interact</span>
+  </div>
+
+  <div id="wardrobe" class="panel hidden">
+    <div class="panel-head"><h2>Wardrobe</h2><button data-close class="ghost small">Close</button></div>
+    <canvas id="wardrobe-preview" width="120" height="132"></canvas>
+    <p id="w-summary" class="muted center"></p>
+    <h3>Cloak</h3>
+    <p class="note">No two players in a party can wear the same colour.</p>
+    <div id="w-cloaks" class="swatches"></div>
+    <h3>Hat</h3>
+    <div id="w-hats" class="hats"></div>
+    <h3>Flame</h3>
+    <div id="w-flames" class="swatches"></div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

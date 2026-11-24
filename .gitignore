@@ -1,0 +1,5 @@
+# editor / tool settings that don't belong online
+.claude/
+.vscode/
+Thumbs.db
+desktop.ini
