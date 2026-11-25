@@ -2,7 +2,7 @@
 //  The in-game HUD (HTML, glass style). Updated every frame, but
 //  only touches the page when a value actually changes.
 // =============================================================
-import { CLOAKS, FLAMES, WARRIOR, SORCERER, CLERIC, WARLOCK, CLASSES, ELEMENTS, RULES, byId } from './data.js';
+import { CLOAKS, FLAMES, WARRIOR, SORCERER, CLERIC, WARLOCK, DRUID, BOWMAN, CLASSES, ELEMENTS, RULES, BOONS, byId } from './data.js';
 import { MAX_LEVEL, SHOP, MODES, EVENTS } from './progress.js';
 import { iconSprite, skillIconName } from './sprites.js';
 
@@ -51,13 +51,15 @@ export const KITS = {
     { id: 'atk', name: 'Hold to draw, let go to shoot', key: 'strike', icon: '🏹' },
     { id: 'mark', name: 'Mark', key: 'skill1', icon: '🎯' },
     { id: 'rain', name: 'Barrage', key: 'skill2', icon: '🌧' },
+    { id: 'farrow', name: 'Fire Arrow', key: 'skill3', icon: '' },
     { id: 'dash', name: 'Roll (flicks an arrow)', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Deadeye (Wildfire)', key: 'ult', icon: '🦅' },
   ],
   rogue: [
     { id: 'atk', name: 'Stab (every 4th spins)', key: 'strike', icon: '🗡' },
+    { id: 'twin', name: 'Twin Fang', key: 'skill2', icon: '' },
     { id: 'smoke', name: 'Smoke Bomb', key: 'skill1', icon: '💨' },
-    { id: 'step', name: 'Shadowstep', key: 'skill2', icon: '👣' },
+    { id: 'step', name: 'Shadowstep', key: 'skill3', icon: '👣' },
     { id: 'dash', name: 'Shadow Clone', key: 'dash', icon: '»' },
     { id: 'ult', name: 'Thousand Cuts (Wildfire)', key: 'ult', icon: '✴' },
   ],
@@ -69,6 +71,23 @@ export const KITS = {
     { id: 'dash', name: 'Guiding Light', key: 'dash', icon: '' },
     { id: 'ult', name: 'Daybreak (Wildfire)', key: 'ult', icon: '' },
   ],
+  druid: [
+    { id: 'atk', name: 'Thorn Shot', key: 'strike', icon: '' },
+    { id: 'entangle', name: 'Entangle', key: 'skill2', icon: '' },
+    { id: 'bear', name: 'Bear Form (full gauge)', key: 'skill1', icon: '' },
+    { id: 'rejuv', name: 'Rejuvenate', key: 'skill3', icon: '' },
+    { id: 'dash', name: 'Dash', key: 'dash', icon: '' },
+    { id: 'ult', name: 'Wrath of the Grove (Wildfire)', key: 'ult', icon: '' },
+  ],
+  // the Druid's bear form (shown on the HUD while you're a bear)
+  bear: [
+    { id: 'atk', name: 'Maul', key: 'strike', icon: '' },
+    { id: 'stomp', name: 'Stomp', key: 'skill2', icon: '' },
+    { id: 'human', name: 'Human Form', key: 'skill1', icon: '' },
+    { id: 'roar', name: 'Roar', key: 'skill3', icon: '' },
+    { id: 'dash', name: 'Charge', key: 'dash', icon: '' },
+    { id: 'ult', name: 'Wrath of the Grove (Wildfire)', key: 'ult', icon: '' },
+  ],
   warlock: [
     { id: 'atk', name: 'Bolt (every 3rd curses)', key: 'strike', icon: '' },
     { id: 'imps', name: 'Swarm', key: 'skill2', icon: '' },
@@ -78,7 +97,7 @@ export const KITS = {
     { id: 'ult', name: 'Eclipse (Wildfire)', key: 'ult', icon: '' },
   ],
 };
-const USES_BAR = { sorcerer: 'mana', warlock: 'shadow', cleric: 'grace', warrior: 'fury' };
+const USES_BAR = { sorcerer: 'mana', warlock: 'shadow', cleric: 'grace', warrior: 'fury', druid: 'nature', bear: 'nature' };
 const RING = 2 * Math.PI * 23;
 const readyAt = new Map();
 
@@ -100,6 +119,7 @@ export function buildHud(cls = 'warrior') {
   row.classList.toggle('grace', cls === 'cleric');
   row.classList.toggle('shadow', cls === 'warlock');
   row.classList.toggle('fury', cls === 'warrior');
+  row.classList.toggle('nature', cls === 'druid' || cls === 'bear');
   last.clear();
   readyAt.clear();
 }
@@ -132,6 +152,31 @@ export function updateHud(game, snap, me) {
     const fill = c.querySelector('.mini i');
     fill.style.width = (p.hp / p.mx) * 100 + '%';
     fill.style.background = byId(FLAMES, p.f).mid;
+  }
+
+  // favors you have this run, listed down the right side
+  const fl = $('#favor-list');
+  const fk = (me.bn || []).join(',');
+  if (fl && fl.dataset.k !== fk) {
+    fl.dataset.k = fk;
+    fl.innerHTML = '';
+    const count = {};
+    for (const b of me.bn || []) count[b] = (count[b] || 0) + 1;
+    if (Object.keys(count).length) { const h = document.createElement('b'); h.textContent = 'Favors'; fl.appendChild(h); }
+    for (const id in count) {
+      const b = BOONS.find((x) => x.id === id);
+      if (!b) continue;
+      const row = document.createElement('div');
+      row.className = 'fav';
+      row.appendChild(iconCanvas('boon_' + id, 18));
+      const s = document.createElement('span');
+      s.innerHTML = '<span></span><small></small>';
+      s.firstChild.textContent = b.name + (count[id] > 1 ? ` ×${count[id]}` : '');
+      s.lastChild.textContent = b.desc;
+      row.appendChild(s);
+      fl.appendChild(row);
+    }
+    fl.classList.toggle('hidden', !fk);
   }
 
   // room code: only shown at the campfire (also in the Esc menu)
@@ -170,7 +215,9 @@ export function updateHud(game, snap, me) {
   set($('#flame-text'), 'text', me.dn ? 'Burnt out' : me.sh > 0 ? `Flame ${me.hp} / ${me.mx}  +${me.sh} shield` : `Flame ${me.hp} / ${me.mx}`);
   if (bar) {
     set($('#mana-fill'), 'width', (me.mn / me.mm) * 100 + '%');
-    set($('#mana-text'), 'text', `${bar === 'grace' ? 'Grace' : bar === 'fury' ? 'Fury' : bar === 'shadow' ? 'Souls' : 'Mana'} ${me.mn} / ${me.mm}`);
+    set($('#mana-text'), 'text', bar === 'nature' ? (me.bf ? `Bear form ${me.mn}%` : me.mn >= 100 ? `Nature full! [${game.keyLabel('skill1')}] to become a bear` : `Nature ${me.mn} / ${me.mm}`)
+      : `${bar === 'grace' ? 'Grace' : bar === 'fury' ? 'Fury' : bar === 'shadow' ? 'Souls' : 'Mana'} ${me.mn} / ${me.mm}`);
+    $('#mana-row').classList.toggle('full', bar === 'nature' && !me.bf && me.mn >= 100);
   }
   const wf = me.wf / RULES.wildfireMax;
   set($('#wild-fill'), 'width', wf * 100 + '%');
@@ -214,15 +261,22 @@ export function updateHud(game, snap, me) {
   }
 
   // skills: a clean ring fills up as each one recharges
-  const kit = KITS[me.k] || KITS.warrior;
+  const kit = KITS[game.kitKey || me.k] || KITS.warrior;
   for (const s of kit) {
     const el = document.getElementById('sk-' + s.id);
     if (!el) continue;
     let rem = 0, total = 1, noMana = false;
-    if (s.id === 'atk') { rem = Math.max(0, game.lp.atkCd); total = me.k === 'bowman' ? 0.9 * stats.recoverMult : stats.atkCd; }
+    if (s.id === 'atk') { rem = Math.max(0, game.lp.atkCd); total = me.k === 'bowman' ? 0.9 * stats.recoverMult : me.bf ? DRUID.maul.cd : stats.atkCd; }
     else if (s.id === 'mark') { rem = me.c1; total = stats.markCd; }
     else if (s.id === 'rain') { rem = me.c2; total = stats.rainCd; }
-    else if (s.id === 'step') { rem = me.c2; total = stats.stepCd; }
+    else if (s.id === 'step') { rem = me.c3; total = stats.stepCd; }
+    else if (s.id === 'twin') { rem = me.c2; total = stats.heavyCd; }
+    else if (s.id === 'farrow') { rem = me.c3; total = stats.fireArrowCd; }
+    else if (s.id === 'entangle') { rem = me.c2; total = stats.entangleCd; }
+    else if (s.id === 'rejuv') { rem = me.c3; total = stats.rejuvCd; }
+    else if (s.id === 'bear') { rem = 0; noMana = me.mn < 100; }
+    else if (s.id === 'stomp') { rem = me.cb2; total = stats.stompCd; }
+    else if (s.id === 'roar') { rem = me.cb3; total = stats.roarCd; }
     else if (s.id === 'smoke') { rem = me.c1; total = stats.smokeCd; }
     else if (s.id === 'dash') { rem = Math.max(0, game.lp.dashCd); total = stats.dashCd; }
     else if (s.id === 'guard') { rem = me.g ? 0 : me.c2; total = stats.guardCd; }
@@ -264,11 +318,14 @@ export function updateHud(game, snap, me) {
   else if (snap.st === 'victory') { big = 'The Heart of the Woods is free'; small = `You defeated the Creaking Oak! Back to camp in ${snap.stt}…`; }
   else if (snap.st === 'defeat') { big = 'Everyone burnt out'; small = `The forest grows dark. Back to camp in ${snap.stt}…`; }
   else if (me.dn && snap.st === 'playing') { big = 'You burnt out'; small = me.rv > 0 ? 'A friend is rekindling you…' : 'An ally can rekindle you by standing close.'; }
+  else if (snap.du && (snap.du.a === me.id ? snap.du.oa : snap.du.b === me.id ? snap.du.ob : 0) > 0) {
+    big = 'Get back in the ring!'; small = `${snap.du.a === me.id ? snap.du.oa : snap.du.ob}… or you lose the duel`;
+  }
   else if (game.bannerT > 0) { big = game.bannerText; small = game.bannerSub || ''; }
   set($('#banner'), 'hide', !big);
   set($('#banner-big'), 'text', big);
   set($('#banner-sub'), 'text', small);
-  $('#banner').classList.toggle('bad', snap.st === 'defeat' || (!!me.dn && snap.st === 'playing'));
+  $('#banner').classList.toggle('bad', snap.st === 'defeat' || (!!me.dn && snap.st === 'playing') || big === 'Get back in the ring!');
 }
 
 // e.g. Thornwood II, or Thornwood 7 in endless

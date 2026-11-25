@@ -5,13 +5,13 @@
 //  photo mode, fishing and the new effects.
 // =============================================================
 import { ROGUE, WARRIOR, byId, CLASSES, BOONS } from './data.js';
-import { SHOP, MODES, EVENTS, FISH, rollFish, isDev, MAX_LEVEL, todayKey } from './progress.js';
-import { toast, shopPanel, lboardPanel, modePanel, chat, devConsole, settings, pause, campPanel, signPanel, boardPanel } from './ui.js';
+import { SHOP, MODES, EVENTS, FISH, RARITY, rollFish, isDev, MAX_LEVEL, todayKey } from './progress.js';
+import { toast, shopPanel, lboardPanel, modePanel, chat, devConsole, settings, pause, campPanel, signPanel, boardPanel, fishbookPanel, bookCanvas } from './ui.js';
 import { audio } from './audio.js';
 import { prefs, keyName } from './prefs.js';
 
 // what friends may ask the host to do for them
-const ACTIONS = ['buyItem', 'useItem', 'reclaimNode', 'prestige', 'chat', 'devCmd'];
+const ACTIONS = ['buyItem', 'sellFish', 'useItem', 'reclaimNode', 'prestige', 'chat', 'devCmd'];
 const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
 
 const X = {
@@ -41,12 +41,31 @@ const X = {
     this.sim[msg.m](from, ...msg.a.slice(0, 3));
   },
 
-  extraPanelsOpen() { return shopPanel.open || lboardPanel.open || modePanel.open; },
-  closeExtraPanels() { shopPanel.close(); lboardPanel.close(); modePanel.close(); },
+  extraPanelsOpen() { return shopPanel.open || lboardPanel.open || modePanel.open || fishbookPanel.open; },
+  closeExtraPanels() { shopPanel.close(); lboardPanel.close(); modePanel.close(); fishbookPanel.close(); },
+  // fish are saved on your character (you keep track of them yourself)
+  saveFish() { this.char.fish = { ...(this.char.fish || {}) }; this.dirty = true; if (fishbookPanel.open) fishbookPanel.fill(this); },
 
   // ---------------------------------------------------- every frame
   updateExtras(dt, me, snap) {
     this.saveProgress(me, dt, false);
+    for (const p of snap.ps) {
+      if (!p.rj && !p.gv) continue;
+      const v = this.playerView(p);
+      if (p.rj && Math.random() < dt * 8) this.particles.push({ x: v.x + (Math.random() - 0.5) * 18, y: v.y - 4 - Math.random() * 20, vx: 0, vy: -22, life: 0.8, max: 0.8, size: 1, color: '#c8f5a0', glow: true, shrink: true });
+      if (p.gv && Math.random() < dt * 40) {
+        const a = Math.random() * Math.PI * 2, r = 30 + Math.random() * 150;
+        this.particles.push({ x: v.x + Math.cos(a) * r, y: v.y + Math.sin(a) * r * 0.6 - 10, vx: -Math.sin(a) * 90, vy: Math.cos(a) * 50 - 20, life: 0.7, max: 0.7, size: 2, color: Math.random() < 0.5 ? '#6fb04a' : '#9be36a', shrink: true });
+      }
+    }
+    // the fish journal button (a little book) at the bottom of the screen, only in camp
+    const fb = document.getElementById('btn-fishbook');
+    if (fb) {
+      if (!fb.firstChild) { fb.appendChild(bookCanvas()); fb.onclick = () => fishbookPanel.toggle(this); }
+      const show = snap.sc === 'lobby';
+      fb.classList.toggle('hidden', !show);
+      if (!show && fishbookPanel.open) fishbookPanel.close();
+    }
     this.lp.lockT -= dt;
     for (const [id, b] of this.bubbles) if (this.t - b.t0 > 5) this.bubbles.delete(id);
     if (shopPanel.open) shopPanel.update(this, me);
@@ -157,8 +176,8 @@ const X = {
         return true;
       }
       case 'pond': {
-        const caught = Object.keys(this.char.fish || {}).filter((k) => k !== 'boot').length;
-        const kinds = FISH.filter((f) => f.id !== 'boot').length;
+        const caught = FISH.filter((f) => RARITY[f.r] && (this.char.fish || {})[f.id] > 0).length;
+        const kinds = FISH.filter((f) => RARITY[f.r]).length;
         if (!this.fishing) this.prompt = { x: best.x, y: best.y - 40, text: `[${key}] Fish`, sub: `Fish journal: ${caught}/${kinds} kinds caught` };
         if (go) this.fishInteract(best, me);
         return true;
@@ -193,7 +212,10 @@ const X = {
       this.dirty = true;
       audio.play(fish.id === 'boot' ? 'nope' : 'catch');
       this.burst(F.bx, F.by, 14, { color: '#bfe8ff', speed: 70, life: 0.6, up: 40 });
-      this.banner(fish.id === 'boot' ? 'An old boot…' : `You caught a ${fish.name}!`, 2, isNew ? 'New fish for your journal!' : `You've caught ${this.char.fish[fish.id]} of these`);
+      const rar = RARITY[fish.r];
+      this.banner(fish.id === 'boot' ? 'An old boot…' : `You caught a ${fish.name}!`, 2.4, fish.id === 'boot' ? '' : `${rar.name} · ` + (isNew ? 'new fish for your journal!' : `you've caught ${this.char.fish[fish.id]} of these`));
+      if (fish.r === 'legendary') { audio.play('wfReady'); this.burst(F.bx, F.by, 30, { color: '#ffd36a', speed: 120, life: 1, up: 60, glow: true }); }
+      if (fishbookPanel.open) fishbookPanel.fill(this);
     } else { toast('Too early! Wait for the bobber to dip.'); audio.play('nope'); }
     this.stopFishing();
   },
@@ -213,6 +235,72 @@ const X = {
   // ---------------------------------------------------- new effects
   extraFx(f, mine, at) {
     switch (f.k) {
+      // ---- Druid
+      case 'thornShot': if (!mine) this.startThorn(f.id, f.a); return true;
+      case 'thornFizz': this.burst(f.x, f.y, 3, { color: '#6fb04a', speed: 40, life: 0.3 }); return true;
+      case 'maul': if (!mine) this.startClaw(f.id, f.a); return true;
+      case 'entangle': audio.play('root', at); return true;
+      case 'vinesUp':
+        this.burst(f.x, f.y - 4, 16, { color: '#6fb04a', speed: 110, life: 0.5, up: 30 });
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: f.r, t0: this.t, life: 0.4, color: 'rgba(155,227,106,1)' });
+        audio.play('hands', at);
+        return true;
+      case 'rejuv':
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: f.r, t0: this.t, life: 0.7, color: 'rgba(180,255,150,1)', light: 140, lcol: [160, 255, 140] });
+        this.burst(f.x, f.y - 16, 16, { color: '#c8f5a0', speed: 80, life: 0.8, up: 30, glow: true });
+        audio.play('sanct', at);
+        return true;
+      case 'natureFull':
+        if (mine) { audio.play('wfReady'); toast(`Nature full! Press [${this.keyLabel('skill1')}] to become a bear.`, 2200); }
+        return true;
+      case 'bearOn': case 'bearOff': {
+        const on = f.k === 'bearOn';
+        this.burst(f.x, f.y - 14, 26, { color: on ? '#8a5a32' : '#9be36a', speed: 150, life: 0.6, glow: !on });
+        this.burst(f.x, f.y - 14, 14, { color: '#6fb04a', speed: 90, life: 0.7, up: 20 });
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 50, t0: this.t, life: 0.45, color: 'rgba(155,227,106,1)', light: 120, lcol: [140, 240, 120] });
+        audio.play(on ? 'roar' : 'boon', at);
+        if (mine) { this.addShake(on ? 4 : 1); if (on) this.banner('Bear Form', 1, `Press [${this.keyLabel('skill1')}] to turn back`); }
+        return true;
+      }
+      case 'stomp':
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: f.r, t0: this.t, life: 0.45, color: 'rgba(200,160,110,1)', light: 120 });
+        this.effects.push({ k: 'crack', x: f.x, y: f.y, r: f.r * 0.6, seed: Math.random() * 3, t0: this.t, life: 0.8 });
+        this.burst(f.x, f.y - 2, 20, { color: '#8a6a3a', speed: 160, life: 0.5 });
+        audio.play('quake', at);
+        if (mine) this.addShake(5);
+        return true;
+      case 'roarB':
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 150, t0: this.t, life: 0.7, color: 'rgba(120,230,110,1)', light: 140, lcol: [120, 230, 110] });
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: 90, t0: this.t + 0.1, life: 0.6, color: 'rgba(80,50,20,1)' });
+        audio.play('roar', at);
+        if (mine) { this.addShake(4); if (f.n) toast(`Roar: ${f.n} enem${f.n === 1 ? 'y turns' : 'ies turn'} on you!`, 1800); }
+        return true;
+      case 'grove':
+        this.effects.push({ k: 'ring', x: f.x, y: f.y, r: f.r, t0: this.t, life: 0.9, color: 'rgba(155,227,106,1)', light: 260, lcol: [140, 240, 120] });
+        this.burst(f.x, f.y - 20, 30, { color: '#9be36a', speed: 180, life: 0.9, glow: true });
+        audio.play('rootsCall', at);
+        if (mine) { this.addShake(5); this.banner('WRATH OF THE GROVE', 1.2, 'The trees lash out around you'); }
+        return true;
+      case 'lash':
+        for (const [x, y] of f.pts) {
+          this.effects.push({ k: 'lash', x, y, a: Math.random() * 0.8 - 0.4, t0: this.t, life: 0.4 });
+          this.burst(x, y - 8, 4, { color: '#6fb04a', speed: 70, life: 0.4 });
+        }
+        audio.play('sweep', { x: f.pts[0][0], y: f.pts[0][1] });
+        return true;
+      // ---- Archer: Fire Arrow / Rogue: Twin Fang / selling fish
+      case 'fireArrow': {
+        const v = this.viewFor(f.id);
+        this.burst(v.x + Math.cos(f.a) * 14, v.y - 14 + Math.sin(f.a) * 14, 10, { color: '#ffb060', speed: 100, life: 0.4, glow: true });
+        audio.play('fire', this.viewPos(f.id));
+        return true;
+      }
+      case 'twin':
+        this.startStab(f.id, f.a);
+        this.effects.push({ k: 'claw', id: f.id, aim: f.a, t0: this.t, life: 0.22, steel: 1 });
+        audio.play('spin', this.viewPos(f.id));
+        return true;
+      case 'sold': if (mine) { audio.play('coin'); toast(`Sold for ${f.v} coins`, 1400); } return true;
       case 'lvl':
         if (mine) {
           audio.play('lvl');
@@ -298,6 +386,8 @@ const X = {
       case 'duelReady': if (f.on) toast(`${f.n} is ready to duel!`); return true;
       case 'duelStart': audio.play('gate'); this.banner(`${f.a} vs ${f.b}`, 3, 'The duel starts in 3…'); return true;
       case 'duelGo': audio.play('roar'); this.banner('Fight!', 0.9); return true;
+      case 'duelOut': if (mine) audio.play('nope'); return true;
+      case 'duelBack': return true;
       case 'duelEnd': audio.play(f.wid === this.myId ? 'victory' : 'boon'); this.banner(`${f.w} wins the duel!`, 2.5, f.forfeit ? `${f.l} stepped out of the ring` : `${f.l} yields`); return true;
       case 'clink': this.burst(f.x, f.y, 4, { color: '#c8d0c0', speed: 70, life: 0.25 }); audio.play('thunk', at); if (prefs.dmgNums) this.effects.push({ k: 'num', x: f.x, y: f.y - 6, dx: 0, text: 'armoured', t0: this.t, life: 0.7, big: false, color: '#b8c4b0' }); return true;
       case 'shamanHeal':

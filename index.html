@@ -77,6 +77,8 @@
   <!-- In-game HUD -->
   <div id="hud" class="hidden">
     <div id="party"></div>
+    <div id="favor-list" class="glass hidden"></div>
+    <button id="btn-fishbook" class="glass hidden" title="Fish journal"></button>
     <div id="stage-pill" class="glass pill"><b id="stage-name"></b><small id="stage-sub"></small></div>
     <div id="top-right">
       <div id="room-pill" class="glass pill room"><span class="muted">Room</span> <strong id="room-code"></strong><button id="btn-copy" class="gbtn small">Copy</button></div>
@@ -100,7 +102,7 @@
   <div id="help" class="glass pill hidden">Press <kbd id="help-key">H</kbd> for controls</div>
 
   <!-- Panels -->
-  <div id="wardrobe" class="panel glass side hidden">
+  <div id="wardrobe" class="panel glass modal hidden">
     <div class="panel-head"><h2>Tent</h2><button data-close class="gbtn small">Close</button></div>
     <canvas id="wardrobe-preview" width="104" height="116"></canvas>
     <p id="w-summary" class="muted center"></p>
@@ -111,6 +113,12 @@
     <div id="w-hats" class="hats"></div>
     <h3>Flame</h3>
     <div id="w-flames" class="swatches"></div>
+  </div>
+
+  <div id="fishbook" class="panel glass modal hidden">
+    <div class="panel-head"><h2>Fish Journal</h2><span id="fishbook-count" class="ptsbadge"></span><button data-close class="gbtn small">Close</button></div>
+    <p class="note">Catch fish at the camp pond. Sell spare fish to the merchant for coins.</p>
+    <div id="fishbook-pages"></div>
   </div>
 
   <div id="tree" class="panel glass modal hidden">

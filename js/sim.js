@@ -8,11 +8,12 @@
 //  or attack through trees and rocks.
 // =============================================================
 import {
-  WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, WOLF, ELITE, ALPHA, TREANT, RULES, CLOAKS, HATS, FLAMES, CLASSES, BOONS,
+  WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, DRUID, WOLF, ELITE, ALPHA, TREANT, RULES, CLOAKS, HATS, FLAMES, CLASSES, BOONS,
   PLAYER_RADIUS, TILE, TOUGH, PACE, xpToNext, classStats, canBuy, weaveOf,
 } from './data.js';
 import { makeLobby, makeForest, makeArena } from './world.js';
 import { installExtras, MOSSBACK, WIDOW } from './simx.js';
+import { installDruid } from './druid.js';
 
 const R = { float: (a, b) => a + Math.random() * (b - a) };
 const STATE_CODE = { idle: 0, chase: 1, windup: 2, lunge: 3, recover: 4, sweep: 5, ret: 6 };
@@ -117,7 +118,7 @@ export class Sim {
   }
 
   // Clerics start with half their Grace; everyone else starts with full mana
-  startMana(p) { return p.cls === 'warrior' ? 0 : p.cls === 'cleric' ? (p.stats.maxMana || 0) * CLERIC.graceStart / 100 : p.stats.maxMana || 0; }
+  startMana(p) { return p.cls === 'druid' ? (p.mana || 0) : p.cls === 'warrior' ? 0 : p.cls === 'cleric' ? (p.stats.maxMana || 0) * CLERIC.graceStart / 100 : p.stats.maxMana || 0; }
 
 
 
@@ -156,7 +157,7 @@ export class Sim {
       x: 0, y: 0, aim: 0, aimD: 100, moving: false, dashing: false,
       hp: 100, max: 100, wf: 0, mana: 0,
       down: false, revive: 0, helper: null,
-      cd: { atk: 0, s1: 0, s2: 0, s3: 0 },
+      cd: { atk: 0, s1: 0, s2: 0, s3: 0, b2: 0, b3: 0 },
       combo: 0, comboT: 0,
       guard: false, guardT: 0, guardHeat: 0, guardStart: 0, gHeld: false,
       lastEl: null, lastElT: -9,
@@ -182,7 +183,7 @@ export class Sim {
   recalc(p) {
     const old = p.max || 100;
     p.stats = classStats(p.cls, p.tree, p.boons, p.cp);
-    p.max = p.stats.maxFlame;
+    p.max = Math.round(p.stats.maxFlame * (p.bear ? DRUID.bear.hp : 1));
     if (p.max > old && !p.down) p.hp += p.max - old;
     p.hp = Math.min(p.hp, p.max);
     if (p.stats.maxMana) p.mana = Math.min(p.mana ?? p.stats.maxMana, p.stats.maxMana);
@@ -210,6 +211,7 @@ export class Sim {
     if (field === 'cls') {
       const c = CLASSES.find((c) => c.id === value);
       if (!c || !c.available || this.scene !== 'lobby') return false;
+      if (p.bear) this.bearOff(p);
       p.cls = value;
       this.resetRunStats(p);
       return true;
@@ -305,7 +307,7 @@ export class Sim {
       if (p.trailT > 0 && (!p.trailPt || Math.hypot(p.x - p.trailPt.x, p.y - p.trailPt.y) > 10)) {
         // Sorcerer: a faint trail that speeds up allies walking through it
         p.trailPt = { x: p.x, y: p.y };
-        this.zones.push({ id: this.nextId++, kind: 'haste', owner: p.id, x: p.x, y: p.y, vx: 0, vy: 0, r: 13, t: SORCERER.trailTime, max: SORCERER.trailTime, dps: 0 });
+        this.zones.push({ id: this.nextId++, kind: 'haste', owner: p.id, x: p.x, y: p.y, vx: 0, vy: 0, r: SORCERER.trailR, t: SORCERER.trailTime, max: SORCERER.trailTime, dps: 0 });
       }
       if (p.stats.shroud && this.inSmoke(p.x, p.y)) p.hp = Math.min(p.max, p.hp + 3 * dt);
       const cd0 = [p.cd.s1, p.cd.s2, p.cd.s3];
@@ -315,6 +317,7 @@ export class Sim {
       else if (p.cls === 'rogue') this.rogueActions(p);
       else if (p.cls === 'cleric') this.clericActions(p);
       else if (p.cls === 'warlock') this.warlockActions(p, dt);
+      else if (p.cls === 'druid') this.druidActions(p, dt);
       else this.warriorActions(p, dt);
       // prestige: abilities you've upgraded recharge faster
       ['s1', 's2', 's3'].forEach((k, i) => { if (cd0[i] <= 0 && p.cd[k] > 0.5) p.cd[k] *= p.stats.slotCd[k]; });
@@ -630,6 +633,7 @@ export class Sim {
     // right-click while drawing cancels the shot instead of raining arrows
     if (p.want.s2 > 0 && p.drawing) { p.want.s2 = 0; p.drawing = false; p.charge = 0; p.cd.atk = 0.15; this.emit({ k: 'cancelDraw', id: p.id }); }
     if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.rainOfArrows(p); }
+    if (p.want.s3 > 0 && p.cd.s3 <= 0) { p.want.s3 = 0; this.fireArrowSkill(p); }
     if (p.hawkT > 0) {
       // Hawk Eye: every shot is instantly full strength and seeks the nearest enemy
       p.drawing = false; p.charge = 0;
@@ -683,9 +687,10 @@ export class Sim {
   // ======================================================= Rogue
   rogueActions(p) {
     const G = ROGUE, st = p.stats;
-    // E = Smoke Bomb, right-click = Shadowstep
+    // E = Smoke Bomb, right-click = Twin Fang, Q = Shadowstep
     if (p.want.s1 > 0 && p.cd.s1 <= 0) { p.want.s1 = 0; this.smokeBomb(p); }
-    if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.shadowstep(p); }
+    if (p.want.s2 > 0 && p.cd.s2 <= 0) { p.want.s2 = 0; this.rogueHeavy(p); }
+    if (p.want.s3 > 0 && p.cd.s3 <= 0) { p.want.s3 = 0; this.shadowstep(p); }
     if ((p.want.atk > 0 || p.ah) && p.cd.atk <= 0) {
       p.want.atk = 0;
       p.cd.atk = st.atkCd;
@@ -740,20 +745,20 @@ export class Sim {
 
   shadowstep(p) {
     const e = this.aimedEnemy(p, ROGUE.stepRange, 0.8);
-    if (!e) { p.cd.s2 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's2' }); return; }
+    if (!e) { p.cd.s3 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's3' }); return; }
     const back = (e.face || 0) + Math.PI;
     let spot = null;
     for (const off of [0, 0.6, -0.6, 1.2, -1.2]) {
       const x = e.x + Math.cos(back + off) * (e.r + 14), y = e.y + Math.sin(back + off) * (e.r + 14);
       if (!this.world.isSolid(Math.floor(x / TILE), Math.floor(y / TILE))) { spot = this.world.collide(x, y, PLAYER_RADIUS); break; }
     }
-    if (!spot) { p.cd.s2 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's2' }); return; }
+    if (!spot) { p.cd.s3 = 0.4; this.emit({ k: 'nope', id: p.id, what: 'step', slot: 's3' }); return; }
     const from = { x: Math.round(p.x), y: Math.round(p.y) };
     p.x = spot.x; p.y = spot.y;
     p.aim = Math.atan2(e.y - p.y, e.x - p.x);
     p.tpLock = 0.35;
     p.ambushT = 2;
-    p.cd.s2 = p.stats.stepCd;
+    p.cd.s3 = p.stats.stepCd;
     this.emit({ k: 'tp', id: p.id, x: Math.round(p.x), y: Math.round(p.y), fx: from.x, fy: from.y, a: r2(p.aim) });
   }
 
@@ -764,6 +769,7 @@ export class Sim {
   }
 
   spawnDecoy(p) {
+    this.decoys = this.decoys.filter((o) => o.owner !== p.id || o.kind === 'familiar');
     const d = { id: 'decoy' + this.nextId++, owner: p.id, x: p.x, y: p.y, t: p.stats.decoyTime, down: false, phantom: p.stats.phantom, cloak: p.cloak };
     this.decoys.push(d);
     // nearby enemies that can see it turn on the clone for a moment
@@ -879,7 +885,8 @@ export class Sim {
     if (p.cls === 'rogue') this.spawnDecoy(p);
     else if (p.cls === 'cleric') this.blessedStep(p);
     else if (p.cls === 'warrior') { p.pushT = 0.28; p.pushSet = new Set(); p.bashFb = 0; }
-    else if (p.cls === 'bowman') this.rollShot(p);
+    else if (p.cls === 'bowman') { p.rollGuardT = BOWMAN.rollGuardTime; this.rollShot(p); }
+    else if (p.cls === 'druid') this.druidDash(p);
     else if (p.cls === 'sorcerer') { p.trailT = 0.3; p.trailPt = null; }
   }
 
@@ -1065,6 +1072,7 @@ export class Sim {
     this.damageEnemy(e, dmg, 0, 0, 0, p, true);
     e.hurtT = 0.05;
     p.mana = Math.min(st.maxMana, p.mana + (S.mana * st.siphonMult / S.time) * dt);
+    p.hp = Math.min(p.max, p.hp + dmg * S.heal); // siphons a little flame
     if (st.lifetap) p.hp = Math.min(p.max, p.hp + 5 * dt);
     if (sp.tick >= 0.4) {
       this.emit({ k: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), d: Math.round(sp.acc), big: 0, by: p.id, el: 'shadow', kx: 0, ky: 0 });
@@ -1249,6 +1257,7 @@ export class Sim {
     }
     if (p.cls === 'cleric') { this.dawn(p); return; }
     if (p.cls === 'warlock') { this.eclipse(p); return; }
+    if (p.cls === 'druid') { this.groveWrath(p); return; }
     if (p.cls === 'bowman') {
       p.hawkT = p.stats.hawkTime * p.stats.ultSize;
       p.cd.atk = 0;
@@ -1308,6 +1317,8 @@ export class Sim {
       }
     }
     dmg *= p.stats.dmgTaken;
+    if (p.rollGuardT > 0) dmg *= 1 - BOWMAN.rollGuard; // rolling Archers take half damage
+    if (p.bear) dmg *= p.stats.bearGuard;
     // Warriors toughen up as their flame burns low (pairs with Dark Fury)
     if (p.cls === 'warrior') dmg *= 1 - WARRIOR.lowGuard * (1 - p.hp / p.max);
     p.lastFight = this.time;
@@ -1798,6 +1809,19 @@ export class Sim {
         if (hit || s.life <= 0) s.life = 0;
         continue;
       }
+      if (s.kind === 'farrow') { this.fireArrowStep(s, target, hit, owner, dt); continue; }
+      if (s.kind === 'thorn') {
+        if (hit || s.life <= 0) {
+          s.life = 0;
+          if (target) {
+            const d = Math.hypot(s.vx, s.vy) || 1;
+            this.damageEnemy(target, s.dmg, s.vx / d, s.vy / d, 60, owner, false, 'nature');
+            if (owner) this.gainNature(owner, DRUID.gauge.perThorn);
+            if (owner && owner.stats.leech) owner.hp = Math.min(owner.max, owner.hp + owner.stats.leech);
+          } else this.emit({ k: 'thornFizz', x: Math.round(s.x), y: Math.round(s.y) });
+        }
+        continue;
+      }
       if (s.kind === 'arrow') {
         if (target) {
           const d = Math.hypot(s.vx, s.vy) || 1;
@@ -1904,6 +1928,7 @@ export class Sim {
         }
         continue;
       }
+      if (z.kind === 'vines') { if (!z.done && z.max - z.t >= z.delay) this.vinesUp(z, owner); continue; }
       if (z.kind === 'hands') {
         if (!z.done && z.max - z.t >= z.delay) {
           z.done = true;
@@ -2086,4 +2111,5 @@ export class Sim {
   }
 }
 
+installDruid(Sim);
 installExtras(Sim);

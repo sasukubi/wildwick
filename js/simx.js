@@ -46,7 +46,7 @@ export const WIDOW = {
 const WRAP = {
   warriorActions: 'atk', quake: 's1', updateGuard: 's2', dashShove: 'dash',
   sorcererActions: 'atk', bowmanActions: 'atk', markTarget: 's1', rainOfArrows: 's2', rollShot: 'dash',
-  rogueActions: 'atk', smokeBomb: 's1', shadowstep: 's2', spawnDecoy: 'dash',
+  rogueActions: 'atk', smokeBomb: 's1', shadowstep: 's3', rogueHeavy: 's2', spawnDecoy: 'dash', fireArrowSkill: 's3',
   clericActions: 'atk', mendingLight: 's1', judgement: 's2', sanctify: 's3', blessedStep: 'dash',
   warlockActions: 'atk', graspingHands: 's1', summonImps: 's2', soulSiphon: 's3', updateSiphon: 's3',
   ultimate: 'ult', dawn: 'ult', eclipse: 'ult', battleCry: 's3',
@@ -157,6 +157,14 @@ const X = {
     p.coins -= it.price;
     p.items[item] = (p.items[item] || 0) + 1;
     this.emit({ k: 'bought', id: p.id, item });
+    return true;
+  },
+  sellFish(id, coins) {
+    const p = this.players.get(id);
+    const v = Math.floor(+coins || 0);
+    if (!p || v <= 0 || v > 2000 || !this.nearProp(p, 'shop', 110)) return false;
+    p.coins += v;
+    this.emit({ k: 'sold', id: p.id, v });
     return true;
   },
   useItem(id, item) {
@@ -359,7 +367,7 @@ const X = {
   updateRing(dt) {
     const g = this.ring;
     if (!g) return;
-    g.r = Math.max(g.min, g.r - 14 * dt);
+    g.r = Math.max(g.min, g.r - 7 * dt);
     g.tick -= dt;
     if (g.tick > 0) return;
     g.tick = 0.5;
@@ -404,6 +412,7 @@ const X = {
     p.brewT = (p.brewT || 0) - dt; p.boostT = (p.boostT || 0) - dt; p.dimT = (p.dimT || 0) - dt; p.rootT = (p.rootT || 0) - dt;
     if (p.cuts) this.updateCuts(p, dt);
     if (p.cls === 'warrior') this.warriorTick(p, dt);
+    this.druidTick(p, dt);
   },
 
   // =================================================== Warrior: Fury, Bladestorm, Aftershock
@@ -566,8 +575,15 @@ const X = {
     const D = this.duel;
     if (!D) return;
     const a = this.players.get(D.a), b = this.players.get(D.b);
-    const out = (o) => !o || Math.hypot(o.x - D.x, o.y - D.y) > D.r + 50;
-    if (out(a) || out(b)) { this.endDuel(out(a) ? D.b : D.a, true); return; }
+    if (!a || !b) { this.endDuel(a ? D.a : D.b, true); return; }
+    // step out of the ring and you have 3 seconds to get back in
+    for (const [o, key] of [[a, 'oa'], [b, 'ob']]) {
+      const outside = Math.hypot(o.x - D.x, o.y - D.y) > D.r;
+      if (!outside) { if (D[key] > 0) this.emit({ k: 'duelBack', id: o.id }); D[key] = 0; continue; }
+      if (!(D[key] > 0)) this.emit({ k: 'duelOut', id: o.id });
+      D[key] = (D[key] || 0) + dt;
+      if (D[key] >= 3) { this.endDuel(o === a ? D.b : D.a, true); return; }
+    }
     for (const [o, e] of [[a, D.ea], [b, D.eb]]) { e.x = o.x; e.y = o.y; e.vx = 0; e.vy = 0; e.face = o.aim; e.stun = 0; e.slowT = 0; }
     if (!D.on) { D.t -= dt; if (D.t <= 0) { D.on = true; this.emit({ k: 'duelGo' }); } }
   },
@@ -642,6 +658,8 @@ const X = {
     return {
       lv: c.lv, xp: Math.floor(c.xp), nx: c.lv >= MAX_LEVEL ? 0 : xpNeed(c.lv), pts: pointsLeft(c), np: c.np, pr: c.pres, rb: c.reb,
       co: p.coins, it: p.items, bt: p.brewT > 0 ? 1 : 0, bo: p.boostT > 0 ? 1 : 0, dm: p.dimT > 0 ? 1 : 0, rt: p.rootT > 0 ? 1 : 0,
+      bf: p.bear ? 1 : 0, cb2: p.bear ? Math.max(0, Math.round(p.cd.b2 * 10) / 10) : 0, cb3: p.bear ? Math.max(0, Math.round(p.cd.b3 * 10) / 10) : 0,
+      rj: p.rejuT > this.time ? 1 : 0, gv: p.grove ? 1 : 0, rg: p.rollGuardT > 0 ? 1 : 0,
       dr: p.duelReady ? 1 : 0, ct: p.cuts ? 1 : 0, bs: p.storm ? 1 : 0, br: p.storm ? Math.round(WARRIOR.storm.r * Math.sqrt(p.stats.ultSize)) : 0, cr: p.cryT > this.time ? 1 : 0, uq: p.unqT > this.time ? 1 : 0,
     };
   },
@@ -650,7 +668,8 @@ const X = {
     return {
       md: this.mode || 'casual', ev: this.event || null, rs: this.resume ? this.resume.forest : 0,
       rg: this.ring ? { x: Math.round(this.ring.x), y: Math.round(this.ring.y), r: Math.round(this.ring.r) } : null,
-      du: D ? { a: D.a, b: D.b, ha: Math.max(0, Math.ceil(D.ea.hp)), hb: Math.max(0, Math.ceil(D.eb.hp)), mx: D.ea.max, on: D.on ? 1 : 0, t: Math.ceil(D.t) } : null,
+      du: D ? { a: D.a, b: D.b, ha: Math.max(0, Math.ceil(D.ea.hp)), hb: Math.max(0, Math.ceil(D.eb.hp)), mx: D.ea.max, on: D.on ? 1 : 0, t: Math.ceil(D.t),
+        oa: D.oa > 0 ? Math.ceil(3 - D.oa) : 0, ob: D.ob > 0 ? Math.ceil(3 - D.ob) : 0 } : null,
     };
   },
 

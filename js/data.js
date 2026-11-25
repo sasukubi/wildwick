@@ -7,7 +7,7 @@
 
 // The game's version. Friends can only play together on the same version.
 // (Raise this with every update.)
-export const VERSION = '1.4.2';
+export const VERSION = '1.5.0';
 import { PRESTIGE } from './progress.js';
 
 export const TILE = 32;
@@ -24,6 +24,7 @@ export const CLOAKS = [
   { id: 'rose',  name: 'Rose',  hex: '#c45a92' },
   { id: 'ash',   name: 'Ash',   hex: '#7d838c' },
   { id: 'frost', name: 'Frost', hex: '#5fbfc6' },
+  { id: 'night', name: 'Night', hex: '#22202a' },
 ];
 
 export const HATS = [
@@ -45,12 +46,13 @@ export const FLAMES = [
 ];
 
 export const CLASSES = [
-  { id: 'warrior',  name: 'Warrior',  available: true,  color: '#ff8a4c', blurb: 'Fights harder the dimmer their flame burns.' },
-  { id: 'warlock',  name: 'Warlock',  available: true,  color: '#9b6bff', blurb: 'Calls shadow hands and imps, and drains enemies for souls.' },
-  { id: 'bowman',   name: 'Archer',   available: true,  color: '#8fd36b', blurb: 'Draw longer for stronger, piercing shots.' },
-  { id: 'rogue',    name: 'Rogue',    available: true,  color: '#d0d4e0', blurb: 'Strikes from behind; dashes leave decoys.' },
-  { id: 'sorcerer', name: 'Sorcerer', available: true,  color: '#58b8ff', blurb: 'Weaves two spells together into one.' },
-  { id: 'cleric',   name: 'Cleric',   available: true,  color: '#ffe08a', blurb: 'Fights up close to build Grace, then spends it to heal.' },
+  { id: 'warrior',  name: 'Warrior',  available: true,  color: '#ff8a4c', stone: '#e0303a', blurb: 'Fights harder the dimmer their flame burns.' },
+  { id: 'warlock',  name: 'Warlock',  available: true,  color: '#9b6bff', stone: '#9b4dff', blurb: 'Calls shadow hands and imps, and drains enemies for souls.' },
+  { id: 'bowman',   name: 'Archer',   available: true,  color: '#8fd36b', stone: '#f4f4ee', blurb: 'Draw longer for stronger, piercing shots.' },
+  { id: 'rogue',    name: 'Rogue',    available: true,  color: '#d0d4e0', stone: '#1a1820', blurb: 'Strikes from behind; dashes leave decoys.' },
+  { id: 'sorcerer', name: 'Sorcerer', available: true,  color: '#58b8ff', stone: '#3a8cff', blurb: 'Weaves two spells together into one.' },
+  { id: 'cleric',   name: 'Cleric',   available: true,  color: '#ffe08a', stone: '#ffd23a', blurb: 'Fights up close to build Grace, then spends it to heal.' },
+  { id: 'druid',    name: 'Druid',    available: true,  color: '#7fd66a', stone: '#3fbf4a', blurb: 'Casts thorns and vines, then becomes a great bear.' },
 ];
 
 // ---- Warrior ------------------------------------------------
@@ -95,7 +97,7 @@ export const SORCERER = {
   firestorm: { r: 30, dps: 42, t: 3, speed: 90 },
   blizzard:  { r: 92, dps: 12, t: 4, slow: 0.45, range: 160 },
   starfall:  { r: 120, meteors: 12, t: 3, dmg: 34, hitR: 36, range: 220 },
-  trailTime: 0.7, trailHaste: 0.12,     // the dash leaves a trail that speeds up allies who walk through it
+  trailTime: 1.1, trailHaste: 0.18, trailR: 18,  // the dash leaves a trail that speeds up allies who walk through it
 };
 export const ELEMENTS = {
   fire:  { name: 'Fireball',  color: '#ff8a3c', icon: '' },
@@ -124,6 +126,9 @@ export const BOWMAN = {
   rainCd: 12, rainR: 70, rainTime: 2, rainArrows: 10, rainDmg: 13, rainRange: 240,
   hawkTime: 6, hawkRecover: 0.32,         // Hawk Eye (Wildfire ultimate)
   rollDmg: 9, rollRange: 230,            // the dash is a roll that flicks a small arrow at the nearest enemy
+  rollGuard: 0.5, rollGuardTime: 0.4,    // 50% less damage taken while rolling
+  // Fire Arrow (Q): pierces through enemies and leaves a short trail of fire on the ground
+  fireArrow: { cd: 10, dmg: 30, speed: 430, range: 380, every: 16, trailTime: 2.5, trailDps: 14, trailR: 14 },
 };
 
 // ---- Rogue --------------------------------------------------
@@ -136,7 +141,9 @@ export const ROGUE = {
   execute: 0.1,                                             // +10% damage to enemies under half health
   hopRange: 48,                                             // stabs hop toward enemies this far away
   decoyTime: 1.2, tauntR: 140,                              // the dash clone pulls nearby enemies for a moment
-  stepCd: 4.5, stepRange: 220,                                // Shadowstep
+  stepCd: 4.5, stepRange: 220,                                // Shadowstep (Q)
+  // Twin Fang (right-click): both daggers at once. 30 damage every 1.2s = less than spamming stabs (27 a second)
+  heavy: { cd: 1.2, dmg: 30, range: 46, arc: 1.8, kb: 260, recover: 0.35 },
   smokeCd: 14, smokeR: 72, smokeTime: 5, smokeSpeed: 1.4,   // Smoke Bomb
   cutsTargets: 6, cutsRange: 230, cutsDmg: 60,              // Thousand Cuts (ultimate)
 };
@@ -163,9 +170,26 @@ export const WARLOCK = {
   boltCd: 0.6, boltSpeed: 240, boltRange: 250, boltDmg: 10, curseEvery: 3, curseTime: 3, curseBonus: 0.15,
   hands: { cost: 30, cd: 9, r: 58, range: 230, delay: 0.45, dmg: 22, root: 1.6 },
   imps: { cost: 35, cd: 12, n: 3, life: 8, speed: 150, dmg: 2.5, biteCd: 0.7, mana: 1, aggro: 260 },
-  siphon: { cost: 0, cd: 8, range: 210, time: 1.6, dps: 15, mana: 8, breakRange: 260 },
+  siphon: { cost: 0, cd: 8, range: 210, time: 1.6, dps: 15, mana: 8, breakRange: 260, heal: 0.12 }, // heals 12% of the damage it drains
   slipTime: 0.14, slipSpeed: 720,                                // Shadow Slip: a quick untouchable blink
   eclipse: { time: 8, hp: 900, r: 20, speed: 70, dmg: 6, swipeCd: 1, swipeR: 52, taunt: 320 },
+};
+
+// ---- Druid --------------------------------------------------
+// Human form: a nature caster. Hits fill the nature gauge; when it's full, E turns you into a bear
+// until the gauge drains (it only drains while you're a bear). E again turns you back early.
+export const DRUID = {
+  speed: 116, maxFlame: 95,
+  gauge: { perThorn: 7, perVine: 5, vineCap: 15 },
+  thorn: { cd: 0.5, dmg: 11, speed: 300, range: 270 },                // Thorn Shot (left click)
+  entangle: { cd: 8, range: 230, r: 56, delay: 0.35, dmg: 10, root: 1.6 }, // Entangle (right click)
+  rejuv: { cd: 14, r: 130, time: 5, hps: 3 },                          // Rejuvenate (Q): a gentle 15 flame over 5s
+  bear: { time: 12, hp: 1.5, guard: 0.8, speed: 0.9 },                 // bear form: 50% more flame, 20% less damage taken, a bit slower
+  maul: { cd: 0.7, dmg: 20, range: 56, arc: 2.2, kb: 220 },            // Maul (left click)
+  stomp: { cd: 8, r: 92, dmg: 22, stun: 1.2 },                         // Stomp (right click)
+  roar: { cd: 12, r: 260, time: 4 },                                   // Roar (Q): enemies nearby turn on you
+  charge: { dmg: 10, stun: 1.0, kb: 260 },                             // Charge (dash in bear form)
+  grove: { time: 3, every: 0.5, r: 210, dmg: 16 },                     // Wrath of the Grove (Wildfire)
 };
 
 // ---- Enemies ------------------------------------------------
@@ -218,7 +242,7 @@ export const TOUGH = {
   dmg: 0.9,                     // everyone deals 10% less damage
   xp: 0.85,                     // 15% less EXP
 };
-for (const o of [WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK]) { o.speed *= PACE; o.maxFlame = Math.round(o.maxFlame * TOUGH.playerFlame); }
+for (const o of [WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, DRUID]) { o.speed *= PACE; o.maxFlame = Math.round(o.maxFlame * TOUGH.playerFlame); }
 WARRIOR.dashSpeed *= PACE;
 WARLOCK.slipSpeed *= PACE;
 SORCERER.fire.speed *= PACE; SORCERER.frost.speed *= PACE; SORCERER.firestorm.speed *= PACE;
@@ -239,7 +263,7 @@ TREANT.rootDmg *= TOUGH.dmg; TREANT.sweepDmg *= TOUGH.dmg;
 export const CAP_REQUIREMENT = 5;
 export const RANK_POWER = 0.6;   // each normal rank is worth 60% of what it used to be
 // upgrades that add whole things (an extra shard, an extra imp...) aren't weakened
-const WHOLE = new Set(['shard', 'brood', 'quickhex', 'flurry']);
+const WHOLE = new Set(['shard', 'brood', 'quickhex', 'flurry', 'longform']);
 export const TREES = {
   warrior: [
     { id: 'fury', name: 'Wrath', color: '#ff7a4c', blurb: 'More Fury, harder swings.', nodes: [
@@ -362,6 +386,26 @@ TREES.warlock = [
     { id: 'lifetap', name: 'Harvest', max: 1, cap: true, desc: 'Soul Siphon also restores your flame.' },
   ] },
 ];
+TREES.druid = [
+  { id: 'wild', name: 'Wild', color: '#9be36a', blurb: 'Sharper thorns, stronger vines.', nodes: [
+    { id: 'thorns', name: 'Sharp Thorns', max: 3, desc: 'Thorn Shot deals +12% damage.' },
+    { id: 'snare', name: 'Deep Roots', max: 3, desc: 'Entangle holds enemies 0.3s longer.' },
+    { id: 'bramble', name: 'Bramble', max: 2, desc: 'Entangle covers 20% more ground and deals +20% damage.' },
+    { id: 'splinter', name: 'Splinter', max: 1, cap: true, desc: 'Every 4th Thorn Shot splits into 3 thorns.' },
+  ] },
+  { id: 'grove', name: 'Grove', color: '#f0d76a', blurb: 'Healing and a faster gauge.', nodes: [
+    { id: 'bloom', name: 'Bloom', max: 3, desc: 'Rejuvenate heals 15% more.' },
+    { id: 'sap', name: 'Sap Flow', max: 3, desc: 'The nature gauge fills 15% faster.' },
+    { id: 'quickgrow', name: 'Quickgrowth', max: 2, desc: 'Entangle and Rejuvenate recharge 15% faster.' },
+    { id: 'lifebloom', name: 'Lifebloom', max: 1, cap: true, desc: 'Rejuvenate also gives everyone it touches a small shield.' },
+  ] },
+  { id: 'ursa', name: 'Ursa', color: '#c48a5a', blurb: 'A tougher, longer-lasting bear.', nodes: [
+    { id: 'hide', name: 'Thick Hide', max: 3, desc: 'Bear form takes 8% less damage.' },
+    { id: 'longform', name: 'Old Growth', max: 3, desc: 'Bear form lasts 1.5 seconds longer.' },
+    { id: 'claws', name: 'Sharp Claws', max: 2, desc: 'Maul, Stomp and Charge deal +15% damage.' },
+    { id: 'greatbear', name: 'Great Bear', max: 1, cap: true, desc: 'Charge stuns every enemy it hits, not just the first.' },
+  ] },
+];
 export const WARRIOR_TREE = TREES.warrior;
 
 // rewrite the numbers in each normal upgrade's text to match RANK_POWER
@@ -404,6 +448,7 @@ export const BOONS = [
   { id: 'spring',  name: 'Crystal',    icon: '', desc: '+40% mana regeneration', cls: 'sorcerer' },
   { id: 'wellw',   name: 'Skull',    icon: '', desc: '+40% soul regeneration', cls: 'warlock' },
   { id: 'psalm',   name: 'Ripped Page',     icon: '', desc: 'Swing hits build 25% more Grace', cls: 'cleric' },
+  { id: 'acorn',   name: 'Acorn',           icon: '', desc: 'The nature gauge fills 25% faster', cls: 'druid' },
 ];
 
 // Works out a player's real numbers from their class, skill tree, boons,
@@ -481,6 +526,7 @@ function baseClassStats(cls, tree = {}, boons = []) {
       rainArrows: Math.round(B.rainArrows * (1 + 0.25 * r('downpour'))),
       rainR: B.rainR * (1 + 0.2 * r('widerain')),
       rainCd: B.rainCd * focus,
+      fireArrowCd: B.fireArrow.cd * focus,
       hawkTime: B.hawkTime + (r('keen') ? 3 : 0),
       furyMax: 0,
     };
@@ -537,6 +583,35 @@ function baseClassStats(cls, tree = {}, boons = []) {
       furyMax: 0,
     };
   }
+  if (cls === 'druid') {
+    const D = DRUID;
+    const quick = Math.pow(0.85, r('quickgrow'));
+    return {
+      ...base,
+      maxFlame: D.maxFlame + 15 * b('wick'),
+      speed: D.speed * (1 + 0.1 * b('swift')),
+      atkCd: D.thorn.cd,
+      maxMana: 100, manaRegen: 0,                  // the nature gauge
+      spellCd: focus,
+      natureGain: (1 + 0.15 * r('sap')) * (1 + 0.25 * b('acorn')),
+      thornMult: 1 + 0.12 * r('thorns'),
+      splinter: r('splinter') > 0,
+      entangleCd: D.entangle.cd * quick * focus,
+      entangleRoot: D.entangle.root + 0.3 * r('snare'),
+      entangleR: D.entangle.r * (1 + 0.2 * r('bramble')),
+      entangleMult: 1 + 0.2 * r('bramble'),
+      rejuvCd: D.rejuv.cd * quick * focus,
+      rejuvMult: 1 + 0.15 * r('bloom'),
+      lifebloom: r('lifebloom') > 0,
+      bearTime: D.bear.time + 1.5 * rr('longform'),
+      bearGuard: D.bear.guard * (1 - 0.08 * r('hide')),
+      clawMult: 1 + 0.15 * r('claws'),
+      greatBear: r('greatbear') > 0,
+      stompCd: D.stomp.cd * focus,
+      roarCd: D.roar.cd * focus,
+      furyMax: 0,
+    };
+  }
   if (cls === 'rogue') {
     const G = ROGUE;
     return {
@@ -551,6 +626,7 @@ function baseClassStats(cls, tree = {}, boons = []) {
       spinR: G.spinR * (1 + 0.15 * r('whirl')),
       bleed: r('bleed') > 0,
       stepCd: G.stepCd * Math.pow(0.85, r('swiftstep')) * focus,
+      heavyCd: G.heavy.cd * focus,
       ambush: 0.4 * r('ambush'),
       smokeCd: G.smokeCd * focus,
       smokeTime: G.smokeTime + 1.5 * r('thick'),

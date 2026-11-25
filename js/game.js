@@ -4,7 +4,7 @@
 //  - On the host: also runs the Sim and sends snapshots.
 //  - On friends' computers: shows the host's snapshots smoothly.
 // =============================================================
-import { VERSION, WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, CLOAKS, FLAMES, CLASSES, BOONS, ELEMENTS, PLAYER_RADIUS, MAX_PLAYERS, classStats, byId } from './data.js';
+import { VERSION, WARRIOR, SORCERER, BOWMAN, ROGUE, CLERIC, WARLOCK, DRUID, CLOAKS, FLAMES, CLASSES, BOONS, ELEMENTS, PLAYER_RADIUS, MAX_PLAYERS, classStats, byId } from './data.js';
 import { World } from './world.js';
 import { Sim } from './sim.js';
 import { Input } from './input.js';
@@ -406,9 +406,12 @@ export class Game {
     if (sk !== this.statsKey) {
       this.statsKey = sk;
       this.stats = classStats(me.k, me.tr, me.bn, { pres: me.pr, reb: me.rb });
-      if (me.k !== this.cls) { this.cls = me.k; buildHud(this.cls); }
+      if (me.k !== this.cls) this.cls = me.k;
       setKeyClass(me.k);
     }
+    // the Druid's bear form has its own set of skills on the HUD
+    const kitKey = me.k === 'druid' && me.bf ? 'bear' : me.k;
+    if (kitKey !== this.kitKey) { this.kitKey = kitKey; buildHud(kitKey); }
     audio.setScene(snap.st === 'rest' ? 'rest' : snap.sc === 'lobby' ? (this.firesideMusic(snap) ? 'fireside' : 'lobby') : snap.sc === 'arena' ? 'boss' : 'forest');
     audio.listener = { x: this.lp.x, y: this.lp.y };
     // camp music speeds up (up to +25%) the closer you get to the "Into the Wilds" archway
@@ -513,9 +516,9 @@ export class Game {
       lp.dashMax = cls === 'warlock' ? WARLOCK.slipTime : WARRIOR.dashTime;
       lp.dashT = lp.dashMax;
       lp.dashCd = S.dashCd;
-      const dcol = cls === 'rogue' || cls === 'warlock' ? '#b08cff' : cls === 'cleric' ? '#ffe9a8' : cls === 'warrior' ? '#9a1424' : byId(FLAMES, me.f).mid;
+      const dcol = cls === 'druid' ? (me.bf ? '#8a5a32' : '#8fe07a') : cls === 'rogue' || cls === 'warlock' ? '#b08cff' : cls === 'cleric' ? '#ffe9a8' : cls === 'warrior' ? '#9a1424' : byId(FLAMES, me.f).mid;
       this.burst(lp.x, lp.y - 8, cls === 'warlock' ? 16 : 8, { color: dcol, speed: 80, life: 0.4, glow: true });
-      audio.play(cls === 'warlock' ? 'slip' : cls === 'cleric' ? 'blessStep' : 'dash');
+      audio.play(cls === 'warlock' ? 'slip' : cls === 'cleric' ? 'blessStep' : cls === 'druid' && me.bf ? 'growl' : 'dash');
     }
     let vx, vy;
     if (lp.dashT > 0) {
@@ -524,11 +527,12 @@ export class Game {
       vx = lp.ddx * dsp;
       lp.vx = lp.ddx * S.speed; lp.vy = lp.ddy * S.speed; // carry some speed out of the dash
       vy = lp.ddy * dsp;
-      const pcol = cls === 'rogue' ? '#b08cff' : cls === 'warlock' ? (Math.random() < 0.5 ? '#3a2458' : '#9b6bff') : cls === 'cleric' ? '#fff1b8' : cls === 'warrior' ? (Math.random() < 0.5 ? '#9a1424' : '#2a0a0e') : byId(FLAMES, me.f).mid;
+      const pcol = cls === 'druid' ? (me.bf ? '#6b4426' : '#8fe07a') : cls === 'rogue' ? '#b08cff' : cls === 'warlock' ? (Math.random() < 0.5 ? '#3a2458' : '#9b6bff') : cls === 'cleric' ? '#fff1b8' : cls === 'warrior' ? (Math.random() < 0.5 ? '#9a1424' : '#2a0a0e') : byId(FLAMES, me.f).mid;
       this.particles.push({ x: lp.x + (Math.random() - 0.5) * 8, y: lp.y - 12 + (Math.random() - 0.5) * 12, vx: 0, vy: 0, life: cls === 'cleric' ? 0.8 : 0.3, max: cls === 'cleric' ? 0.8 : 0.3, size: 2, color: pcol, glow: cls !== 'warlock', shrink: true });
     } else {
       let sp = S.speed * (this.world.kind === 'lobby' ? 1.15 : 1) * (me.bt ? 1.2 : 1) * (me.bo ? 1.25 : 1) * (cls === 'warrior' && me.bs ? WARRIOR.stormSpeed : 1); // Bladestorm: double speed
       if (guarding) sp *= WARRIOR.guardSlow;
+      if (cls === 'druid' && me.bf) sp *= DRUID.bear.speed;
       if (cls === 'bowman' && lp.drawing) sp *= S.drawSlow;
       if (cls === 'rogue' && (snap.zn || []).some((z) => z.k === 'smoke' && Math.hypot(lp.x - z.x, lp.y - z.y) < z.r)) sp *= ROGUE.smokeSpeed;
       // walking through a friend's Sorcerer trail gives a small burst of speed
@@ -586,6 +590,9 @@ export class Game {
         audio.play('mace');
       } else if (cls === 'warlock') {
         this.startBolt(this.myId, lp.aim);
+      } else if (cls === 'druid') {
+        if (me.bf) { lp.atkCd = DRUID.maul.cd; this.startClaw(this.myId, lp.aim); }
+        else this.startThorn(this.myId, lp.aim);
       } else {
         this.startStaff(this.myId, lp.aim);
         audio.play('staff');
@@ -650,6 +657,7 @@ export class Game {
       hurt: !!p.hu,
       dash: mine ? this.lp.dashT > 0 : !!p.d,
       guard: !!p.g,
+      bear: !!p.bf,
       emote: mine ? this.lp.emote : p.em,
       emoteT: mine ? this.t - this.lp.emoteAt : p.ea,
     };
@@ -706,6 +714,20 @@ export class Game {
     this.effects.push({ k: 'spin', id, aim: 0, r, t0: this.t, life: 0.3 });
   }
 
+  startClaw(id, aim) {
+    const v = this.viewFor(id);
+    v.swingT = this.t;
+    this.effects.push({ k: 'claw', id, aim, t0: this.t, life: 0.26 });
+    audio.play('famSwipe', this.viewPos(id));
+  }
+
+  startThorn(id, aim) {
+    const v = this.viewFor(id);
+    v.castT = this.t;
+    audio.play('bow', this.viewPos(id));
+    this.burst(v.x + Math.cos(aim) * 12, v.y - 16 + Math.sin(aim) * 12, 4, { color: '#9be36a', speed: 50, life: 0.3, glow: true });
+  }
+
   startBolt(id, aim) {
     const v = this.viewFor(id);
     v.castT = this.t;
@@ -745,7 +767,7 @@ export class Game {
   // a skill button flashes red when you can't use it (no mana, no target...)
   deny(slot) {
     audio.play('fizzle');
-    const map = { s1: ['sk-quake', 'sk-fire', 'sk-mark', 'sk-smoke', 'sk-mend', 'sk-hands'], s2: ['sk-gale', 'sk-rain', 'sk-step', 'sk-judge', 'sk-imps'], s3: ['sk-frost', 'sk-ground', 'sk-siphon'], ult: ['sk-ult'] };
+    const map = { s1: ['sk-quake', 'sk-fire', 'sk-mark', 'sk-smoke', 'sk-mend', 'sk-hands', 'sk-bear'], s2: ['sk-gale', 'sk-rain', 'sk-twin', 'sk-judge', 'sk-imps'], s3: ['sk-frost', 'sk-ground', 'sk-siphon', 'sk-step', 'sk-farrow'], ult: ['sk-ult'] };
     for (const id of map[slot] || []) {
       const el = document.getElementById(id);
       if (el) { el.classList.remove('denied'); void el.offsetWidth; el.classList.add('denied'); }

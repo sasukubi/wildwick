@@ -11,7 +11,7 @@ import {
   grassTile, dirtTile, paintDecor, treeSprite, boulderSprite, charSprite, downSprite, swordSprite, staffSprite, whiteOf,
   wolfSprite, wolfEye, treantSprite, TREANT_EYES, propSprite, TORCH, CHAR_W,
   bowSprite, daggerSprite, archwaySprite, ARCH_LANTERNS, lanternSprite, emojiSprite, pingSprite, PINGS,
-  maceSprite, charmSprite, impSprite,
+  maceSprite, charmSprite, impSprite, druidStaffSprite, bearSprite,
 } from './sprites.js';
 import { drawNewProp, drawGroundProps, propLights, drawNewEnemy, enemyLights, drawWeb, drawCoin, drawWorldExtras, drawScreenExtras, setSnap, NEW_ENEMIES } from './renderx.js';
 import { stageName } from './hud.js';
@@ -122,6 +122,7 @@ export function drawCharacter(ctx, x, y, o, t) {
     if (em === 'dance') { y -= Math.round(Math.abs(Math.sin(et * 8)) * 3); x += Math.round(Math.sin(et * 4) * 3); o = { ...o, aim: Math.floor(et / 0.4) % 2 ? Math.PI : 0, moving: true }; }
     if (em === 'flourish' && et < 2) o = { ...o, swing: -1, cast: -1, spinWeapon: et * 11 };
   }
+  if (o.bear) { drawBear(ctx, x, y, o, t); return; }
   ctx.save();
   if (em === 'bow' && et < 1.4) { ctx.translate(x, y); ctx.rotate(Math.sin(Math.min(1, et / 0.5) * Math.PI / 2) * 0.35 * (et > 0.9 ? Math.max(0, (1.4 - et) / 0.5) : 1) * (Math.cos(o.aim) >= 0 ? 1 : -1)); ctx.translate(-x, -y); }
   if (em === 'sit') { ctx.translate(x, y); ctx.scale(1, 0.78); ctx.translate(-x, -y); }
@@ -133,19 +134,19 @@ export function drawCharacter(ctx, x, y, o, t) {
   const { img, flip } = charSprite(o.look, dir, frame, o.cls);
   const bob = o.moving && frame !== 0 ? -1 : 0;
   const hand = HAND[dir];
-  const sorc = o.cls === 'sorcerer';
+  const sorc = o.cls === 'sorcerer' || o.cls === 'druid';
   const weapon = () => {
     if (em === 'sit') return; // weapon put away while sitting
     if (o.spinWeapon !== undefined) {
       // showing off: the weapon twirls around the hand
-      const img = o.cls === 'bowman' ? bowSprite() : o.cls === 'rogue' ? daggerSprite() : o.cls === 'sorcerer' ? staffSprite() : o.cls === 'cleric' ? maceSprite() : o.cls === 'warlock' ? charmSprite() : swordSprite(true);
+      const img = o.cls === 'bowman' ? bowSprite() : o.cls === 'rogue' ? daggerSprite() : o.cls === 'druid' ? druidStaffSprite() : o.cls === 'sorcerer' ? staffSprite() : o.cls === 'cleric' ? maceSprite() : o.cls === 'warlock' ? charmSprite() : swordSprite(true);
       ctx.save(); ctx.translate(x + hand[0], y + hand[1] - 6); ctx.rotate(o.spinWeapon); ctx.drawImage(img, -img.width / 2, -img.height / 2); ctx.restore();
       return;
     }
     if ((em === 'cheer' && et < 1.8) || (em === 'wave' && et < 1.6)) {
       // arm raised: weapon held up high (cheer) or a waving hand (wave)
       if (em === 'wave') { ctx.fillStyle = '#e8b994'; ctx.fillRect(Math.round(x + 7 + Math.sin(et * 14) * 2), y - 30, 3, 3); return; }
-      const img = o.cls === 'bowman' ? bowSprite() : o.cls === 'rogue' ? daggerSprite() : o.cls === 'sorcerer' ? staffSprite() : o.cls === 'cleric' ? maceSprite() : o.cls === 'warlock' ? charmSprite() : swordSprite(false);
+      const img = o.cls === 'bowman' ? bowSprite() : o.cls === 'rogue' ? daggerSprite() : o.cls === 'druid' ? druidStaffSprite() : o.cls === 'sorcerer' ? staffSprite() : o.cls === 'cleric' ? maceSprite() : o.cls === 'warlock' ? charmSprite() : swordSprite(false);
       ctx.save(); ctx.translate(x + 6, y - 24); ctx.rotate(-Math.PI / 2); ctx.drawImage(img, -2, -img.height / 2); ctx.restore();
       return;
     }
@@ -192,7 +193,7 @@ export function drawCharacter(ctx, x, y, o, t) {
       // a little lantern swinging in the off hand
       ctx.drawImage(lanternSprite(true), Math.round(x - hand[0] * 0.7 - 3 + Math.sin(t * 2.4) * 0.8), Math.round(y + hand[1] + bob - 1));
     }
-    const sw = sorc ? staffSprite() : o.cls === 'cleric' ? maceSprite() : swordSprite(o.heavy && o.swing >= 0);
+    const sw = sorc ? (o.cls === 'druid' ? druidStaffSprite() : staffSprite()) : o.cls === 'cleric' ? maceSprite() : swordSprite(o.heavy && o.swing >= 0);
     let ang;
     if (o.guard) ang = o.aim - (Math.PI / 2) * (Math.cos(o.aim) >= 0 ? 1 : -1);
     else if (o.swing >= 0) { const span = sorc ? 1.0 : o.heavy ? 1.6 : 1.25; ang = o.aim - span + easeOut(o.swing) * span * 2; }
@@ -215,6 +216,21 @@ export function drawCharacter(ctx, x, y, o, t) {
     ctx.restore();
   } else ctx.drawImage(img, x - CHAR_W / 2, y - 35 + bob);
   if (!behind) weapon();
+  ctx.restore();
+}
+
+// the Druid's bear form: faces left or right, lunges a little when it mauls
+function drawBear(ctx, x, y, o, t) {
+  const right = Math.cos(o.aim) >= 0;
+  const frame = o.moving ? [1, 0, 2, 0][Math.floor(t * 6) % 4] : 0;
+  const lunge = o.swing >= 0 ? Math.sin(o.swing * Math.PI) * 5 : 0;
+  const bob = o.moving && frame !== 0 ? -1 : Math.round(Math.sin(t * 2.2) * 0.6);
+  ctx.save();
+  if (o.hurt && Math.floor(t * 30) % 2) ctx.globalAlpha = 0.5;
+  if (o.dash) ctx.globalAlpha = 0.85;
+  ctx.translate(x + (right ? lunge : -lunge), y + bob);
+  if (!right) ctx.scale(-1, 1);
+  ctx.drawImage(bearSprite(frame), -22, -30);
   ctx.restore();
 }
 
@@ -455,7 +471,7 @@ export class Renderer {
       // a banner in the class colour behind each shrine
       const c = byId(CLASSES, p.cls);
       ctx.fillStyle = '#3b2a1e'; ctx.fillRect(p.x + 9, p.y - 44, 2, 44);
-      ctx.fillStyle = c.available ? c.color : '#5a5e66';
+      ctx.fillStyle = c.available ? c.stone || c.color : '#5a5e66';
       ctx.beginPath(); ctx.moveTo(p.x + 11, p.y - 43); ctx.lineTo(p.x + 22, p.y - 41); ctx.lineTo(p.x + 19, p.y - 35); ctx.lineTo(p.x + 22, p.y - 29); ctx.lineTo(p.x + 11, p.y - 30); ctx.fill();
       ctx.drawImage(propSprite('shrine', c.available ? 1 : 0), p.x - 10, p.y - 32);
     }
@@ -638,6 +654,13 @@ export class Renderer {
       ctx.setLineDash([3, 4]); ctx.lineDashOffset = t * 12;
       ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.7, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
     } else if (z.k === 'storm') { ctx.fillStyle = `rgba(60,20,5,${0.4 * fade})`; ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.5, 0, 0, TAU); ctx.fill(); }
+    else if (z.k === 'vines') {
+      // Entangle: a green ring warns where the vines will burst up, then a mat of roots
+      const k = Math.min(1, (z.mx - z.t) / 0.35);
+      ctx.fillStyle = `rgba(30,60,20,${0.45 * fade})`;
+      jaggedBlob(ctx, z.x, z.y, z.r * (0.4 + 0.6 * k), z.r * 0.6 * (0.4 + 0.6 * k), z.id, 1, 16); ctx.fill();
+      if (k < 1) { ctx.strokeStyle = 'rgba(155,227,106,0.8)'; ctx.lineWidth = 1; jaggedBlob(ctx, z.x, z.y, z.r, z.r * 0.6, z.id + 3, 1, 16); ctx.stroke(); }
+    }
   }
 
   drawStrikeGround(ctx, s, t) {
@@ -724,11 +747,12 @@ export class Renderer {
     for (const k of snap.pk) L.push({ x: k.x, y: k.y, r: k.k === 'f' ? 80 : k.k === 'c' ? 22 : 48, col: k.k === 'f' ? [255, 230, 140] : [255, 160, 70], i: 0.85 });
     for (const z of snap.zn || []) {
       if (z.k === 'hands') continue;
+      if (z.k === 'vines') { L.push({ x: z.x, y: z.y - 6, r: z.r * 1.2, col: [140, 240, 120], i: 0.45 }); continue; }
       if (z.k === 'sanct') { L.push({ x: z.x, y: z.y - 6, r: z.r * 1.4, col: [255, 230, 160], i: 0.75 }); continue; }
       if (z.k === 'spark') { L.push({ x: z.x, y: z.y - 8, r: 40, col: [255, 240, 180], i: 0.6 }); continue; }
       L.push({ x: z.x, y: z.y - 6, r: z.k === 'blizzard' ? z.r * 1.3 : z.k === 'storm' ? 110 : 60, col: z.k === 'blizzard' ? [150, 210, 255] : [255, 140, 50], i: 0.8 });
     }
-    for (const s of snap.sp || []) L.push({ x: s.x, y: s.y, r: s.k === 'fire' ? 90 : 50, col: s.k === 'fire' ? [255, 150, 60] : s.k === 'bolt' ? [170, 120, 255] : [150, 220, 255], i: 0.9 });
+    for (const s of snap.sp || []) L.push({ x: s.x, y: s.y, r: s.k === 'fire' || s.k === 'farrow' ? 90 : 50, col: s.k === 'fire' || s.k === 'farrow' ? [255, 150, 60] : s.k === 'bolt' ? [170, 120, 255] : s.k === 'thorn' ? [160, 240, 120] : [150, 220, 255], i: 0.9 });
     for (const p of snap.ps) if (p.iv > 0) { const v = game.playerView(p); L.push({ x: v.x, y: v.y - 16, r: 110, col: [255, 236, 160], i: 0.8 }); }
     for (const s of snap.sf || []) if (s.t < 0.6) L.push({ x: s.x, y: s.y, r: 70, col: [255, 190, 110], i: 0.6 });
     for (const e of snap.es) {
@@ -750,7 +774,7 @@ export class Renderer {
     for (const p of world.props) {
       if (p.type !== 'shrine') continue;
       const c = byId(CLASSES, p.cls);
-      L.push({ x: p.x, y: p.y - 30, r: c.available ? 90 : 36, col: hexRgb(c.color), i: c.available ? 0.9 : 0.5 });
+      L.push({ x: p.x, y: p.y - 30, r: c.available ? 90 : 36, col: hexRgb(c.id === 'rogue' ? '#6a5a8a' : c.stone || c.color), i: c.available ? 0.9 : 0.5 });
     }
     for (const e of game.effects) {
       if (!e.light) continue;
@@ -850,7 +874,7 @@ export class Renderer {
       if (p.type !== 'shrine' || !vis(p.x, p.y)) continue;
       const c = byId(CLASSES, p.cls);
       const bob = Math.round(Math.sin(t * 2 + p.x) * 1.5);
-      ctx.fillStyle = c.available ? c.color : 'rgba(90,95,110,0.8)';
+      ctx.fillStyle = c.available ? c.stone || c.color : 'rgba(90,95,110,0.8)';
       ctx.beginPath();
       ctx.moveTo(p.x, p.y - 46 + bob); ctx.lineTo(p.x + 5, p.y - 39 + bob); ctx.lineTo(p.x, p.y - 33 + bob); ctx.lineTo(p.x - 5, p.y - 39 + bob);
       ctx.fill();
@@ -890,6 +914,19 @@ export class Renderer {
       if (!vis(z.x, z.y, 120)) continue;
       const fade = Math.min(1, z.t / 0.5);
       if (z.k === 'pyre') drawFlame(ctx, z.x, z.y, Math.min(1, z.t / 2), FLAMES[0], t * 1.3, false, z.x + z.y, 1.1);
+      else if (z.k === 'vines' && z.mx - z.t >= 0.35) {
+        const up = Math.min(1, (z.mx - z.t - 0.35) / 0.15) * fade;
+        for (let i = 0; i < 14; i++) {
+          const a = hash2(z.id, i) * TAU, d = Math.sqrt(hash2(i, z.id)) * z.r * 0.9;
+          const bx = z.x + Math.cos(a) * d, by = z.y + Math.sin(a) * d * 0.6, h = (8 + hash2(i * 3, z.id) * 12) * up;
+          const sway = Math.sin(t * 4 + i) * 2;
+          ctx.strokeStyle = '#2f5a22'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(bx + sway * 2, by - h * 0.6, bx + sway, by - h); ctx.stroke();
+          ctx.strokeStyle = '#6fb04a'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(bx + sway * 2, by - h * 0.6, bx + sway, by - h); ctx.stroke();
+          if (i % 3 === 0) { ctx.fillStyle = '#9be36a'; ctx.fillRect(Math.round(bx + sway - 1), Math.round(by - h), 2, 2); }
+        }
+      }
       else if (z.k === 'storm') {
         for (let i = 0; i < 4; i++) {
           const a = t * 8 + i * 1.6, rr = 6 + i * 4;
@@ -959,6 +996,23 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(-6, 0, 12, -1.1, 1.1); ctx.stroke();
         ctx.strokeStyle = 'rgba(255,250,235,0.95)'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(-6, 0, 12, -1.0, 1.0); ctx.stroke();
+        ctx.restore();
+      } else if (s.k === 'thorn') {
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
+        ctx.fillStyle = 'rgba(155,227,106,0.35)'; ctx.fillRect(-14, -1, 10, 2);
+        ctx.fillStyle = '#5a3a22'; ctx.fillRect(-6, -1, 8, 2);
+        ctx.fillStyle = '#9be36a'; ctx.fillRect(2, -1.5, 3, 3); ctx.fillStyle = '#d8ffb0'; ctx.fillRect(5, -0.5, 2, 1);
+        ctx.fillStyle = '#6fb04a'; ctx.fillRect(-3, -3, 1, 2); ctx.fillRect(-1, 1, 1, 2);
+        ctx.restore();
+      } else if (s.k === 'farrow') {
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createLinearGradient(-26, 0, 4, 0);
+        g.addColorStop(0, 'rgba(255,80,20,0)'); g.addColorStop(1, 'rgba(255,170,60,0.9)');
+        ctx.fillStyle = g; ctx.fillRect(-26, -3, 30, 6);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = '#d8c39a'; ctx.fillRect(-8, -0.5, 11, 1);
+        ctx.fillStyle = '#ffd36a'; ctx.fillRect(3, -1.5, 4, 3); ctx.fillStyle = '#fff4c8'; ctx.fillRect(5, -0.5, 2, 1);
         ctx.restore();
       } else if (s.k === 'arrow') {
         ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
@@ -1183,7 +1237,7 @@ export class Renderer {
         g.addColorStop(0, 'rgba(200,160,255,0.9)'); g.addColorStop(1, 'rgba(90,40,180,0)');
         ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; circle(ctx, hx, hy, 6); ctx.globalCompositeOperation = 'source-over';
       }
-      const [tx, ty] = torchPoint(v.x, v.y, o.aim, o.moving, t);
+      const [tx, ty] = p.bf ? [v.x + (Math.cos(o.aim) >= 0 ? -3 : 3), v.y - 30] : torchPoint(v.x, v.y, o.aim, o.moving, t);
       drawFlame(ctx, tx, ty, p.hp / p.mx, pal, t, !!p.gl, seed);
       // reviving someone: hold your torch out, flame flows to theirs
       const patient = snap.ps.find((q) => q.dn && q.rh === p.id);
@@ -1382,7 +1436,16 @@ export class Renderer {
       }
       if (p.dn) {
         const [x, y] = toS(v.x, v.y - 30);
-        text(ctx, p.rv > 0 ? 'Rekindling…' : p.id === game.myId ? 'Waiting to be rekindled…' : 'Stand close to rekindle', x, y, { size: 11, color: p.rv > 0 ? '#ffe0a0' : '#ffb59a' });
+        text(ctx, p.rv > 0 ? (p.rh ? 'Rekindling…' : 'Fading…') : p.id === game.myId ? 'Waiting to be rekindled…' : 'Stand close to rekindle', x, y, { size: 11, color: p.rv > 0 ? '#ffe0a0' : '#ffb59a' });
+        if (p.rv > 0) {
+          // how far along the rekindling is; it slowly drains (and dims) when nobody is helping
+          const w = 46, by = y + 8, a = p.rh ? 1 : 0.55;
+          ctx.globalAlpha = a;
+          ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(by - 1), w + 2, 6);
+          ctx.fillStyle = p.rh ? '#ffc86a' : '#c98a4a'; ctx.fillRect(Math.round(x - w / 2), Math.round(by), Math.round(w * Math.min(1, p.rv)), 4);
+          if (p.rh) { ctx.fillStyle = '#fff4c8'; ctx.fillRect(Math.round(x - w / 2), Math.round(by), Math.round(w * Math.min(1, p.rv)), 1); }
+          ctx.globalAlpha = 1;
+        }
       }
     }
     for (const e of game.effects) {

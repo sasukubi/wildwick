@@ -210,8 +210,9 @@ export function drawGroundProps(ctx, world, snap, t, vis) {
       ctx.fillStyle = 'rgba(120,90,60,0.28)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
       ctx.strokeStyle = 'rgba(230,200,140,0.35)'; ctx.lineWidth = 2; ctx.setLineDash([4, 5]);
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r - 4, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-      for (let i = 0; i < 10; i++) {
-        const a = (i / 10) * TAU, x = Math.round(p.x + Math.cos(a) * p.r), y = Math.round(p.y + Math.sin(a) * p.r);
+      const ns = Math.round(p.r / 9);
+      for (let i = 0; i < ns; i++) {
+        const a = (i / ns) * TAU, x = Math.round(p.x + Math.cos(a) * p.r), y = Math.round(p.y + Math.sin(a) * p.r);
         ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(x - 4, y, 9, 3);
         ctx.fillStyle = OUT; ctx.fillRect(x - 4, y - 9, 8, 10);
         ctx.fillStyle = i % 2 ? '#8a8f95' : '#7a7f85'; ctx.fillRect(x - 3, y - 8, 6, 8);
@@ -309,6 +310,35 @@ export function drawCoin(ctx, k, y, t) {
 
 // ---------------------------------------------------- world-space extras (after characters)
 export function drawWorldExtras(ctx, game, snap, me, t) {
+  for (const e of game.effects) {
+    const k = (t - e.t0) / e.life;
+    if (k < 0 || k > 1) continue;
+    if (e.k === 'claw') {
+      // bear claws (or the Rogue's two daggers): three/two bright slashes in front
+      const v = game.viewFor(e.id);
+      const n = e.steel ? 2 : 3, R = e.steel ? 30 : 36;
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < n; i++) {
+        const off = (i - (n - 1) / 2) * 7;
+        const ox = -Math.sin(e.aim) * off, oy = Math.cos(e.aim) * off * 0.7;
+        const a0 = e.aim - 0.7, a1 = e.aim - 0.7 + 1.4 * Math.min(1, k * 1.6);
+        ctx.strokeStyle = e.steel ? `rgba(230,235,245,${1 - k})` : `rgba(255,240,210,${1 - k})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let s = 0; s <= 8; s++) { const a = a0 + (a1 - a0) * (s / 8); ctx.lineTo(v.x + ox + Math.cos(a) * R * 0.6, v.y - 12 + oy + Math.sin(a) * R * 0.45 + Math.cos(e.aim) * 0); }
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (e.k === 'lash') {
+      // Wrath of the Grove: a branch whips up out of the ground
+      const h = 34 * Math.sin(Math.min(1, k * 1.4) * Math.PI);
+      ctx.strokeStyle = '#3a2414'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(e.x - 6, e.y + 2); ctx.quadraticCurveTo(e.x - 10 + e.a * 20, e.y - h * 0.6, e.x + e.a * 30, e.y - h); ctx.stroke();
+      ctx.strokeStyle = '#7a5432'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(e.x - 6, e.y + 2); ctx.quadraticCurveTo(e.x - 10 + e.a * 20, e.y - h * 0.6, e.x + e.a * 30, e.y - h); ctx.stroke();
+      ctx.fillStyle = '#6fb04a'; ctx.fillRect(Math.round(e.x + e.a * 30 - 2), Math.round(e.y - h - 2), 4, 3);
+    }
+  }
   // fishing: your line and bobber, or other players' rods
   for (const p of snap.ps) {
     const fishing = p.id === game.myId ? !!game.fishing : p.em === 'fish';

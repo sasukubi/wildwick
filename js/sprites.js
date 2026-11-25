@@ -346,7 +346,7 @@ function paintPack(g, dir, behind) {
 
 function paintBody(g, dir, cloak, frame, cls) {
   const C = cloak, Cd = shadeHex(cloak, -0.35), Cl = shadeHex(cloak, 0.18);
-  const robe = cls === 'sorcerer' || cls === 'cleric' || cls === 'warlock';
+  const robe = cls === 'sorcerer' || cls === 'cleric' || cls === 'warlock' || cls === 'druid';
   const s = frame === 1 ? 1 : frame === 2 ? -1 : 0;
   if (dir === 'right') { px(g, 9 + s * 2, 30, 4, 5, PAL.boot); px(g, 13 - s * 2, 30, 4, 5, PAL.boot); }
   else {
@@ -409,6 +409,22 @@ function paintClassExtras(g, dir, cls, cloak) {
       px(g, cx - 2, 32, 5, 1, '#c9a24a');
     } else if (dir === 'right') { px(g, 13, 20, 3, 13, '#efe6d2'); px(g, 13, 25, 3, 1, '#c9a24a'); }
     else { px(g, 7, 19, 10, 2, '#efe6d2'); px(g, 7, 21, 10, 1, '#c9a24a'); } // mantle seen from behind
+  } else if (cls === 'druid') {
+    // a leafy green mantle, a vine belt with an acorn, and little antlers on the hood
+    const L = '#3f7a2e', L2 = '#6fb04a', L3 = '#9be36a';
+    if (front || dir === 'right') {
+      px(g, 5, 19, 15, 3, PAL.o); px(g, 6, 19, 13, 2, L); px(g, 6, 21, 13, 1, '#2f5a22');
+      for (let x = 6; x < 19; x += 3) px(g, x, 19, 1, 1, L3);
+      px(g, 7, 25, 11, 1, '#5a8a3a'); px(g, 15, 26, 2, 2, '#9a6a3a'); px(g, 15, 25, 2, 1, '#5a3a22');
+    } else { px(g, 5, 18, 15, 6, PAL.o); px(g, 6, 18, 13, 5, L); px(g, 7, 19, 3, 2, L2); px(g, 13, 20, 3, 2, L2); }
+    // hood rim + antlers
+    const hx = dir === 'right' ? 13 : 12, hy = 14;
+    px(g, hx - 5, hy - 6, 11, 2, PAL.o); px(g, hx - 4, hy - 6, 9, 1, L);
+    for (const s of [-1, 1]) {
+      if (dir === 'right' && s < 0) continue;
+      px(g, hx + s * 3, hy - 8, 1, 2, '#b08a5e'); px(g, hx + s * 4, hy - 10, 1, 2, '#c49a6a'); px(g, hx + s * 5, hy - 11, 1, 1, '#c49a6a');
+      px(g, hx + s * 2, hy - 10, 1, 1, '#c49a6a'); px(g, hx + s * 6, hy - 9, 1, 1, '#b08a5e');
+    }
   } else if (cls === 'warlock') {
     // a deep-purple mantle over the shoulders and a bone charm hanging from the belt
     const M = '#2a1a40', M2 = '#3d2760';
@@ -479,6 +495,48 @@ export function maceSprite() {
     px(g, 4, 3, 1, 3, PAL.gold);
     oval(g, 15, 4, 4, 4, PAL.o); oval(g, 15, 4, 3, 3, '#c9a24a'); px(g, 14, 2, 2, 2, '#f4dc8a');
     px(g, 15, 0, 1, 1, PAL.o); px(g, 15, 8, 1, 1, PAL.o); px(g, 19, 4, 1, 1, PAL.o);
+    return c;
+  });
+}
+
+// druid's staff: gnarled wood with a sprouting top, pointing right, grip at x=0
+export function druidStaffSprite() {
+  return cached('dstaff', () => {
+    const [c, g] = canvas(30, 11);
+    px(g, 0, 4, 23, 3, PAL.o); px(g, 1, 5, 22, 1, '#7a5432'); px(g, 6, 4, 2, 1, '#5a3a22'); px(g, 14, 6, 2, 1, '#5a3a22');
+    px(g, 22, 2, 3, 7, PAL.o); px(g, 23, 3, 1, 5, '#7a5432');
+    oval(g, 26, 3, 3, 2, PAL.o); oval(g, 26, 3, 2, 1, '#6fb04a'); oval(g, 27, 7, 2, 2, PAL.o); oval(g, 27, 7, 1, 1, '#9be36a');
+    px(g, 28, 5, 1, 1, '#d8ffb0');
+    return c;
+  });
+}
+
+// the Druid's bear form, facing right. frame 0 idle, 1 and 2 walking
+export function bearSprite(frame) {
+  return cached('bear' + frame, () => {
+    const [c, g] = canvas(44, 32);
+    oval(g, 21, 29, 16, 3, 'rgba(0,0,0,0.3)');
+    const B = '#6b4426', B2 = '#8a5a32', B1 = '#4a2e18';
+    // legs (they swap when walking)
+    const lg = frame === 1 ? [2, -1, -1, 2] : frame === 2 ? [-1, 2, 2, -1] : [0, 0, 0, 0];
+    [[9, lg[0]], [15, lg[1]], [25, lg[2]], [31, lg[3]]].forEach(([x, o], i) => {
+      px(g, x - 1, 19, 7, 10 + Math.max(0, o), PAL.o); px(g, x, 19, 5, 9 + Math.max(0, o), i % 2 ? B1 : B);
+      px(g, x, 27 + Math.max(0, o), 5, 1, '#2a1a10');
+    });
+    // body
+    oval(g, 20, 15, 15, 9, PAL.o); oval(g, 20, 15, 14, 8, B); oval(g, 18, 12, 10, 4, B2); oval(g, 20, 20, 12, 3, B1);
+    // moss on its back
+    for (const [x, w] of [[10, 5], [15, 7], [22, 6], [27, 4]]) { px(g, x, 6, w, 2, '#3f7a2e'); px(g, x + 1, 5, w - 2, 1, '#6fb04a'); }
+    px(g, 17, 4, 1, 1, '#9be36a'); px(g, 24, 4, 1, 1, '#9be36a');
+    // head
+    oval(g, 34, 12, 7, 6, PAL.o); oval(g, 34, 12, 6, 5, B); oval(g, 33, 10, 4, 2, B2);
+    px(g, 29, 5, 4, 4, PAL.o); px(g, 30, 6, 2, 2, B2); px(g, 35, 5, 4, 4, PAL.o); px(g, 36, 6, 2, 2, B2);
+    // snout + nose
+    px(g, 38, 12, 5, 5, PAL.o); px(g, 38, 13, 4, 3, '#a07850'); px(g, 41, 12, 2, 2, '#1a1010');
+    // glowing green eye
+    px(g, 35, 10, 2, 2, '#5fff6a'); px(g, 36, 10, 1, 1, '#e0ffe0');
+    // a few leaves tangled in the fur
+    px(g, 12, 13, 2, 1, '#6fb04a'); px(g, 25, 16, 2, 1, '#6fb04a');
     return c;
   });
 }
@@ -1113,6 +1171,67 @@ const ICON = {
     oval(g, 8, 9, 6, 5, PAL.o); oval(g, 8, 9, 5, 4, '#7d8288'); oval(g, 7, 8, 3, 2, '#9aa0a6');
     px(g, 8, 6, 1, 6, '#7fe0ff'); px(g, 6, 8, 5, 1, '#7fe0ff');
   },
+  thorn(g) {
+    px(g, 2, 7, 10, 2, '#5a3a22'); px(g, 3, 7, 8, 1, '#8a6a3a');
+    px(g, 11, 6, 3, 4, '#9be36a'); px(g, 14, 7, 1, 2, '#d8ffb0');
+    px(g, 5, 5, 1, 2, '#6fb04a'); px(g, 8, 9, 1, 2, '#6fb04a'); px(g, 2, 6, 1, 1, '#6fb04a');
+  },
+  entangle(g) {
+    oval(g, 8, 12, 7, 3, '#2a4a1e');
+    for (const [x, h] of [[3, 8], [6, 11], [10, 10], [13, 7]]) { px(g, x, 13 - h, 2, h, '#3f7a2e'); px(g, x + 1, 13 - h, 1, h, '#6fb04a'); px(g, x - 1, 14 - h, 1, 1, '#9be36a'); }
+    px(g, 6, 6, 4, 1, '#6fb04a'); px(g, 8, 9, 4, 1, '#6fb04a');
+  },
+  bearform(g) {
+    oval(g, 8, 9, 6, 5, '#2a1a10'); oval(g, 8, 9, 5, 4, '#6b4426');
+    px(g, 2, 3, 4, 4, '#2a1a10'); px(g, 3, 4, 2, 2, '#8a5a32'); px(g, 10, 3, 4, 4, '#2a1a10'); px(g, 11, 4, 2, 2, '#8a5a32');
+    px(g, 6, 11, 4, 3, '#a07850'); px(g, 7, 11, 2, 1, '#1a1010');
+    px(g, 5, 8, 2, 1, '#5fff6a'); px(g, 9, 8, 2, 1, '#5fff6a');
+  },
+  human(g) {
+    oval(g, 8, 8, 5, 5, '#2a1e14'); oval(g, 8, 8, 4, 4, '#e8b994');
+    px(g, 4, 3, 9, 3, '#3f7a2e'); px(g, 3, 1, 1, 3, '#c49a6a'); px(g, 12, 1, 1, 3, '#c49a6a'); px(g, 2, 0, 1, 2, '#c49a6a'); px(g, 13, 0, 1, 2, '#c49a6a');
+    px(g, 6, 8, 1, 1, '#2a1e14'); px(g, 9, 8, 1, 1, '#2a1e14'); px(g, 4, 13, 8, 3, '#3f7a2e');
+  },
+  rejuv(g) {
+    px(g, 7, 3, 2, 11, '#3f7a2e');
+    oval(g, 5, 6, 3, 2, '#6fb04a'); oval(g, 11, 9, 3, 2, '#6fb04a'); oval(g, 5, 11, 2, 1, '#9be36a');
+    px(g, 3, 1, 1, 1, '#d8ffb0'); px(g, 12, 2, 1, 1, '#d8ffb0'); px(g, 13, 13, 1, 1, '#d8ffb0'); px(g, 2, 13, 1, 1, '#d8ffb0');
+    px(g, 6, 0, 4, 1, '#ffe0a0');
+  },
+  maul(g) {
+    for (let i = 0; i < 3; i++) for (let k = 0; k < 10; k++) px(g, 3 + i * 4 + Math.round(k * 0.3), 2 + k, 2, 1, i === 1 ? '#ffffff' : '#d8d0c0');
+    px(g, 1, 12, 14, 3, '#6b4426'); px(g, 2, 12, 12, 1, '#8a5a32');
+  },
+  stomp(g) {
+    oval(g, 8, 12, 7, 3, '#5a3a22'); px(g, 5, 4, 6, 7, '#2a1a10'); px(g, 6, 5, 4, 5, '#6b4426');
+    px(g, 5, 10, 1, 2, '#e8e0c8'); px(g, 7, 10, 1, 2, '#e8e0c8'); px(g, 9, 10, 1, 2, '#e8e0c8');
+    px(g, 0, 11, 2, 1, '#ffe0a0'); px(g, 14, 11, 2, 1, '#ffe0a0'); px(g, 1, 8, 1, 2, '#ffe0a0'); px(g, 14, 8, 1, 2, '#ffe0a0');
+  },
+  roar(g) {
+    oval(g, 6, 8, 5, 5, '#2a1a10'); oval(g, 6, 8, 4, 4, '#6b4426'); px(g, 7, 9, 4, 3, '#2a1010'); px(g, 8, 9, 1, 1, '#ffffff');
+    for (const r of [2, 4]) { px(g, 11 + r, 8 - r, 1, r * 2 + 1, '#5fff6a'); }
+  },
+  charge(g) {
+    oval(g, 10, 9, 5, 4, '#2a1a10'); oval(g, 10, 9, 4, 3, '#6b4426'); px(g, 14, 8, 2, 2, '#a07850');
+    px(g, 0, 5, 5, 1, '#d8d0c0'); px(g, 1, 9, 4, 1, '#d8d0c0'); px(g, 0, 12, 5, 1, '#d8d0c0');
+  },
+  grove(g) {
+    for (const [x, h] of [[2, 12], [7, 15], [12, 11]]) { px(g, x, 16 - h, 3, h, '#4a2e18'); px(g, x + 1, 16 - h, 1, h, '#7a5432'); oval(g, x + 1, 16 - h, 3, 2, '#3f7a2e'); }
+    px(g, 5, 7, 2, 1, '#9be36a'); px(g, 10, 4, 2, 1, '#9be36a'); px(g, 0, 15, 16, 1, '#2a4a1e');
+  },
+  farrow(g) {
+    px(g, 2, 12, 9, 1, '#d8c39a'); for (let k = 0; k < 9; k++) px(g, 2 + k, 13 - k, 1, 1, '#d8c39a');
+    px(g, 10, 3, 3, 3, '#e9eef3'); px(g, 1, 12, 2, 2, '#c4533a');
+    px(g, 11, 1, 2, 2, '#ffd36a'); px(g, 13, 3, 2, 2, '#ff8a3c'); px(g, 9, 6, 2, 2, '#ff8a3c'); px(g, 6, 9, 2, 2, '#ff5a1a'); px(g, 3, 11, 2, 2, '#c4371a');
+  },
+  twin(g) {
+    for (const s of [0, 1]) { const o = s * 6; for (let k = 0; k < 8; k++) px(g, 3 + o + Math.round(k * 0.2), 2 + k, 2, 1, '#d8dde6'); px(g, 2 + o, 10, 4, 1, '#3b2a1e'); px(g, 3 + o, 11, 2, 3, '#5a3a22'); }
+    px(g, 7, 1, 2, 1, '#ffffff');
+  },
+  boon_acorn(g) {
+    oval(g, 8, 10, 4, 5, '#2a1e14'); oval(g, 8, 10, 3, 4, '#9a6a3a'); px(g, 6, 8, 2, 3, '#c49a6a');
+    px(g, 3, 4, 10, 3, '#2a1e14'); px(g, 4, 5, 8, 2, '#6b4426'); px(g, 5, 5, 2, 1, '#8a5a32'); px(g, 8, 2, 1, 2, '#4a2e18');
+  },
   help(g) {
     oval(g, 8, 8, 7, 7, '#2a4a6a'); px(g, 6, 4, 4, 2, '#ffffff'); px(g, 9, 6, 2, 2, '#ffffff'); px(g, 7, 8, 2, 2, '#ffffff'); px(g, 7, 11, 2, 2, '#ffffff');
   },
@@ -1121,8 +1240,10 @@ const ICON = {
 const SKILL_ICON = {
   warrior: { atk: 'sword', guard: 'shield', quake: 'quake', cry: 'warcry', dash: 'bash', ult: 'bladestorm' },
   sorcerer: { atk: 'shove', gale: 'gale', fire: 'fire', frost: 'frost', dash: 'gust', ult: 'starfall' },
-  bowman: { atk: 'bow', mark: 'mark', rain: 'rain', dash: 'dash', ult: 'deadeye' },
-  rogue: { atk: 'dagger', smoke: 'smoke', step: 'step', dash: 'clone', ult: 'cuts' },
+  bowman: { atk: 'bow', mark: 'mark', rain: 'rain', farrow: 'farrow', dash: 'dash', ult: 'deadeye' },
+  rogue: { atk: 'dagger', twin: 'twin', smoke: 'smoke', step: 'step', dash: 'clone', ult: 'cuts' },
+  druid: { atk: 'thorn', entangle: 'entangle', bear: 'bearform', rejuv: 'rejuv', dash: 'dash', ult: 'grove' },
+  bear: { atk: 'maul', stomp: 'stomp', human: 'human', roar: 'roar', dash: 'charge', ult: 'grove' },
   cleric: { atk: 'mace', mend: 'kindle', judge: 'judge', ground: 'ground', dash: 'guiding', ult: 'dawn' },
   warlock: { atk: 'bolt', hands: 'hands', imps: 'imps', siphon: 'siphon', dash: 'dash', ult: 'eclipse' },
 };

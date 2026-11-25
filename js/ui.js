@@ -8,7 +8,7 @@ import { audio } from './audio.js';
 import { prefs, savePrefs, KEY_ACTIONS, DEFAULT_KEYS, keyName, getRoomPref, ABILITY_KEYS, keysFor, activeKeys } from './prefs.js';
 import { KITS, iconCanvas } from './hud.js';
 import { skillIconName, PINGS, EMOJIS, pingSprite, emojiSprite } from './sprites.js';
-import { MAX_LEVEL, SLOTS, REBIRTHS, REBIRTH_EVERY, PRESTIGE, SHOP, MODES, todayKey } from './progress.js';
+import { MAX_LEVEL, SLOTS, REBIRTHS, REBIRTH_EVERY, PRESTIGE, SHOP, MODES, FISH, RARITY, todayKey } from './progress.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -484,9 +484,11 @@ export class BoonPanel {
 const SKILL_TEXT = {
   warrior: { atk: 'Strike: sword combo. Every 3rd swing is heavy (and slower to recover). Never uses Fury.', guard: 'Iron Guard: hold to block hits from the front (blocking builds Fury), let go for Retaliation.', quake: 'Shockwave: slam the ground around you to stun enemies.', cry: 'Battle Cry: for 5 seconds, every enemy near you (even ones that arrive later) turns on you.', dash: 'Bash: dash and shove enemies you hit, breaking their attack. The start of it dodges attacks.', ult: 'Bladestorm: spin a giant sword for 4 seconds, cutting everything around you, moving twice as fast (no Bash while spinning). Needs full Wildfire.' },
   sorcerer: { atk: 'Shove: a weak staff swing that pushes enemies away.', gale: 'Gale: a blast of wind that knocks enemies back.', fire: 'Fireball: an exploding fireball.', frost: 'Frostbite: slowing ice shards.', dash: 'Gust: dash and leave a faint trail that speeds up allies who walk through it.', ult: 'Starfall: meteors hunt the monsters where you aim (needs full Wildfire).' },
-  bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Barrage where you aim.', dash: 'Roll. Flicks a small arrow at the nearest enemy.', ult: 'Deadeye: every shot is full strength and seeks enemies (needs full Wildfire).' },
-  rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Shadow Clone: dash and leave a clone behind that nearby enemies turn on for a moment.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
+  bowman: { atk: 'Hold to draw, let go to shoot. Longer draw = stronger, piercing arrow, but a longer wait. Right-click cancels a draw.', mark: 'Mark the enemy you aim at: the whole party deals +20% damage to it.', rain: 'Barrage where you aim.', farrow: 'Fire Arrow: a burning arrow that pierces through every enemy and leaves a short trail of fire on the ground.', dash: 'Roll. You take 50% less damage while rolling, and it flicks a small arrow at the nearest enemy.', ult: 'Deadeye: every shot is full strength and seeks enemies (needs full Wildfire).' },
+  rogue: { atk: 'Quick stabs. Every 4th is a spin that hits all around you.', twin: 'Twin Fang: a heavy hit with both daggers. Hits harder than a stab, but has a cooldown.', smoke: 'Smoke Bomb: enemies inside crawl and can\'t see anyone. You move faster in it.', step: 'Shadowstep: teleport behind the enemy you aim at.', dash: 'Shadow Clone: dash and leave a clone behind that nearby enemies turn on for a moment.', ult: 'Thousand Cuts: slash up to 6 nearby enemies (needs full Wildfire).' },
   cleric: { atk: 'Swing. Every hit builds Grace.', mend: 'Kindle: heal the ally you aim at (or whoever needs it most, or yourself). Costs Grace.', judge: 'Judgement: slam your mace to stun enemies in front of you.', ground: 'Sanctified Ground: a ring of light that heals allies and slows enemies. Costs Grace.', dash: 'Guiding Light: dash and leave a spark that heals allies you pass.', ult: 'Daybreak: heal everyone near you and rekindle fallen allies, who are safe for 3 seconds (needs full Wildfire).' },
+  druid: { atk: 'Thorn Shot: fire a thorn. Every hit fills your nature gauge.', entangle: 'Entangle: vines burst up where you aim and hold enemies in place.', bear: 'Bear Form: when your nature gauge is full, become a great bear until it drains. Press again to turn back early.', rejuv: 'Rejuvenate: a gentle heal over 5 seconds for you and allies close by.', dash: 'Dash. In bear form it is a Charge instead.', ult: 'Wrath of the Grove: for 3 seconds the trees around you lash every enemy nearby (needs full Wildfire).' },
+  bear: { atk: 'Maul: heavy claw swipes.', stomp: 'Stomp: slam the ground to stun enemies around you.', human: 'Human Form: turn back early. Your gauge stays where it is.', roar: 'Roar: every enemy nearby turns on you for 4 seconds.', dash: 'Charge: knock enemies aside and stun the first one you hit.' },
   warlock: { atk: 'Bolt. Every 3rd bolt curses: cursed enemies take extra damage.', hands: 'Dead Man\'s Reach: shadow hands burst up where you aim, holding enemies in place.', imps: 'Swarm: 3 imps chase and bite for 8 seconds. Their bites give you souls.', siphon: 'Soul Siphon: drain the enemy you aim at, refilling your souls.', dash: 'Phase Shift: a quick blink you cannot be hit during.', ult: 'Eclipse: a huge, tough familiar draws every enemy to it (needs full Wildfire).' },
 };
 export const CLASS_TRICK = {
@@ -496,6 +498,7 @@ export const CLASS_TRICK = {
   rogue: 'Backstab: hits from behind deal double damage. A red dagger shows over enemies you are behind.',
   cleric: 'Grace: hit enemies to build it, spend it to heal. Heals past full flame become a shield. Grace fades when you stop fighting, but never below half.',
   warlock: 'Curses and summons: your imps and hands do the dirty work while you keep your distance. Imp bites refill your souls.',
+  druid: 'Nature gauge: your Thorn Shots and Entangle fill it. When it is full, press E to become a tough bear (more flame, takes less damage). The gauge only drains while you are a bear.',
 };
 const PAD = { strike: 'RT', skill2: 'LT', skill1: 'X', skill3: 'LB', ult: 'RB', dash: 'A', interact: 'Y', tree: 'View', controls: '—', pause: 'Start' };
 
@@ -509,7 +512,9 @@ function fillGuide(box, game, cls) {
   const K = keysFor(cls);
   const kb = (key) => (key === 'strike' ? (K.strike ? `LMB / ${keyName(K.strike)}` : 'LMB') : key === 'skill2' ? (K.skill2 ? `RMB / ${keyName(K.skill2)}` : 'RMB') : keyName(K[key]));
   const skillName = (k) => k.name.replace(/\s*\(.*\)$/, '');
-  const rows = [...kit.map((k) => ({ icon: skillIconName(cls, k.id), key: k.key, name: skillName(k), text: (text[k.id] || '').replace(new RegExp('^' + skillName(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.?:?\\s*', 'i'), '') })),
+  const strip = (k, t) => (t || '').replace(new RegExp('^' + skillName(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.?:?\\s*', 'i'), '');
+  const bearRows = cls === 'druid' ? KITS.bear.filter((k) => k.id !== 'ult').map((k) => ({ icon: skillIconName('bear', k.id), key: k.key, name: 'Bear: ' + skillName(k), text: strip(k, SKILL_TEXT.bear[k.id]) })) : [];
+  const rows = [...kit.map((k) => ({ icon: skillIconName(cls, k.id), key: k.key, name: skillName(k), text: strip(k, text[k.id]) })), ...bearRows,
     { icon: 'interact', key: 'interact', name: 'Interact', text: '' }, { icon: 'tree', key: 'tree', name: 'Skill tree', text: '' }, { icon: 'help', key: 'controls', name: 'Controls', text: 'show / hide this screen' }];
   for (const r of rows) {
     const row = document.createElement('div');
@@ -824,7 +829,109 @@ shopPanel.update = function (game, me) {
     btn.onclick = () => game.act('buyItem', it.id);
     box.appendChild(row);
   }
+  // spare fish (you always keep one of each for your journal)
+  const fish = (game.char && game.char.fish) || {};
+  const spare = FISH.filter((f) => RARITY[f.r] && (fish[f.id] || 0) > 1);
+  const head = document.createElement('h3');
+  head.textContent = 'Sell fish';
+  box.appendChild(head);
+  if (!spare.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'No spare fish. You keep one of each kind for your journal.'; box.appendChild(p); }
+  let all = 0;
+  for (const f of spare) {
+    const n = fish[f.id] - 1, price = RARITY[f.r].price;
+    all += n * price;
+    const row = document.createElement('div');
+    row.className = 'shoprow fishsell';
+    row.innerHTML = '<div><b></b><small></small></div><span class="muted"></span><button class="gbtn small"></button>';
+    row.querySelector('b').textContent = f.name;
+    row.querySelector('b').style.color = RARITY[f.r].col;
+    row.querySelector('small').textContent = `${RARITY[f.r].name} · ${price} coins each`;
+    row.querySelector('span').textContent = `×${n} spare`;
+    const btn = row.querySelector('button');
+    btn.textContent = `Sell 1 (+${price})`;
+    btn.onclick = () => { if ((fish[f.id] || 0) > 1 && game.act('sellFish', price) !== false) { fish[f.id]--; game.saveFish(); this.lastKey = ''; } };
+    box.appendChild(row);
+  }
+  if (spare.length > 1) {
+    const b = button(`Sell all spare fish (+${all} coins)`, () => {
+      if (game.act('sellFish', all) === false) return;
+      for (const f of spare) fish[f.id] = 1;
+      game.saveFish(); this.lastKey = '';
+    });
+    box.appendChild(b);
+  }
 };
+shopPanel.update0 = shopPanel.update;
+shopPanel.update = function (game, me) {
+  const fk = JSON.stringify((game.char && game.char.fish) || {});
+  if (fk !== this.fishKey) { this.fishKey = fk; this.lastKey = ''; }
+  this.update0(game, me);
+};
+
+// ---------------------------------------------------------- the fish journal (a book)
+export const fishbookPanel = makePanel('#fishbook');
+fishbookPanel.fill = function (game) {
+  const fish = (game.char && game.char.fish) || {};
+  const real = FISH.filter((f) => RARITY[f.r]);
+  const caught = real.filter((f) => fish[f.id] > 0).length;
+  $('#fishbook-count').textContent = `${caught} / ${real.length} kinds`;
+  const pages = $('#fishbook-pages');
+  pages.innerHTML = '';
+  const left = document.createElement('div'), right = document.createElement('div');
+  left.className = right.className = 'fpage';
+  for (const [rid, page] of [['common', left], ['rare', left], ['epic', right], ['legendary', right]]) {
+    const R = RARITY[rid];
+    const h = document.createElement('h3');
+    h.textContent = R.name;
+    page.appendChild(h);
+    for (const f of real.filter((x) => x.r === rid)) {
+      const n = fish[f.id] || 0;
+      const row = document.createElement('div');
+      row.className = 'fish' + (n ? '' : ' unknown');
+      row.appendChild(fishCanvas(n ? f.col : '#6a5a44'));
+      const d = document.createElement('div');
+      d.innerHTML = '<b></b> <span class="tag"></span><small></small>';
+      d.querySelector('b').textContent = n ? f.name : '???';
+      d.querySelector('.tag').textContent = n ? `×${n}` : '';
+      d.querySelector('.tag').style.color = R.col;
+      d.querySelector('small').textContent = n ? f.desc : 'Not caught yet.';
+      row.appendChild(d);
+      page.appendChild(row);
+    }
+  }
+  pages.append(left, right);
+};
+$('#fishbook [data-close]').onclick = () => fishbookPanel.close();
+// a little pixel fish (or its silhouette)
+export function fishCanvas(col) {
+  const c = document.createElement('canvas');
+  c.width = 20; c.height = 10;
+  const g = c.getContext('2d');
+  const P = (x, y, w, h, k) => { g.fillStyle = k; g.fillRect(x, y, w, h); };
+  // facing right: a forked tail on the left, a rounded body, an eye near the nose
+  const O = '#2a1e14';
+  const body = [[6, 4, 2], [7, 3, 4], [8, 2, 6], [9, 2, 6], [10, 2, 6], [11, 2, 6], [12, 2, 6], [13, 2, 6], [14, 3, 4], [15, 3, 4], [16, 4, 2]];
+  for (const [x, y, h] of body) { P(x, y - 1, 1, h + 2, O); }
+  P(17, 4, 1, 2, O);
+  for (const [x, y, h] of body) P(x, y, 1, h, col);
+  P(1, 1, 2, 2, O); P(1, 7, 2, 2, O); P(3, 2, 2, 2, O); P(3, 6, 2, 2, O); P(5, 3, 1, 4, O);
+  P(2, 2, 1, 1, col); P(2, 7, 1, 1, col); P(4, 3, 1, 1, col); P(4, 6, 1, 1, col); P(5, 4, 1, 2, col);
+  P(8, 2, 6, 1, 'rgba(255,255,255,0.4)'); P(9, 7, 5, 1, 'rgba(0,0,0,0.25)');
+  P(14, 4, 1, 1, '#111'); P(10, 1, 3, 1, O);
+  return c;
+}
+// a little pixel book for the journal button
+export function bookCanvas() {
+  const c = document.createElement('canvas');
+  c.width = 20; c.height = 20;
+  const g = c.getContext('2d');
+  const P = (x, y, w, h, k) => { g.fillStyle = k; g.fillRect(x, y, w, h); };
+  P(2, 3, 16, 14, '#2a1e14'); P(3, 4, 14, 12, '#7a3a22'); P(3, 4, 2, 12, '#5a2a18');
+  P(5, 15, 12, 2, '#f3e8c8'); P(5, 16, 12, 1, '#c9b88e');
+  P(8, 7, 6, 3, '#e8c45c'); P(7, 8, 1, 1, '#e8c45c'); P(14, 7, 1, 1, '#e8c45c'); P(14, 9, 1, 1, '#e8c45c'); P(9, 8, 1, 1, '#2a1e14');
+  P(4, 3, 12, 1, '#9a5a32');
+  return c;
+}
 $('#shop [data-close]').onclick = () => shopPanel.close();
 
 // ---------------------------------------------------------- leaderboard
@@ -962,9 +1069,9 @@ $('#dev-input').addEventListener('keydown', (e) => {
 document.addEventListener('pointerdown', (e) => {
   const g = pause.game;
   if (!g || !g.alive) return;
-  if (e.target.closest('.panel, #chat, #dev, #confirm, #toasts, #wheel, #menu-gear, #btn-gear, .skill, #boons, #tips')) return;
+  if (e.target.closest('.panel, #btn-fishbook, #chat, #dev, #confirm, #toasts, #wheel, #menu-gear, #btn-gear, .skill, #boons, #tips')) return;
   g.wardrobe.close(); g.tree.close(); g.controls.close();
   campPanel.close(); signPanel.close(); boardPanel.close();
-  shopPanel.close(); lboardPanel.close(); modePanel.close();
+  shopPanel.close(); lboardPanel.close(); modePanel.close(); fishbookPanel.close();
   settings.close(); pause.close();
 });

@@ -230,7 +230,7 @@ export function makeLobby() {
   // Layout (in tiles): campfire hub in the middle, archway path north,
   // training grounds west, class hall east, wardrobe tent south-west,
   // signpost + stats board south.
-  const w = 46, h = 36;
+  const w = 62, h = 36;
   const world = new World(w, h, 'lobby', 0);
   const cx = 23, cy = 19;
   const T = TILE;
@@ -246,7 +246,8 @@ export function makeLobby() {
   openEllipse(12, 29, 5, 3.6);             // wardrobe tent (south-west)
   openEllipse(cx, 29, 6, 3.5);             // signpost + board (south)
   openEllipse(10, 7, 6.5, 4.6);            // the Skilltree grove + fishing pond (north-west)
-  openEllipse(36, 7.5, 6, 4.4);            // duel ring (north-east)
+  openEllipse(36, 7.5, 6, 4.4);            // the path to the duel clearing (north-east)
+  openEllipse(52, 13, 8.6, 8.2, 2);        // the duel clearing, cut into the trees (far east)
   openEllipse(34, 29, 5, 3.6);             // the merchant (south-east)
   openEllipse(cx, 6.5, 3.6, 2);            // beside the archway path: the path stone
   for (let ty = 1; ty <= cy; ty++) for (let tx = cx - 2; tx < cx + 2; tx++) world.setOpen(tx, ty); // archway path
@@ -264,7 +265,8 @@ export function makeLobby() {
   markPathDisc(world, cx, cy, 2.6);
   walk(cx, cy, 13, 17); walk(cx, cy, 31, 18); walk(cx, cy, 13, 28); walk(cx, cy, cx, 28);
   walk(cx - 1, cy - 3, 12, 8.5); walk(cx + 1, cy - 3, 34, 8.5); walk(cx, cy, 32, 28);
-  markPathDisc(world, 36, 7.8, 2.4);       // duel ring floor
+  walk(36, 8, 44, 11); walk(44, 11, 47, 12.5);
+  markPathDisc(world, 52, 13, 3);          // duel ring floor
   markPathDisc(world, 9.5, 17, 3.2);       // training yard floor
   markPathDisc(world, 36.5, 18, 2.2);      // class hall centre stone
 
@@ -303,8 +305,8 @@ export function makeLobby() {
   world.props.push({ type: 'pond', x: 13.6 * T, y: 8.6 * T, rx: 46, ry: 26, solidR: 30 });
   world.props.push({ type: 'sign', x: 15.4 * T, y: 11.2 * T, text: 'The Skilltree', solidR: 7 });
   // a ring of stones for friendly duels
-  world.props.push({ type: 'duelring', x: 36 * T, y: 7.8 * T, r: 76, solidR: 0 });
-  world.props.push({ type: 'sign', x: 31.2 * T, y: 11 * T, text: 'Duel Ring', solidR: 7 });
+  world.props.push({ type: 'duelring', x: 52 * T, y: 13 * T, r: 210, solidR: 0 });
+  world.props.push({ type: 'sign', x: 31.2 * T, y: 11 * T, text: 'Duel Clearing', solidR: 7 });
   // the wandering merchant's stall
   world.props.push({ type: 'shop', x: 34.6 * T, y: 28.4 * T, solidR: 18 });
   // the leaderboard next to the stats board, and the path stone that picks the kind of run
